@@ -37,7 +37,16 @@ app.on("activate", () => {
     createWindow();
   }
 });
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  try {
+    const { initDatabase } = await import("./dbmanager-CoM95Aq9.js");
+    await initDatabase();
+    console.log("Database initialized successfully from electron/main.ts");
+  } catch (error) {
+    console.error("Failed to initialize database:", error);
+  }
+  createWindow();
+});
 export {
   MAIN_DIST,
   RENDERER_DIST,

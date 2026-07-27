@@ -65,4 +65,13 @@ app.on('activate', () => {
   }
 })
 
-app.whenReady().then(createWindow)
+app.whenReady().then(async () => {
+  try {
+    const { initDatabase } = await import('../src/main/database/dbmanager');
+    await initDatabase();
+    console.log('Database initialized successfully from electron/main.ts');
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
+  }
+  createWindow();
+})

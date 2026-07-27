@@ -13,7 +13,8 @@ export async function up(knex: Knex): Promise<void> {
     table.decimal('balance', 15, 2).defaultTo(0);
     table.text('notes');
     table.boolean('isActive').defaultTo(true);
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.index('phone');
     table.index('isActive');
@@ -30,7 +31,8 @@ export async function up(knex: Knex): Promise<void> {
     table.text('address');
     table.text('notes');
     table.boolean('isActive').defaultTo(true);
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.index('phone');
     table.index('isActive');
@@ -46,7 +48,8 @@ export async function up(knex: Knex): Promise<void> {
     table.string('category', 50);
     table.text('description');
     table.boolean('isActive').defaultTo(true);
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.index('name');
     table.index('category');
@@ -68,7 +71,8 @@ export async function up(knex: Knex): Promise<void> {
     table.date('expiry_date');
     table.text('notes');
     table.boolean('isActive').defaultTo(true);
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.foreign('product_id').references('id').inTable('products').onDelete('RESTRICT');
     table.foreign('supplier_id').references('id').inTable('suppliers').onDelete('RESTRICT');
@@ -95,7 +99,8 @@ export async function up(knex: Knex): Promise<void> {
     table.decimal('paid_amount', 15, 2).defaultTo(0);
     table.enum('status', ['draft', 'confirmed', 'paid', 'cancelled']).defaultTo('draft');
     table.text('notes');
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.foreign('supplier_id').references('id').inTable('suppliers').onDelete('RESTRICT');
     
@@ -116,7 +121,8 @@ export async function up(knex: Knex): Promise<void> {
     table.decimal('unit_price', 15, 2).notNullable();
     table.decimal('line_total', 15, 2).notNullable();
     table.text('notes');
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.foreign('purchase_invoice_id').references('id').inTable('purchase_invoices').onDelete('CASCADE');
     table.foreign('product_id').references('id').inTable('products').onDelete('RESTRICT');
@@ -134,7 +140,8 @@ export async function up(knex: Knex): Promise<void> {
     table.decimal('commission_percentage', 5, 2).defaultTo(0);
     table.text('description');
     table.boolean('isActive').defaultTo(true);
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.index('isActive');
   });
@@ -158,7 +165,8 @@ export async function up(knex: Knex): Promise<void> {
     table.decimal('paid_amount', 15, 2).defaultTo(0);
     table.enum('status', ['draft', 'confirmed', 'paid', 'cancelled']).defaultTo('draft');
     table.text('notes');
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.foreign('customer_id').references('id').inTable('customers').onDelete('RESTRICT');
     table.foreign('sale_type_id').references('id').inTable('sale_types').onDelete('RESTRICT');
@@ -183,7 +191,8 @@ export async function up(knex: Knex): Promise<void> {
     table.decimal('cost_price', 15, 2).notNullable();
     table.decimal('profit', 15, 2).defaultTo(0);
     table.text('notes');
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.foreign('sale_invoice_id').references('id').inTable('sale_invoices').onDelete('CASCADE');
     table.foreign('stock_batch_id').references('id').inTable('stock_batches').onDelete('RESTRICT');
@@ -204,7 +213,8 @@ export async function up(knex: Knex): Promise<void> {
     table.string('currency', 10).defaultTo('SAR');
     table.boolean('isActive').defaultTo(true);
     table.text('notes');
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.foreign('parent_id').references('id').inTable('cashboxes').onDelete('SET NULL');
     
@@ -226,7 +236,8 @@ export async function up(knex: Knex): Promise<void> {
     table.decimal('balance_after', 15, 2).notNullable();
     table.dateTime('transaction_date').defaultTo(knex.fn.now());
     table.text('notes');
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.foreign('cashbox_id').references('id').inTable('cashboxes').onDelete('RESTRICT');
     
@@ -244,7 +255,8 @@ export async function up(knex: Knex): Promise<void> {
     table.enum('type', ['expense', 'income']).notNullable();
     table.text('description');
     table.boolean('isActive').defaultTo(true);
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.index('type');
     table.index('isActive');
@@ -263,7 +275,8 @@ export async function up(knex: Knex): Promise<void> {
     table.text('description');
     table.string('reference_number', 50);
     table.text('notes');
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.foreign('category_id').references('id').inTable('transaction_categories').onDelete('RESTRICT');
     table.foreign('cashbox_id').references('id').inTable('cashboxes').onDelete('RESTRICT');
@@ -289,7 +302,8 @@ export async function up(knex: Knex): Promise<void> {
     table.enum('payment_method', ['cash', 'bank', 'credit_card', 'cheque', 'online']).defaultTo('cash');
     table.string('reference_number', 50);
     table.text('notes');
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.foreign('cashbox_id').references('id').inTable('cashboxes').onDelete('RESTRICT');
     
@@ -312,7 +326,8 @@ export async function up(knex: Knex): Promise<void> {
     table.enum('role', ['admin', 'manager', 'cashier', 'viewer']).defaultTo('cashier');
     table.boolean('isActive').defaultTo(true);
     table.dateTime('last_login');
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.index('username');
     table.index('email');
@@ -332,7 +347,8 @@ export async function up(knex: Knex): Promise<void> {
     table.json('new_data');
     table.string('ip_address', 45);
     table.text('user_agent');
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.foreign('user_id').references('id').inTable('users').onDelete('SET NULL');
     
@@ -350,7 +366,8 @@ export async function up(knex: Knex): Promise<void> {
     table.text('setting_value');
     table.text('description');
     table.string('category', 50).defaultTo('general');
-    table.timestamps(true, true);
+    table.timestamp('created_at').nullable();
+    table.timestamp('updated_at').nullable();
     
     table.index('setting_key');
     table.index('category');

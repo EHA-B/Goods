@@ -45,7 +45,7 @@ app.on("activate", () => {
 });
 app.whenReady().then(async () => {
   try {
-    const { initDatabase } = await import("./dbmanager-CoM95Aq9.js");
+    const { initDatabase } = await import("./dbmanager-CjHrm3dH.js");
     await initDatabase();
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {

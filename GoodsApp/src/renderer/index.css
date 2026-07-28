@@ -1,164 +1,159 @@
 @import "tailwindcss";
 
-/* ============================= */
-/* Theme */
-/* ============================= */
-
 :root {
-  /* Brand */
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
+  font-family: "Tajawal", sans-serif;
+
+  /* ===========================
+     Colors
+     =========================== */
 
   /* Backgrounds */
-  --background: #f8fafc;
+  --app-background: #f5f6f5;
   --surface: #ffffff;
-
-  /* Borders */
-  --border: #e2e8f0;
+  --surface-subtle: #f8f9f8;
+  --surface-hover: #eef2f1;
 
   /* Text */
-  --text: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  --text-primary: #252828;
+  --text-secondary: #6c7473;
+  --text-muted: #9aa19f;
+  --text-inverse: #ffffff;
+
+  /* Borders */
+  --border: #dde3e1;
+  --border-strong: #cad2cf;
+  --divider: #eef2f1;
+
+  /* Brand */
+  --primary: #0f766e;
+  --primary-hover: #0b625c;
+  --primary-subtle: #e6f4f2;
 
   /* Status */
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+  --success: #2e8b57;
+  --success-subtle: #e8f7ef;
+
+  --warning: #b67d25;
+  --warning-subtle: #fbf4e5;
+
+  --danger: #b34d4d;
+  --danger-subtle: #faecec;
+
   --info: #3b82f6;
+  --info-subtle: #eaf3ff;
 
-  /* Radius */
-  --radius: 12px;
+  /* ===========================
+     Effects
+     =========================== */
 
-  /* Shadow */
-  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
-  --shadow-md: 0 4px 12px rgb(15 23 42 / 0.08);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 6px 18px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 12px 30px rgba(15, 23, 42, 0.08);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+
+  --transition: 150ms ease;
+  --focus-ring: rgba(15, 118, 110, 0.25);
+
+  color: var(--text-primary);
+  background: var(--app-background);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ============================= */
-/* Base */
-/* ============================= */
-
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
 html {
   direction: rtl;
+  scroll-behavior: smooth;
+}
+
+html,
+body,
+#root {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
 }
 
 body {
-  margin: 0;
   min-height: 100vh;
-
-  background: var(--background);
-  color: var(--text);
-
-  font-family: "Cairo", sans-serif;
-
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
+  background: var(--app-background);
+  color: var(--text-primary);
+  font-family: "Tajawal", sans-serif;
+  line-height: 1.5;
 }
 
-/* ============================= */
-/* Typography */
-/* ============================= */
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  margin: 0;
-  color: var(--text);
-  font-weight: 700;
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
-p {
-  margin: 0;
-}
-
-/* ============================= */
-/* Inputs */
-/* ============================= */
-
+button,
 input,
 select,
-textarea,
-button {
+textarea {
   font: inherit;
 }
 
 button {
   cursor: pointer;
+  transition: var(--transition);
 }
 
-/* ============================= */
-/* Selection */
-/* ============================= */
-
-::selection {
-  background: var(--primary);
-  color: white;
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
-/* ============================= */
-/* Focus */
-/* ============================= */
+input,
+select,
+textarea {
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition),
+    background-color var(--transition);
+}
 
 :focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
+  outline: none;
 }
 
-/* ============================= */
-/* Scrollbar */
-/* ============================= */
+::selection {
+  color: var(--text-inverse);
+  background: var(--primary);
+}
+
+/* ===========================
+   Scrollbar
+   =========================== */
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  width: 9px;
+  height: 9px;
 }
 
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* ============================= */
-/* Utilities */
-/* ============================= */
-
-.surface {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #c7cbc5;
+  background-clip: padding-box;
 }
 
-.page {
-  padding: 24px;
-}
-
-.page-title {
-  font-size: 24px;
-  font-weight: 700;
-}
-
-.page-description {
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
-
-.transition-default {
-  transition: 180ms ease;
+::-webkit-scrollbar-thumb:hover {
+  background: #aeb4ac;
+  background-clip: padding-box;
 }

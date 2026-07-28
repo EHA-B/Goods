@@ -1,37 +1,78 @@
+import {
+  CircleDollarSign,
+  Package,
+  Truck,
+  Users,
+} from "lucide-react";
+
+import DashboardClock from "../../components/dashboard/DashboardClock";
+import QuickActionsCard from "../../components/dashboard/QuickActionsCard";
+import RecentSalesCard from "../../components/dashboard/RecentSalesCard";
+import StatCard from "../../components/dashboard/StatCard";
+import StatsGrid from "../../components/dashboard/StatsGrid";
+
+import { PageHeader } from "../../components/ui";
+
+import { PATHS } from "../../routes/path";
+
+const stats = [
+  {
+    title: "رصيد الصندوق",
+    value: "0",
+    suffix: "ل.س",
+    description: "الرصيد المتوفر حاليًا",
+    icon: CircleDollarSign,
+    to: PATHS.CASHBOXES,
+  },
+  {
+    title: "المنتجات",
+    value: "0",
+    suffix: "منتج",
+    description: "إجمالي المنتجات",
+    icon: Package,
+    to: PATHS.PRODUCTS,
+  },
+  {
+    title: "العملاء",
+    value: "0",
+    suffix: "عميل",
+    description: "إجمالي العملاء",
+    icon: Users,
+    to: PATHS.CUSTOMERS,
+  },
+  {
+    title: "الموردون",
+    value: "0",
+    suffix: "مورد",
+    description: "إجمالي الموردين",
+    icon: Truck,
+    to: PATHS.SUPPLIERS,
+  },
+];
+
 function DashboardPage() {
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--text)]">
-          لوحة التحكم
-        </h1>
+    <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-6">
+      <PageHeader
+        title="لوحة التحكم"
+        description="نظرة عامة على حركة المخزون والمبيعات."
+        actions={<DashboardClock />}
+      />
 
-        <p className="mt-1 text-base text-[var(--text-secondary)]">
-          نظرة سريعة على معلومات StockLite.
-        </p>
+      <StatsGrid>
+        {stats.map((stat) => (
+          <StatCard
+            key={stat.title}
+            {...stat}
+          />
+        ))}
+      </StatsGrid>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.6fr_1fr]">
+        <RecentSalesCard />
+
+        <QuickActionsCard />
       </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <DashboardCard title="رصيد الصندوق" value="0" />
-        <DashboardCard title="عدد المنتجات" value="0" />
-        <DashboardCard title="عدد العملاء" value="0" />
-        <DashboardCard title="عدد الموردين" value="0" />
-      </div>
-    </div>
-  );
-}
-
-type DashboardCardProps = {
-  title: string;
-  value: string;
-};
-
-function DashboardCard({ title, value }: DashboardCardProps) {
-  return (
-    <div className="rounded-xl border border-[var(--border)] bg-white p-5 shadow-sm">
-      <p className="text-base text-[var(--text-secondary)]">{title}</p>
-
-      <p className="mt-3 text-3xl font-bold text-[var(--text)]">{value}</p>
     </div>
   );
 }

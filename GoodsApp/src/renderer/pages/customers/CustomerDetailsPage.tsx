@@ -1,7 +1,7 @@
-import { ArrowRight, PencilLine } from "lucide-react";
+import { PencilLine } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Button, Card, EmptyState, PageHeader, Select, StatusBadge } from "../../components/ui";
+import { BackButton, Button, Card, EmptyState, PageHeader, Select, StatusBadge } from "../../components/ui";
 import { DataTable, DataTableBody, DataTableCell, DataTableHead, DataTableHeaderCell, DataTableRow } from "../../components/common";
 import { useCustomers } from "./CustomersContext";
 
@@ -21,7 +21,7 @@ export default function CustomerDetailsPage() {
 
   return (
     <>
-      <PageHeader title={customer.name} description="بيانات العميل وجميع حركات البيع والشراء المرتبطة به." actions={<div className="flex gap-2"><Button variant="secondary" startIcon={<ArrowRight size={17} />} onClick={() => navigate("/customers")}>العودة</Button><Button variant="secondary" startIcon={<PencilLine size={17} />} onClick={() => navigate(`/customers/${id}/edit`)}>تعديل</Button></div>} />
+      <PageHeader title={customer.name} description="بيانات العميل وجميع حركات البيع والشراء المرتبطة به." actions={<div className="flex gap-2"><BackButton to="/customers" label="العودة إلى العملاء" /><Button variant="secondary" startIcon={<PencilLine size={17} />} onClick={() => navigate(`/customers/${id}/edit`)}>تعديل</Button></div>} />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card><p className="text-xs text-[var(--text-muted)]">رقم الهاتف</p><p className="mt-2 font-bold" dir="ltr">{customer.phone || "—"}</p></Card>
         <Card><p className="text-xs text-[var(--text-muted)]">الرصيد الحالي</p><p className="mt-2 text-lg font-bold">{money(Math.abs(customer.balance))} ل.س</p><p className="mt-1 text-xs text-[var(--text-muted)]">{customer.balance > 0 ? "على العميل" : customer.balance < 0 ? "للعميل" : "متوازن"}</p></Card>

@@ -1,6 +1,8 @@
 export const PATHS = {
     DASHBOARD: "/",
     PRODUCTS: "/products",
+    PRODUCT_NEW: "/products/new",
+    PRODUCT_EDIT: "/products/:productId/edit",
 
     CUSTOMERS: "/customers",
     CUSTOMER_NEW: "/customers/new",
@@ -11,6 +13,7 @@ export const PATHS = {
     INVENTORY_DETAILS: "/inventory/:productId",
     INVENTORY_ADJUST: "/inventory/:productId/adjust",
     INVENTORY_BATCH_NEW: "/inventory/:productId/batches/new",
+    INVENTORY_MOVEMENT_DETAILS: "/inventory/:productId/movements/:movementId",
 
     SUPPLIERS: "/suppliers",
     PURCHASES: "/purchases",

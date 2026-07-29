@@ -3,9 +3,7 @@ import { ArrowRight, Boxes, History, LayoutDashboard, Plus, SlidersHorizontal } 
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { InventoryStatusBadge, StockBatchesTable, StockMovementsTable } from "../../components/inventory";
 import { Button, Card } from "../../components/ui";
-import StockMovementDetailsDialog from "./StockMovementDetailsDialog";
 import { useInventory } from "./InventoryContext";
-import type { StockMovement } from "../../components/inventory";
 
 type Tab = "overview" | "batches" | "movements";
 export default function ProductInventoryDetailsPage() {
@@ -13,13 +11,12 @@ export default function ProductInventoryDetailsPage() {
   const { getProduct, batches, movements } = useInventory();
   const product = getProduct(Number(productId));
   const [activeTab, setActiveTab] = useState<Tab>("overview");
-  const [selectedMovement, setSelectedMovement] = useState<StockMovement>();
   const productBatches = useMemo(() => batches.filter((x) => x.productId === product?.productId), [batches, product]);
   const productMovements = useMemo(() => movements.filter((x) => x.productId === product?.productId), [movements, product]);
   if (!product) return <Navigate to="/inventory" replace />;
   return <>
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <Button variant="ghost" startIcon={<ArrowRight size={17} />} onClick={() => navigate("/inventory")}>العودة إلى المخزون</Button>
+      <Button variant="secondary" startIcon={<ArrowRight size={17} />} onClick={() => navigate("/inventory")}>العودة إلى المخزون</Button>
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" startIcon={<Plus size={17} />} onClick={() => navigate(`/inventory/${product.productId}/batches/new`)}>إضافة دفعة</Button>
         <Button startIcon={<SlidersHorizontal size={17} />} onClick={() => navigate(`/inventory/${product.productId}/adjust`)}>تسوية المخزون</Button>
@@ -34,10 +31,9 @@ export default function ProductInventoryDetailsPage() {
       <div className="p-5">
         {activeTab === "overview" && <div className="grid gap-5 xl:grid-cols-2"><Card header="بيانات المخزون"><dl className="divide-y divide-[var(--border)]"><Line label="الرصيد الحالي" value={`${product.totalQuantity.toLocaleString()} ${product.unit}`} /><Line label="الحد الأدنى" value={`${product.minimumStock.toLocaleString()} ${product.unit}`} /><Line label="متوسط سعر الشراء" value={`${product.averagePurchasePrice.toLocaleString()} ل.س`} /><Line label="قيمة المخزون" value={`${product.stockValue.toLocaleString()} ل.س`} /><Line label="أقرب انتهاء" value={product.nearestExpiryDate ?? "لا يوجد"} /></dl></Card><Card header="التوريد والدفعات"><dl className="divide-y divide-[var(--border)]"><Line label="عدد الدفعات" value={productBatches.length.toLocaleString()} /><Line label="عدد الموردين" value={product.suppliersCount.toLocaleString()} /><div className="py-3"><dt className="text-xs text-[var(--text-muted)]">الموردون</dt><dd className="mt-2 flex flex-wrap gap-2">{product.supplierNames.map((name) => <span key={name} className="rounded-full border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-1 text-xs font-medium">{name}</span>)}</dd></div></dl></Card></div>}
         {activeTab === "batches" && <section><Heading title="دفعات المادة" description="تفاصيل المورد والكميات وسعر الشراء وتواريخ الاستلام والانتهاء." /><div className="mt-4 overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border)]"><StockBatchesTable batches={productBatches} /></div></section>}
-        {activeTab === "movements" && <section><Heading title="سجل حركة المادة" description="جميع عمليات الإدخال والإخراج والتسويات مرتبة حسب التاريخ." /><div className="mt-4 overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border)]"><StockMovementsTable movements={productMovements} onViewDetails={setSelectedMovement} /></div></section>}
+        {activeTab === "movements" && <section><Heading title="سجل حركة المادة" description="جميع عمليات الإدخال والإخراج والتسويات مرتبة حسب التاريخ." /><div className="mt-4 overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border)]"><StockMovementsTable movements={productMovements} onView={(movement) => navigate(`/inventory/${product.productId}/movements/${movement.id}`)} /></div></section>}
       </div>
     </Card>
-    <StockMovementDetailsDialog movement={selectedMovement} onClose={() => setSelectedMovement(undefined)} />
   </>;
 }
 function Summary({ label, value }: { label: string; value: string }) { return <div className="rounded-[var(--radius-sm)] bg-[var(--surface-subtle)] px-4 py-3"><p className="text-xs text-[var(--text-muted)]">{label}</p><p dir="ltr" className="mt-1 text-right font-bold">{value}</p></div>; }

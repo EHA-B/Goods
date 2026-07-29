@@ -1,15 +1,15 @@
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 
+import TableFooter from "../../components/common/TableFooter";
 import ProductsTable, {
-  Product,
+  type Product,
 } from "../../components/products/ProductsTable";
 import ProductsToolbar from "../../components/products/ProductsToolbar";
-import TableFooter from "../../components/common/TableFooter";
-
 import {
   Button,
   Card,
+  ConfirmDialog,
   EmptyState,
   PageHeader,
 } from "../../components/ui";
@@ -69,82 +69,78 @@ const initialProducts: Product[] = [
 ];
 
 export default function ProductsPage() {
-  const [products, setProducts] =
-    useState<Product[]>(initialProducts);
-
-  const [searchQuery, setSearchQuery] =
-    useState("");
-
-  const [statusFilter, setStatusFilter] =
-    useState("all");
-
-  const [
-    isProductDialogOpen,
-    setIsProductDialogOpen,
-  ] = useState(false);
+  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   const filteredProducts = useMemo(() => {
-    const query =
-      searchQuery.trim().toLowerCase();
+    const query = searchQuery.trim().toLowerCase();
 
     return products.filter((product) => {
       const matchesSearch =
         !query ||
-        product.name
-          .toLowerCase()
-          .includes(query) ||
-        product.code
-          .toLowerCase()
-          .includes(query) ||
-        product.category
-          .toLowerCase()
-          .includes(query);
+        product.name.toLowerCase().includes(query) ||
+        product.code.toLowerCase().includes(query) ||
+        product.category.toLowerCase().includes(query);
 
       const matchesStatus =
-        statusFilter === "all" ||
-        product.status === statusFilter;
+        statusFilter === "all" || product.status === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
-  }, [
-    products,
-    searchQuery,
-    statusFilter,
-  ]);
+  }, [products, searchQuery, statusFilter]);
 
   const filtersAreActive =
-    searchQuery.trim().length > 0 ||
-    statusFilter !== "all";
+    searchQuery.trim().length > 0 || statusFilter !== "all";
 
   function clearFilters() {
     setSearchQuery("");
     setStatusFilter("all");
   }
 
-  function handleSaveProduct(
-    savedProduct: Product,
-  ) {
+  function openCreateDialog() {
+    setSelectedProduct(null);
+    setIsProductDialogOpen(true);
+  }
+
+  function openEditDialog(product: Product) {
+    setSelectedProduct(product);
+    setIsProductDialogOpen(true);
+  }
+
+  function closeProductDialog() {
+    setIsProductDialogOpen(false);
+    setSelectedProduct(null);
+  }
+
+  function handleSaveProduct(savedProduct: Product) {
     setProducts((currentProducts) => {
-      const productExists =
-        currentProducts.some(
-          (product) =>
-            product.id === savedProduct.id,
-        );
+      const productExists = currentProducts.some(
+        (product) => product.id === savedProduct.id,
+      );
 
       if (productExists) {
-        return currentProducts.map(
-          (product) =>
-            product.id === savedProduct.id
-              ? savedProduct
-              : product,
+        return currentProducts.map((product) =>
+          product.id === savedProduct.id ? savedProduct : product,
         );
       }
 
-      return [
-        savedProduct,
-        ...currentProducts,
-      ];
+      return [savedProduct, ...currentProducts];
     });
+  }
+
+  function handleConfirmDelete() {
+    if (!productToDelete) {
+      return;
+    }
+
+    setProducts((currentProducts) =>
+      currentProducts.filter((product) => product.id !== productToDelete.id),
+    );
+    setProductToDelete(null);
   }
 
   return (
@@ -154,12 +150,8 @@ export default function ProductsPage() {
         description="إدارة بيانات المنتجات والأسعار والكميات المتوفرة."
         actions={
           <Button
-            startIcon={
-              <Plus size={17} />
-            }
-            onClick={() =>
-              setIsProductDialogOpen(true)
-            }
+            startIcon={<Plus size={17} />}
+            onClick={openCreateDialog}
           >
             إضافة منتج
           </Button>
@@ -170,35 +162,23 @@ export default function ProductsPage() {
         <ProductsToolbar
           searchQuery={searchQuery}
           statusFilter={statusFilter}
-          filtersAreActive={
-            filtersAreActive
-          }
-          onSearchChange={
-            setSearchQuery
-          }
-          onStatusChange={
-            setStatusFilter
-          }
-          onClearFilters={
-            clearFilters
-          }
+          filtersAreActive={filtersAreActive}
+          onSearchChange={setSearchQuery}
+          onStatusChange={setStatusFilter}
+          onClearFilters={clearFilters}
         />
 
         {filteredProducts.length > 0 ? (
           <>
             <ProductsTable
-              products={
-                filteredProducts
-              }
+              products={filteredProducts}
+              onEdit={openEditDialog}
+              onDelete={setProductToDelete}
             />
 
             <TableFooter
-              visibleCount={
-                filteredProducts.length
-              }
-              totalCount={
-                products.length
-              }
+              visibleCount={filteredProducts.length}
+              totalCount={products.length}
               entityName="منتج"
             />
           </>
@@ -207,10 +187,7 @@ export default function ProductsPage() {
             title="لا توجد نتائج مطابقة"
             description="لم نعثر على منتج يطابق عبارة البحث أو حالة المخزون المحددة."
             action={
-              <Button
-                variant="secondary"
-                onClick={clearFilters}
-              >
+              <Button variant="secondary" onClick={clearFilters}>
                 عرض جميع المنتجات
               </Button>
             }
@@ -220,10 +197,21 @@ export default function ProductsPage() {
 
       <ProductDialog
         open={isProductDialogOpen}
-        onClose={() =>
-          setIsProductDialogOpen(false)
-        }
+        product={selectedProduct}
+        onClose={closeProductDialog}
         onSave={handleSaveProduct}
+      />
+
+      <ConfirmDialog
+        open={productToDelete !== null}
+        title="حذف المنتج"
+        message={
+          productToDelete
+            ? `هل أنت متأكد من حذف المنتج «${productToDelete.name}»؟`
+            : ""
+        }
+        onCancel={() => setProductToDelete(null)}
+        onConfirm={handleConfirmDelete}
       />
     </>
   );

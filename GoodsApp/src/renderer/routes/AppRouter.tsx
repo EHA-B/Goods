@@ -1,71 +1,101 @@
-import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import {
+    HashRouter,
+    Navigate,
+    Route,
+    Routes,
+} from "react-router-dom";
 
 import MainLayout from "../layouts/MainLayout";
 
 import DashboardPage from "../pages/dashboard/DashboardPage";
+
+import InventoryPage from "../pages/inventory/InventoryPage";
+import ProductInventoryDetailsPage from "../pages/inventory/ProductInventoryDetailsPage";
+import StockAdjustmentPage from "../pages/inventory/StockAdjustmentPage";
+import StockBatchFormPage from "../pages/inventory/StockBatchFormPage";
+import { InventoryProvider } from "../pages/inventory/InventoryContext";
+
 import ProductsPage from "../pages/products/ProductsPage";
 
-// الصفحات غير الجاهزة حاليًا
-// import InventoryPage from "../pages/inventory/InventoryPage";
-// import CustomersPage from "../pages/customers/CustomersPage";
-// import SuppliersPage from "../pages/suppliers/SuppliersPage";
-// import SalesPage from "../pages/sales/SalesPage";
-// import PurchasesPage from "../pages/purchases/PurchasesPage";
-// import CashboxesPage from "../pages/cashboxes/CashboxesPage";
-// import TransactionsPage from "../pages/transactions/TransactionsPage";
-// import SettingsPage from "../pages/settings/SettingsPage";
+import CustomersPage from "../pages/customers/CustomersPage";
+import CustomerFormPage from "../pages/customers/CustomerFormPage";
+import CustomerDetailsPage from "../pages/customers/CustomerDetailsPage";
+import { CustomersProvider } from "../pages/customers/CustomersContext";
 
 import { PATHS } from "./path";
 
 function AppRouter() {
-  return (
-    <HashRouter>
-      <Routes>
-        <Route element={<MainLayout />}>
-          {/* لوحة التحكم */}
-          <Route index element={<DashboardPage />} />
+    return (
+        <HashRouter>
+            <InventoryProvider>
+                <CustomersProvider>
+                    <Routes>
+                        <Route element={<MainLayout />}>
+                            <Route
+                                index
+                                element={<DashboardPage />}
+                            />
 
-          {/* المنتجات */}
-          <Route path={PATHS.PRODUCTS} element={<ProductsPage />} />
+                            <Route
+                                path={PATHS.PRODUCTS}
+                                element={<ProductsPage />}
+                            />
 
-          {/* المخزون */}
-          {/* <Route path={PATHS.INVENTORY} element={<InventoryPage />} /> */}
+                            <Route
+                                path={PATHS.INVENTORY}
+                                element={<InventoryPage />}
+                            />
 
-          {/* العملاء */}
-          {/* <Route path={PATHS.CUSTOMERS} element={<CustomersPage />} /> */}
+                            <Route
+                                path={PATHS.INVENTORY_DETAILS}
+                                element={<ProductInventoryDetailsPage />}
+                            />
 
-          {/* الموردون */}
-          {/* <Route path={PATHS.SUPPLIERS} element={<SuppliersPage />} /> */}
+                            <Route
+                                path={PATHS.INVENTORY_ADJUST}
+                                element={<StockAdjustmentPage />}
+                            />
 
-          {/* المبيعات */}
-          {/* <Route path={PATHS.SALES} element={<SalesPage />} /> */}
+                            <Route
+                                path={PATHS.INVENTORY_BATCH_NEW}
+                                element={<StockBatchFormPage />}
+                            />
 
-          {/* المشتريات */}
-          {/* <Route path={PATHS.PURCHASES} element={<PurchasesPage />} /> */}
+                            <Route
+                                path={PATHS.CUSTOMERS}
+                                element={<CustomersPage />}
+                            />
 
-          {/* الصناديق */}
-          {/* <Route path={PATHS.CASHBOXES} element={<CashboxesPage />} /> */}
+                            <Route
+                                path={PATHS.CUSTOMER_NEW}
+                                element={<CustomerFormPage />}
+                            />
 
-          {/* المعاملات المالية */}
-          {/* 
-          <Route
-            path={PATHS.TRANSACTIONS}
-            element={<TransactionsPage />}
-          />
-          */}
+                            <Route
+                                path={PATHS.CUSTOMER_DETAILS}
+                                element={<CustomerDetailsPage />}
+                            />
 
-          {/* الإعدادات */}
-          {/* <Route path={PATHS.SETTINGS} element={<SettingsPage />} /> */}
+                            <Route
+                                path={PATHS.CUSTOMER_EDIT}
+                                element={<CustomerFormPage />}
+                            />
 
-          {/* أي رابط غير معروف يرجع للوحة التحكم */}
-          <Route
-            path="*"
-            element={<Navigate to={PATHS.DASHBOARD} replace />}
-          />
-        </Route>
-      </Routes>
-    </HashRouter>
-  );
+                            <Route
+                                path="*"
+                                element={
+                                    <Navigate
+                                        to={PATHS.DASHBOARD}
+                                        replace
+                                    />
+                                }
+                            />
+                        </Route>
+                    </Routes>
+                </CustomersProvider>
+            </InventoryProvider>
+        </HashRouter>
+    );
 }
 
 export default AppRouter;

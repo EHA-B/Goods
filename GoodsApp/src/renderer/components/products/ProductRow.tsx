@@ -1,14 +1,18 @@
-
 import { DataTableCell, DataTableRow } from "../common";
 import ProductActions from "./ProductActions";
 import type { Product } from "./ProductsTable";
 import ProductStatus from "./ProductStatus";
+
 type ProductRowProps = {
   product: Product;
+  onEdit: (product: Product) => void;
+  onDelete: (product: Product) => void;
 };
 
 export default function ProductRow({
   product,
+  onEdit,
+  onDelete,
 }: ProductRowProps) {
   return (
     <DataTableRow>
@@ -25,17 +29,12 @@ export default function ProductRow({
       </DataTableCell>
 
       <DataTableCell>
-        <span
-          dir="ltr"
-          className="inline-block font-medium"
-        >
+        <span dir="ltr" className="inline-block font-medium">
           {product.code}
         </span>
       </DataTableCell>
 
-      <DataTableCell>
-        {product.category}
-      </DataTableCell>
+      <DataTableCell>{product.category}</DataTableCell>
 
       <DataTableCell>
         <span className="font-bold text-[var(--text-primary)]">
@@ -49,7 +48,7 @@ export default function ProductRow({
 
       <DataTableCell>
         <span className="font-bold text-[var(--text-primary)]">
-          {product.salePrice.toLocaleString("ar-SY")}
+          {product.salePrice.toLocaleString("en-US")}
         </span>
 
         <span className="mr-1.5 text-xs text-[var(--text-muted)]">
@@ -59,11 +58,14 @@ export default function ProductRow({
 
       <DataTableCell>
         <ProductStatus status={product.status} />
-        
       </DataTableCell>
 
       <DataTableCell>
-        <ProductActions product={product} />
+        <ProductActions
+          product={product}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
       </DataTableCell>
     </DataTableRow>
   );

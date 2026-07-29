@@ -35,6 +35,120 @@ class PurchaseInvoiceController {
         return this.getPurchaseInvoice(id);
     }
 
+    async createFullPurchaseInvoice(input, items) {
+        if (!input || !input.invoice_number) {
+            throw { code: 'VALIDATION_ERROR', message: 'invoice_number is required' };
+        }
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            throw { code: 'VALIDATION_ERROR', message: 'items array is required and cannot be empty' };
+        }
+
+        const db = await dbmanager.init();
+        
+        // Helper function for running queries wrapped in Promises
+        const run = (sql, params = []) => new Promise((resolve, reject) => {
+            db.run(sql, params, function(err) {
+                if (err) reject(err);
+                else resolve(this);
+            });
+        });
+
+        try {
+            await run('BEGIN TRANSACTION');
+
+            // 1. Insert the Purchase Invoice
+            const invoiceSql = `
+                INSERT INTO purchase_invoices (
+                    invoice_number, supplier_id, invoice_type, invoice_date, 
+                    subtotal, discount, tax, total, paid_amount, status, notes, 
+                    created_at, updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))
+            `;
+            
+            const invoiceDate = input.invoice_date || new Date().toISOString().split('T')[0];
+            
+            const invoiceResult = await run(invoiceSql, [
+                input.invoice_number,
+                input.supplier_id ?? null,
+                input.invoice_type ?? 'standard',
+                invoiceDate,
+                input.subtotal ?? 0,
+                input.discount ?? 0,
+                input.tax ?? 0,
+                input.total ?? 0,
+                input.paid_amount ?? 0,
+                input.status ?? 'confirmed',
+                input.notes ?? null
+            ]);
+            
+            const invoiceId = invoiceResult.lastID;
+
+            // 2. Loop through items to insert purchase_invoice_items AND stock_batches
+            let index = 1;
+            for (const item of items) {
+                if (!item.product_id || item.quantity == null || item.unit_price == null) {
+                    throw new Error('Each item must have product_id, quantity, and unit_price');
+                }
+
+                const lineTotal = item.line_total ?? (item.quantity * item.unit_price);
+
+                // Insert into purchase_invoice_items
+                const itemSql = `
+                    INSERT INTO purchase_invoice_items (
+                        purchase_invoice_id, product_id, quantity, unit_price, line_total, notes, created_at, updated_at
+                    ) VALUES (?,?,?,?,?,?, datetime('now'), datetime('now'))
+                `;
+                await run(itemSql, [
+                    invoiceId,
+                    item.product_id,
+                    item.quantity,
+                    item.unit_price,
+                    lineTotal,
+                    item.notes ?? null
+                ]);
+
+                // Insert into stock_batches
+                const batchSql = `
+                    INSERT INTO stock_batches (
+                        product_id, supplier_id, purchase_invoice_id, batch_code, 
+                        quantity, remaining_quantity, purchase_price, received_date, 
+                        expiry_date, notes, isActive, created_at, updated_at
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,1, datetime('now'), datetime('now'))
+                `;
+                
+                // Generate a unique batch code for this item
+                const batchCode = item.batch_code || `${input.invoice_number}-B${index}`;
+                
+                await run(batchSql, [
+                    item.product_id,
+                    input.supplier_id ?? null,
+                    invoiceId,
+                    batchCode,
+                    item.quantity,
+                    item.quantity, // remaining_quantity starts exactly equal to purchased quantity
+                    item.unit_price, // purchase_price is the cost we acquired it for
+                    invoiceDate, // received_date
+                    item.expiry_date ?? null,
+                    item.batch_notes ?? null
+                ]);
+                
+                index++;
+            }
+
+            // If everything succeeded, commit the transaction
+            await run('COMMIT');
+            
+            // Return the newly created invoice header
+            return this.getPurchaseInvoice(invoiceId);
+            
+        } catch (error) {
+            // If anything failed (e.g. duplicate batch code, missing fields), rollback completely
+            await run('ROLLBACK');
+            throw error;
+        }
+    }
+
+
     async getPurchaseInvoice(id) {
         if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
         const db = await dbmanager.init();

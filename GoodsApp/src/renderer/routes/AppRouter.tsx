@@ -1,69 +1,58 @@
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
-
 import MainLayout from "../layouts/MainLayout";
-
 import DashboardPage from "../pages/dashboard/DashboardPage";
+import InventoryPage from "../pages/inventory/InventoryPage";
+import ProductInventoryDetailsPage from "../pages/inventory/ProductInventoryDetailsPage";
+import StockAdjustmentPage from "../pages/inventory/StockAdjustmentPage";
+import StockBatchFormPage from "../pages/inventory/StockBatchFormPage";
+import StockMovementDetailsPage from "../pages/inventory/StockMovementDetailsPage";
+import { InventoryProvider } from "../pages/inventory/InventoryContext";
 import ProductsPage from "../pages/products/ProductsPage";
-
-// الصفحات غير الجاهزة حاليًا
-// import InventoryPage from "../pages/inventory/InventoryPage";
-// import CustomersPage from "../pages/customers/CustomersPage";
-// import SuppliersPage from "../pages/suppliers/SuppliersPage";
-// import SalesPage from "../pages/sales/SalesPage";
-// import PurchasesPage from "../pages/purchases/PurchasesPage";
-// import CashboxesPage from "../pages/cashboxes/CashboxesPage";
-// import TransactionsPage from "../pages/transactions/TransactionsPage";
-// import SettingsPage from "../pages/settings/SettingsPage";
-
+import ProductFormPage from "../pages/products/ProductFormPage";
+import { ProductsProvider } from "../pages/products/ProductsContext";
+import CustomersPage from "../pages/customers/CustomersPage";
+import CustomerFormPage from "../pages/customers/CustomerFormPage";
+import CustomerDetailsPage from "../pages/customers/CustomerDetailsPage";
+import { CustomersProvider } from "../pages/customers/CustomersContext";
+import SuppliersPage from "../pages/suppliers/SuppliersPage";
+import SupplierFormPage from "../pages/suppliers/SupplierFormPage";
+import SupplierDetailsPage from "../pages/suppliers/SupplierDetailsPage";
+import { SuppliersProvider } from "../pages/suppliers/SuppliersContext";
 import { PATHS } from "./path";
 
 function AppRouter() {
   return (
     <HashRouter>
-      <Routes>
-        <Route element={<MainLayout />}>
-          {/* لوحة التحكم */}
-          <Route index element={<DashboardPage />} />
-
-          {/* المنتجات */}
-          <Route path={PATHS.PRODUCTS} element={<ProductsPage />} />
-
-          {/* المخزون */}
-          {/* <Route path={PATHS.INVENTORY} element={<InventoryPage />} /> */}
-
-          {/* العملاء */}
-          {/* <Route path={PATHS.CUSTOMERS} element={<CustomersPage />} /> */}
-
-          {/* الموردون */}
-          {/* <Route path={PATHS.SUPPLIERS} element={<SuppliersPage />} /> */}
-
-          {/* المبيعات */}
-          {/* <Route path={PATHS.SALES} element={<SalesPage />} /> */}
-
-          {/* المشتريات */}
-          {/* <Route path={PATHS.PURCHASES} element={<PurchasesPage />} /> */}
-
-          {/* الصناديق */}
-          {/* <Route path={PATHS.CASHBOXES} element={<CashboxesPage />} /> */}
-
-          {/* المعاملات المالية */}
-          {/* 
-          <Route
-            path={PATHS.TRANSACTIONS}
-            element={<TransactionsPage />}
-          />
-          */}
-
-          {/* الإعدادات */}
-          {/* <Route path={PATHS.SETTINGS} element={<SettingsPage />} /> */}
-
-          {/* أي رابط غير معروف يرجع للوحة التحكم */}
-          <Route
-            path="*"
-            element={<Navigate to={PATHS.DASHBOARD} replace />}
-          />
-        </Route>
-      </Routes>
+      <ProductsProvider>
+        <InventoryProvider>
+          <CustomersProvider>
+            <SuppliersProvider>
+            <Routes>
+              <Route element={<MainLayout />}>
+                <Route index element={<DashboardPage />} />
+                <Route path={PATHS.PRODUCTS} element={<ProductsPage />} />
+                <Route path={PATHS.PRODUCT_NEW} element={<ProductFormPage />} />
+                <Route path={PATHS.PRODUCT_EDIT} element={<ProductFormPage />} />
+                <Route path={PATHS.INVENTORY} element={<InventoryPage />} />
+                <Route path={PATHS.INVENTORY_DETAILS} element={<ProductInventoryDetailsPage />} />
+                <Route path={PATHS.INVENTORY_ADJUST} element={<StockAdjustmentPage />} />
+                <Route path={PATHS.INVENTORY_BATCH_NEW} element={<StockBatchFormPage />} />
+                <Route path={PATHS.INVENTORY_MOVEMENT_DETAILS} element={<StockMovementDetailsPage />} />
+                <Route path={PATHS.CUSTOMERS} element={<CustomersPage />} />
+                <Route path={PATHS.CUSTOMER_NEW} element={<CustomerFormPage />} />
+                <Route path={PATHS.CUSTOMER_DETAILS} element={<CustomerDetailsPage />} />
+                <Route path={PATHS.CUSTOMER_EDIT} element={<CustomerFormPage />} />
+                <Route path={PATHS.SUPPLIERS} element={<SuppliersPage />} />
+                <Route path={PATHS.SUPPLIER_NEW} element={<SupplierFormPage />} />
+                <Route path={PATHS.SUPPLIER_DETAILS} element={<SupplierDetailsPage />} />
+                <Route path={PATHS.SUPPLIER_EDIT} element={<SupplierFormPage />} />
+                <Route path="*" element={<Navigate to={PATHS.DASHBOARD} replace />} />
+              </Route>
+            </Routes>
+            </SuppliersProvider>
+          </CustomersProvider>
+        </InventoryProvider>
+      </ProductsProvider>
     </HashRouter>
   );
 }

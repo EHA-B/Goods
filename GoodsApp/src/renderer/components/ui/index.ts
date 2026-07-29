@@ -62,3 +62,4 @@ export { default as TableCell } from "./TableCell";
 export { default as TableRow } from "./TableRow";
 
 export { default as Textarea } from "./Textarea";
+export { default as BackButton } from "./BackButton";

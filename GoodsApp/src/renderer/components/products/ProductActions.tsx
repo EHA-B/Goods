@@ -1,54 +1,38 @@
-import {
-  MoreHorizontal,
-  PencilLine,
-  Trash2,
-} from "lucide-react";
+import { PencilLine, Trash2 } from "lucide-react";
 
-import {
-  IconButton,
-} from "../ui";
-
+import { Button } from "../ui";
 import type { Product } from "./ProductsTable";
-import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from "../ui/dropdown-menu";
 
 type ProductActionsProps = {
   product: Product;
+  onEdit: (product: Product) => void;
+  onDelete: (product: Product) => void;
 };
 
 export default function ProductActions({
   product,
+  onEdit,
+  onDelete,
 }: ProductActionsProps) {
   return (
-    <DropdownMenu
-      trigger={
-        <IconButton
-           aria-label="إجراءات المنتج"
-      className="h-8 w-8"
-        >
-          <MoreHorizontal size={18} />
-        </IconButton>
-      }
-    >
-      <DropdownMenuItem
-        icon={<PencilLine size={15} />}
-        onClick={() => {
-          console.log("Edit", product.id);
-        }}
+    <div className="flex items-center justify-end gap-2">
+      <Button
+        size="sm"
+        variant="secondary"
+        startIcon={<PencilLine size={15} />}
+        onClick={() => onEdit(product)}
       >
-        تعديل المنتج
-      </DropdownMenuItem>
+        تعديل
+      </Button>
 
-      <DropdownMenuSeparator />
-
-      <DropdownMenuItem
-        danger
-        icon={<Trash2 size={15} />}
-        onClick={() => {
-          console.log("Delete", product.id);
-        }}
+      <Button
+        size="sm"
+        variant="danger"
+        startIcon={<Trash2 size={15} />}
+        onClick={() => onDelete(product)}
       >
-        حذف المنتج
-      </DropdownMenuItem>
-    </DropdownMenu>
+        حذف
+      </Button>
+    </div>
   );
 }

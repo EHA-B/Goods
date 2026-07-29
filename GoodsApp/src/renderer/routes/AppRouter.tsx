@@ -17,7 +17,29 @@ import { CustomersProvider } from "../pages/customers/CustomersContext";
 import SuppliersPage from "../pages/suppliers/SuppliersPage";
 import SupplierFormPage from "../pages/suppliers/SupplierFormPage";
 import SupplierDetailsPage from "../pages/suppliers/SupplierDetailsPage";
+import SalesPage from "../pages/sales/SalesPage";
+import SaleFormPage from "../pages/sales/SaleFormPage";
+import SaleDetailsPage from "../pages/sales/SaleDetailsPage";
+import SalePaymentPage from "../pages/sales/SalePaymentPage";
+import PurchasesPage from "../pages/purchases/PurchasesPage";
+import PurchaseFormPage from "../pages/purchases/PurchaseFormPage";
+import PurchaseDetailsPage from "../pages/purchases/PurchaseDetailsPage";
+import PurchasePaymentPage from "../pages/purchases/PurchasePaymentPage";
 import { SuppliersProvider } from "../pages/suppliers/SuppliersContext";
+import CashboxesPage from "../pages/cashboxes/CashboxesPage";
+import CashboxFormPage from "../pages/cashboxes/CashboxFormPage";
+import CashboxDetailsPage from "../pages/cashboxes/CashboxDetailsPage";
+import CashboxTransactionFormPage from "../pages/cashboxes/CashboxTransactionFormPage";
+import CashboxTransferPage from "../pages/cashboxes/CashboxTransferPage";
+import TransactionsPage from "../pages/transactions/TransactionsPage";
+import TransactionFormPage from "../pages/transactions/TransactionFormPage";
+import TransactionDetailsPage from "../pages/transactions/TransactionDetailsPage";
+import TransactionCategoriesPage from "../pages/cashboxes/TransactionCategoriesPage";
+import TransactionCategoryFormPage from "../pages/cashboxes/TransactionCategoryFormPage";
+import SettingsPage from "../pages/settings/SettingsPage";
+import CompanySettingsPage from "../pages/settings/CompanySettingsPage";
+import BackupSettingsPage from "../pages/settings/BackupSettingsPage";
+import AboutSettingsPage from "../pages/settings/AboutSettingsPage";
 import { PATHS } from "./path";
 
 function AppRouter() {
@@ -46,6 +68,33 @@ function AppRouter() {
                 <Route path={PATHS.SUPPLIER_NEW} element={<SupplierFormPage />} />
                 <Route path={PATHS.SUPPLIER_DETAILS} element={<SupplierDetailsPage />} />
                 <Route path={PATHS.SUPPLIER_EDIT} element={<SupplierFormPage />} />
+                <Route path={PATHS.SALES} element={<SalesPage />} />
+                <Route path={PATHS.SALE_NEW} element={<SaleFormPage />} />
+                <Route path={PATHS.SALE_DETAILS} element={<SaleDetailsPage />} />
+                <Route path={PATHS.SALE_EDIT} element={<SaleFormPage />} />
+                <Route path={PATHS.SALE_PAYMENT_NEW} element={<SalePaymentPage />} />
+                <Route path={PATHS.PURCHASES} element={<PurchasesPage />} />
+                <Route path={PATHS.PURCHASE_NEW} element={<PurchaseFormPage />} />
+                <Route path={PATHS.PURCHASE_DETAILS} element={<PurchaseDetailsPage />} />
+                <Route path={PATHS.PURCHASE_EDIT} element={<PurchaseFormPage />} />
+                <Route path={PATHS.PURCHASE_PAYMENT_NEW} element={<PurchasePaymentPage />} />
+                <Route path={PATHS.CASHBOXES} element={<CashboxesPage />} />
+                <Route path={PATHS.CASHBOX_NEW} element={<CashboxFormPage />} />
+                <Route path={PATHS.CASHBOX_DETAILS} element={<CashboxDetailsPage />} />
+                <Route path={PATHS.CASHBOX_EDIT} element={<CashboxFormPage />} />
+                <Route path={PATHS.CASHBOX_TRANSACTION_NEW} element={<CashboxTransactionFormPage />} />
+                <Route path={PATHS.CASHBOX_TRANSFER_NEW} element={<CashboxTransferPage />} />
+                <Route path={PATHS.TRANSACTIONS} element={<TransactionsPage />} />
+                <Route path={PATHS.TRANSACTION_NEW} element={<TransactionFormPage />} />
+                <Route path={PATHS.TRANSACTION_DETAILS} element={<TransactionDetailsPage />} />
+                <Route path={PATHS.TRANSACTION_EDIT} element={<TransactionFormPage />} />
+                <Route path={PATHS.TRANSACTION_CATEGORIES} element={<TransactionCategoriesPage />} />
+                <Route path={PATHS.TRANSACTION_CATEGORY_NEW} element={<TransactionCategoryFormPage />} />
+                <Route path={PATHS.TRANSACTION_CATEGORY_EDIT} element={<TransactionCategoryFormPage />} />
+                <Route path={PATHS.SETTINGS} element={<SettingsPage />} />
+                <Route path={PATHS.SETTINGS_COMPANY} element={<CompanySettingsPage />} />
+                <Route path={PATHS.SETTINGS_BACKUP} element={<BackupSettingsPage />} />
+                <Route path={PATHS.SETTINGS_ABOUT} element={<AboutSettingsPage />} />
                 <Route path="*" element={<Navigate to={PATHS.DASHBOARD} replace />} />
               </Route>
             </Routes>

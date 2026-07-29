@@ -16,6 +16,9 @@ export const PATHS = {
     INVENTORY_MOVEMENT_DETAILS: "/inventory/:productId/movements/:movementId",
 
     SUPPLIERS: "/suppliers",
+    SUPPLIER_NEW: "/suppliers/new",
+    SUPPLIER_DETAILS: "/suppliers/:supplierId",
+    SUPPLIER_EDIT: "/suppliers/:supplierId/edit",
     PURCHASES: "/purchases",
     SALES: "/sales",
     CASHBOXES: "/cashboxes",

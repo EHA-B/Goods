@@ -14,6 +14,10 @@ import CustomersPage from "../pages/customers/CustomersPage";
 import CustomerFormPage from "../pages/customers/CustomerFormPage";
 import CustomerDetailsPage from "../pages/customers/CustomerDetailsPage";
 import { CustomersProvider } from "../pages/customers/CustomersContext";
+import SuppliersPage from "../pages/suppliers/SuppliersPage";
+import SupplierFormPage from "../pages/suppliers/SupplierFormPage";
+import SupplierDetailsPage from "../pages/suppliers/SupplierDetailsPage";
+import { SuppliersProvider } from "../pages/suppliers/SuppliersContext";
 import { PATHS } from "./path";
 
 function AppRouter() {
@@ -22,6 +26,7 @@ function AppRouter() {
       <ProductsProvider>
         <InventoryProvider>
           <CustomersProvider>
+            <SuppliersProvider>
             <Routes>
               <Route element={<MainLayout />}>
                 <Route index element={<DashboardPage />} />
@@ -37,9 +42,14 @@ function AppRouter() {
                 <Route path={PATHS.CUSTOMER_NEW} element={<CustomerFormPage />} />
                 <Route path={PATHS.CUSTOMER_DETAILS} element={<CustomerDetailsPage />} />
                 <Route path={PATHS.CUSTOMER_EDIT} element={<CustomerFormPage />} />
+                <Route path={PATHS.SUPPLIERS} element={<SuppliersPage />} />
+                <Route path={PATHS.SUPPLIER_NEW} element={<SupplierFormPage />} />
+                <Route path={PATHS.SUPPLIER_DETAILS} element={<SupplierDetailsPage />} />
+                <Route path={PATHS.SUPPLIER_EDIT} element={<SupplierFormPage />} />
                 <Route path="*" element={<Navigate to={PATHS.DASHBOARD} replace />} />
               </Route>
             </Routes>
+            </SuppliersProvider>
           </CustomersProvider>
         </InventoryProvider>
       </ProductsProvider>

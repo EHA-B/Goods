@@ -113,6 +113,21 @@ class ProductController {
         if (!info || info.changes === 0) throw { code: 'NOT_FOUND', message: 'Product not found' };
         return { success: true, message: 'Product deleted successfully' };
     }
+
+    async listStockProdcuts(pagenation,id){
+         const db = await dbmanager.init();
+         
+    }
+    async createStockProduct(input){
+         const db = await dbmanager.init();
+    }
+
+
+
+    async updateStockProduct(id,input){
+         const db = await dbmanager.init();
+         const [name,unit,category,isActive,batch_code,quantity,purchase_price,notes] = input
+    }
 }
 
 module.exports = new ProductController();

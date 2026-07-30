@@ -113,21 +113,321 @@ class ProductController {
         if (!info || info.changes === 0) throw { code: 'NOT_FOUND', message: 'Product not found' };
         return { success: true, message: 'Product deleted successfully' };
     }
+// Add these methods to your ProductController class
 
-    async listStockProdcuts(pagenation,id){
-         const db = await dbmanager.init();
-         
+async listStockProducts(pagination = { page: 1, limit: 10 }) {
+    const db = await dbmanager.init();
+    const page = parseInt(pagination.page) || 1;
+    const limit = parseInt(pagination.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    try {
+        // Get total count for pagination
+        const countResult = await new Promise((resolve, reject) => {
+            db.get(
+                `SELECT COUNT(DISTINCT p.id) as total FROM products p 
+                 LEFT JOIN stock_batches sb ON p.id = sb.product_id`,
+                (err, row) => {
+                    if (err) return reject(err);
+                    resolve(row);
+                }
+            );
+        });
+
+        // Get paginated products with their stock batch details
+        const rows = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT 
+                    p.id as product_id,
+                    p.name,
+                    p.unit,
+                    p.category,
+                    p.description,
+                    p.isActive as product_active,
+                    p.created_at as product_created_at,
+                    p.updated_at as product_updated_at,
+                    sb.id as batch_id,
+                    sb.supplier_id,
+                    sb.purchase_invoice_id,
+                    sb.batch_code,
+                    sb.quantity,
+                    sb.remaining_quantity,
+                    sb.purchase_price,
+                    sb.received_date,
+                    sb.expiry_date,
+                    sb.notes as batch_notes,
+                    sb.isActive as batch_active
+                FROM products p
+                LEFT JOIN stock_batches sb ON p.id = sb.product_id
+                ORDER BY p.id DESC
+                LIMIT ? OFFSET ?`,
+                [limit, offset],
+                (err, rows) => {
+                    if (err) return reject(err);
+                    resolve(rows);
+                }
+            );
+        });
+
+        // Group stock batches by product
+        const products = {};
+        rows.forEach(row => {
+            if (!products[row.product_id]) {
+                products[row.product_id] = {
+                    product: {
+                        id: row.product_id,
+                        name: row.name,
+                        unit: row.unit,
+                        category: row.category,
+                        description: row.description,
+                        isActive: row.product_active,
+                        created_at: row.product_created_at,
+                        updated_at: row.product_updated_at
+                    },
+                    stock_batches: []
+                };
+            }
+            if (row.batch_id) {
+                products[row.product_id].stock_batches.push({
+                    id: row.batch_id,
+                    supplier_id: row.supplier_id,
+                    purchase_invoice_id: row.purchase_invoice_id,
+                    batch_code: row.batch_code,
+                    quantity: row.quantity,
+                    remaining_quantity: row.remaining_quantity,
+                    purchase_price: row.purchase_price,
+                    received_date: row.received_date,
+                    expiry_date: row.expiry_date,
+                    notes: row.batch_notes,
+                    isActive: row.batch_active
+                });
+            }
+        });
+
+        return {
+            data: Object.values(products),
+            pagination: {
+                page,
+                limit,
+                total: countResult.total,
+                totalPages: Math.ceil(countResult.total / limit)
+            }
+        };
+    } catch (error) {
+        throw error;
     }
-    async createStockProduct(input){
-         const db = await dbmanager.init();
+}
+
+async createStockProduct(input) {
+    // Validate required fields
+    if (!input || !input.product || !input.product.name) {
+        const err = new Error('Product name is required');
+        err.code = 'VALIDATION_ERROR';
+        throw err;
     }
 
-
-
-    async updateStockProduct(id,input){
-         const db = await dbmanager.init();
-         const [name,unit,category,isActive,batch_code,quantity,purchase_price,notes] = input
+    // Check if stock batch data is provided
+    if (!input.stock_batch || input.stock_batch.quantity === undefined) {
+        const err = new Error('Stock batch quantity is required');
+        err.code = 'VALIDATION_ERROR';
+        throw err;
     }
+
+    const db = await dbmanager.init();
+
+    try {
+        // Start transaction
+        await new Promise((resolve, reject) => {
+            db.run('BEGIN TRANSACTION', (err) => {
+                if (err) return reject(err);
+                resolve();
+            });
+        });
+
+        // Create the product using existing method
+        const productInput = {
+            name: input.product.name,
+            unit: input.product.unit || null,
+            category: input.product.category || null,
+            description: input.product.description || null,
+            isActive: input.product.isActive !== undefined ? input.product.isActive : 1
+        };
+
+        const product = await this.createProduct(productInput);
+
+        // Now create the stock batch using StockBatchController
+        const stockBatchController = require('./stockBatchController'); // Adjust path as needed
+        
+        const stockBatchInput = {
+            product_id: product.id,
+            supplier_id: input.stock_batch.supplier_id || null,
+            purchase_invoice_id: input.stock_batch.purchase_invoice_id || null,
+            batch_code: input.stock_batch.batch_code || null,
+            quantity: input.stock_batch.quantity,
+            remaining_quantity: input.stock_batch.remaining_quantity || input.stock_batch.quantity,
+            purchase_price: input.stock_batch.purchase_price || null,
+            received_date: input.stock_batch.received_date || null,
+            expiry_date: input.stock_batch.expiry_date || null,
+            notes: input.stock_batch.notes || null,
+            isActive: input.stock_batch.isActive !== undefined ? input.stock_batch.isActive : 1
+        };
+
+        const stockBatch = await stockBatchController.createStockBatch(stockBatchInput);
+
+        // Commit transaction
+        await new Promise((resolve, reject) => {
+            db.run('COMMIT', (err) => {
+                if (err) return reject(err);
+                resolve();
+            });
+        });
+
+        // Return combined result
+        return {
+            product,
+            stock_batch: stockBatch
+        };
+    } catch (error) {
+        // Rollback on error
+        await new Promise((resolve) => {
+            db.run('ROLLBACK', () => resolve());
+        });
+        throw error;
+    }
+}
+
+async updateStockProduct(id, input) {
+    if (!id) {
+        const err = new Error('Product ID is required');
+        err.code = 'VALIDATION_ERROR';
+        throw err;
+    }
+
+    const db = await dbmanager.init();
+
+    try {
+        // Start transaction
+        await new Promise((resolve, reject) => {
+            db.run('BEGIN TRANSACTION', (err) => {
+                if (err) return reject(err);
+                resolve();
+            });
+        });
+
+        // Update product if data is provided
+        let product = null;
+        if (input.product) {
+            product = await this.updateProduct(id, input.product);
+        } else {
+            // Get current product if not updating product fields
+            product = await this.getProduct(id);
+        }
+
+        // Update stock batch if data is provided
+        let stockBatch = null;
+        if (input.stock_batch) {
+            // Find the stock batch for this product
+            const db = await dbmanager.init();
+            const existingBatch = await new Promise((resolve, reject) => {
+                db.get(
+                    `SELECT id FROM stock_batches WHERE product_id = ? LIMIT 1`,
+                    [id],
+                    (err, row) => {
+                        if (err) return reject(err);
+                        resolve(row);
+                    }
+                );
+            });
+
+            if (existingBatch) {
+                // Update existing batch
+                const stockBatchController = require('./stockBatchController');
+                stockBatch = await stockBatchController.updateStockBatch(existingBatch.id, input.stock_batch);
+            } else {
+                // Create new batch if none exists
+                const stockBatchController = require('./stockBatchController');
+                const stockBatchInput = {
+                    product_id: id,
+                    supplier_id: input.stock_batch.supplier_id || null,
+                    purchase_invoice_id: input.stock_batch.purchase_invoice_id || null,
+                    batch_code: input.stock_batch.batch_code || null,
+                    quantity: input.stock_batch.quantity || null,
+                    remaining_quantity: input.stock_batch.remaining_quantity || input.stock_batch.quantity || null,
+                    purchase_price: input.stock_batch.purchase_price || null,
+                    received_date: input.stock_batch.received_date || null,
+                    expiry_date: input.stock_batch.expiry_date || null,
+                    notes: input.stock_batch.notes || null,
+                    isActive: input.stock_batch.isActive !== undefined ? input.stock_batch.isActive : 1
+                };
+                stockBatch = await stockBatchController.createStockBatch(stockBatchInput);
+            }
+        } else {
+            // Get existing stock batch if not updating stock fields
+            const db = await dbmanager.init();
+            const existingBatch = await new Promise((resolve, reject) => {
+                db.get(
+                    `SELECT * FROM stock_batches WHERE product_id = ? LIMIT 1`,
+                    [id],
+                    (err, row) => {
+                        if (err) return reject(err);
+                        resolve(row);
+                    }
+                );
+            });
+            if (existingBatch) {
+                stockBatch = existingBatch;
+            }
+        }
+
+        // Commit transaction
+        await new Promise((resolve, reject) => {
+            db.run('COMMIT', (err) => {
+                if (err) return reject(err);
+                resolve();
+            });
+        });
+
+        return {
+            product,
+            stock_batch: stockBatch
+        };
+    } catch (error) {
+        // Rollback on error
+        await new Promise((resolve) => {
+            db.run('ROLLBACK', () => resolve());
+        });
+        throw error;
+    }
+}
+
+async getProductWithStock(id) {
+    if (!id) {
+        const err = new Error('Product ID is required');
+        err.code = 'VALIDATION_ERROR';
+        throw err;
+    }
+
+    // Get the product using existing method
+    const product = await this.getProduct(id);
+
+    // Get all stock batches for this product
+    const db = await dbmanager.init();
+    const stockBatches = await new Promise((resolve, reject) => {
+        db.all(
+            `SELECT * FROM stock_batches WHERE product_id = ?`,
+            [id],
+            (err, rows) => {
+                if (err) return reject(err);
+                resolve(rows);
+            }
+        );
+    });
+
+    return {
+        product,
+        stock_batches: stockBatches
+    };
+}
 }
 
 module.exports = new ProductController();

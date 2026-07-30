@@ -25,14 +25,14 @@ export default function ProductFormPage() {
     <PageHeader title={id ? "تعديل المنتج" : "إضافة منتج"} description="أدخل بيانات المنتج الأساسية والأسعار وحالة التوفر." actions={<BackButton to="/products" label="العودة إلى المنتجات" />} />
     <Card header="بيانات المنتج" description="الحقول الأساسية المستخدمة في القوائم والفواتير.">
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        <FormField label="اسم المنتج" required><Input value={form.name} onChange={(e) => update("name", e.target.value)} /></FormField>
-        <FormField label="الكود" required><Input dir="ltr" value={form.code} onChange={(e) => update("code", e.target.value)} /></FormField>
-        <FormField label="التصنيف"><Input value={form.category} onChange={(e) => update("category", e.target.value)} /></FormField>
-        <FormField label="الوحدة" required><Input value={form.unit} onChange={(e) => update("unit", e.target.value)} /></FormField>
+        <FormField label="اسم المنتج" required><Input value={form.name} placeholder="مثال: سكر أبيض 1 كغ" onChange={(e) => update("name", e.target.value)} /></FormField>
+        <FormField label="الكود" required><Input dir="ltr" value={form.code} placeholder="مثال: PRD-001" onChange={(e) => update("code", e.target.value)} /></FormField>
+        <FormField label="التصنيف"><Input value={form.category} placeholder="مثال: مواد غذائية" onChange={(e) => update("category", e.target.value)} /></FormField>
+        <FormField label="الوحدة" required><Input value={form.unit} placeholder="مثال: كغ، عبوة، قطعة" onChange={(e) => update("unit", e.target.value)} /></FormField>
         <FormField label="الكمية"><NumberInput min={0} value={form.quantity} onChange={(e) => update("quantity", e.target.value)} /></FormField>
         <FormField label="سعر البيع"><NumberInput min={0} value={form.salePrice} suffix="ل.س" onChange={(e) => update("salePrice", e.target.value)} /></FormField>
         <FormField label="الحالة"><Select value={form.status} options={STATUS_OPTIONS} onChange={(e) => update("status", e.target.value as ProductStatus)} /></FormField>
-        <div className="md:col-span-2 xl:col-span-3"><FormField label="ملاحظات"><Textarea rows={5} value={form.notes} onChange={(e) => update("notes", e.target.value)} /></FormField></div>
+        <div className="md:col-span-2 xl:col-span-3"><FormField label="ملاحظات"><Textarea rows={5} value={form.notes} placeholder="ملاحظات إضافية عن المنتج..." onChange={(e) => update("notes", e.target.value)} /></FormField></div>
         {error && <p className="md:col-span-2 xl:col-span-3 text-sm font-medium text-[var(--danger)]">{error}</p>}
       </div>
     </Card>

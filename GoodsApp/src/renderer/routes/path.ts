@@ -1,4 +1,5 @@
 export const PATHS = {
+    LOGIN: "/login",
     DASHBOARD: "/",
     PRODUCTS: "/products",
     PRODUCT_NEW: "/products/new",
@@ -24,11 +25,13 @@ export const PATHS = {
     PURCHASE_DETAILS: "/purchases/:purchaseId",
     PURCHASE_EDIT: "/purchases/:purchaseId/edit",
     PURCHASE_PAYMENT_NEW: "/purchases/:purchaseId/payments/new",
+    PURCHASE_PRINT: "/purchases/:purchaseId/print",
     SALES: "/sales",
     SALE_NEW: "/sales/new",
     SALE_DETAILS: "/sales/:saleId",
     SALE_EDIT: "/sales/:saleId/edit",
     SALE_PAYMENT_NEW: "/sales/:saleId/payments/new",
+    SALE_PRINT: "/sales/:saleId/print",
     CASHBOXES: "/cashboxes",
     CASHBOX_NEW: "/cashboxes/new",
     CASHBOX_DETAILS: "/cashboxes/:id",
@@ -48,4 +51,5 @@ export const PATHS = {
     SETTINGS_COMPANY: "/settings/company",
     SETTINGS_BACKUP: "/settings/backup",
     SETTINGS_ABOUT: "/settings/about",
+    SETTINGS_APPEARANCE: "/settings/appearance",
 } as const;

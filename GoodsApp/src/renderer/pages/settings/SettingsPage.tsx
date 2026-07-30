@@ -1,4 +1,4 @@
-import { Building2, DatabaseBackup, Info, ArrowLeft } from "lucide-react";
+import { Building2, DatabaseBackup, Info, ArrowLeft, Palette } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, PageHeader } from "../../components/ui";
 import { PATHS } from "../../routes/path";
@@ -15,6 +15,12 @@ const items = [
     description: "إنشاء نسخة من بيانات النظام أو استعادة نسخة محفوظة.",
     path: PATHS.SETTINGS_BACKUP,
     icon: DatabaseBackup,
+  },
+  {
+    title: "إعدادات الواجهة",
+    description: "الوضع الليلي وحجم الخط وباليت ألوان الواجهة.",
+    path: PATHS.SETTINGS_APPEARANCE,
+    icon: Palette,
   },
   {
     title: "حول البرنامج",

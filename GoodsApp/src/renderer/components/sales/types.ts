@@ -3,6 +3,7 @@ export type PaymentMethod = "cash" | "bank" | "credit_card" | "cheque" | "online
 
 export type SaleItem = {
   id: number;
+  productId: number;
   stockBatchId: number;
   productName: string;
   batchCode: string;

@@ -1,4 +1,5 @@
 import type { PurchaseDraft, PurchaseInvoice, PurchasePayment } from "../../components/purchases/types";
+import { frontendCatalog } from "../../data/frontendCatalog";
 
 let purchases: PurchaseInvoice[] = [
   { id: 1, invoiceNumber: "PUR-00041", supplierId: 1, supplierName: "شركة النور للتجارة", purchaseType: "standard", cashboxId: 1, cashboxName: "الصندوق الرئيسي", invoiceDate: "2026-07-25", subtotal: 252000, discount: 2000, tax: 0, total: 250000, paidAmount: 150000, status: "confirmed", notes: "توريد للمستودع الرئيسي", items: [
@@ -10,9 +11,9 @@ let purchases: PurchaseInvoice[] = [
   ], payments: [] },
 ];
 
-const suppliers = [{ id: 1, name: "شركة النور للتجارة" }, { id: 2, name: "مؤسسة الخير" }, { id: 3, name: "مستودع الشام" }];
-const products = [{ id: 1, name: "زيت نباتي 1 لتر" }, { id: 2, name: "سكر 1 كغ" }, { id: 3, name: "أرز 1 كغ" }];
-const cashboxes = [{ id: 1, name: "الصندوق الرئيسي" }, { id: 2, name: "صندوق الفرع" }];
+const suppliers = frontendCatalog.suppliers();
+const products = frontendCatalog.products();
+const cashboxes = frontendCatalog.cashboxes();
 
 export const purchasesService = {
   list: () => [...purchases],
@@ -27,7 +28,7 @@ export const purchasesService = {
     const previous = id ? purchases.find((purchase) => purchase.id === id) : undefined;
     const newId = id ?? Math.max(0, ...purchases.map((purchase) => purchase.id)) + 1;
     const payment: PurchasePayment[] = draft.initialPayment > 0 ? [{ id: Date.now(), purchaseId: newId, date: draft.invoiceDate, amount: draft.initialPayment, method: draft.paymentMethod, cashboxName: cashbox?.name ?? "-", referenceNumber: draft.paymentReference }] : [];
-    const saved: PurchaseInvoice = { ...draft, id: newId, invoiceNumber: draft.invoiceNumber || `PUR-${String(newId).padStart(5, "0")}`, supplierName: supplier.name, cashboxName: cashbox?.name, subtotal, total, paidAmount: (previous?.paidAmount ?? 0) + draft.initialPayment, payments: [...(previous?.payments ?? []), ...payment], items: draft.items.map((item, index) => ({ ...item, id: item.id || Date.now() + index, lineTotal: item.quantity * item.purchasePrice })) };
+    const saved: PurchaseInvoice = { ...draft, id: newId, invoiceNumber: draft.invoiceNumber || `PUR-${String(newId).padStart(5, "0")}`, supplierName: supplier.name, cashboxName: cashbox?.name, subtotal, total, paidAmount: (previous?.paidAmount ?? 0) + draft.initialPayment, payments: [...(previous?.payments ?? []), ...payment], items: draft.items.map((item, index) => ({ ...item, batchCode: item.batchCode.trim() || `${draft.invoiceNumber || `PUR-${String(newId).padStart(5, "0")}`}-B${index + 1}`, id: item.id || Date.now() + index, lineTotal: item.quantity * item.purchasePrice })) };
     purchases = previous ? purchases.map((purchase) => purchase.id === id ? saved : purchase) : [saved, ...purchases];
     return saved;
   },

@@ -1,4 +1,5 @@
 import type { SaleDraft, SaleInvoice, SalePayment } from "../../components/sales/types";
+import { frontendCatalog } from "../../data/frontendCatalog";
 
 let sales: SaleInvoice[] = [
   {
@@ -21,8 +22,8 @@ let sales: SaleInvoice[] = [
     status: "confirmed",
     notes: "تسليم من المستودع الرئيسي",
     items: [
-      { id: 1, stockBatchId: 1, productName: "زيت نباتي 1 لتر", batchCode: "B-2407-01", quantity: 10, availableQuantity: 36, unitPrice: 12000, costPrice: 9000, lineTotal: 120000, profit: 30000 },
-      { id: 2, stockBatchId: 2, productName: "سكر 1 كغ", batchCode: "B-2407-11", quantity: 10, availableQuantity: 44, unitPrice: 6000, costPrice: 4800, lineTotal: 60000, profit: 12000 },
+      { id: 1, productId: 1, stockBatchId: 1, productName: "زيت نباتي 1 لتر", batchCode: "B-2407-01", quantity: 10, availableQuantity: 36, unitPrice: 12000, costPrice: 9000, lineTotal: 120000, profit: 30000 },
+      { id: 2, productId: 2, stockBatchId: 2, productName: "سكر 1 كغ", batchCode: "B-2407-11", quantity: 10, availableQuantity: 44, unitPrice: 6000, costPrice: 4800, lineTotal: 60000, profit: 12000 },
     ],
     payments: [
       { id: 1, saleId: 1, date: "2026-07-27", amount: 100000, method: "cash", cashboxName: "الصندوق الرئيسي", referenceNumber: "PAY-1001" },
@@ -47,7 +48,7 @@ let sales: SaleInvoice[] = [
     paidAmount: 65100,
     status: "paid",
     items: [
-      { id: 3, stockBatchId: 3, productName: "أرز 1 كغ", batchCode: "B-2407-19", quantity: 10, availableQuantity: 18, unitPrice: 6200, costPrice: 5000, lineTotal: 62000, profit: 12000 },
+      { id: 3, productId: 3, stockBatchId: 3, productName: "أرز 1 كغ", batchCode: "B-2407-19", quantity: 10, availableQuantity: 18, unitPrice: 6200, costPrice: 5000, lineTotal: 62000, profit: 12000 },
     ],
     payments: [
       { id: 2, saleId: 2, date: "2026-07-28", amount: 65100, method: "bank", cashboxName: "الصندوق الرئيسي", referenceNumber: "TRX-8841" },
@@ -55,27 +56,20 @@ let sales: SaleInvoice[] = [
   },
 ];
 
-const customers = [
-  { id: 1, name: "أحمد الخطيب" },
-  { id: 2, name: "مؤسسة النور" },
-  { id: 3, name: "سارة محمود" },
-];
-const saleTypes = [
-  { id: 1, name: "بيع مباشر", commissionPercentage: 0 },
-  { id: 2, name: "عمولة 5%", commissionPercentage: 5 },
-  { id: 3, name: "عمولة 10%", commissionPercentage: 10 },
-];
-const cashboxes = [{ id: 1, name: "الصندوق الرئيسي" }, { id: 2, name: "صندوق الفرع" }];
-const batches = [
-  { id: 1, productName: "زيت نباتي 1 لتر", batchCode: "B-2407-01", availableQuantity: 36, costPrice: 9000, suggestedPrice: 12000 },
-  { id: 2, productName: "سكر 1 كغ", batchCode: "B-2407-11", availableQuantity: 44, costPrice: 4800, suggestedPrice: 6000 },
-  { id: 3, productName: "أرز 1 كغ", batchCode: "B-2407-19", availableQuantity: 18, costPrice: 5000, suggestedPrice: 6200 },
-];
+const customers = frontendCatalog.customers();
+const saleTypes = frontendCatalog.saleTypes();
+const cashboxes = frontendCatalog.cashboxes();
+const batches = frontendCatalog.stockBatches().map((batch) => {
+  const product = frontendCatalog.product(batch.productId)!;
+  const supplier = frontendCatalog.supplier(batch.supplierId);
+  return { ...batch, productName: product.name, productCode: product.code, unit: product.unit, supplierName: supplier?.name ?? "-" };
+});
+const products = frontendCatalog.products();
 
 export const salesService = {
   list: () => [...sales],
   getById: (id: number) => sales.find((sale) => sale.id === id),
-  getLookups: () => ({ customers, saleTypes, cashboxes, batches }),
+  getLookups: () => ({ customers, saleTypes, cashboxes, products, batches }),
   remove: (id: number) => { sales = sales.filter((sale) => sale.id !== id); },
   save: (draft: SaleDraft, id?: number) => {
     const customer = customers.find((item) => item.id === draft.customerId)!;

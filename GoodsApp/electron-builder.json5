@@ -11,6 +11,10 @@
     "dist",
     "dist-electron"
   ],
+  "extraResources": [
+    { "from": "src/controllers", "to": "src/controllers", "filter": ["**/*.js", "package.json"] },
+    { "from": "src/database", "to": "src/database", "filter": ["databaseManager.js", "package.json"] }
+  ],
   "mac": {
     "target": [
       "dmg"

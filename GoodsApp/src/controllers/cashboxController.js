@@ -105,18 +105,18 @@ class CashboxController {
         return this.getCashbox(id);
     }
 
-//     async deleteCashbox(id) {
-//         if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
-//         const db = await dbmanager.init();
-//         const info = await new Promise((resolve, reject) => {
-//             db.run(`DELETE FROM cashboxes WHERE id = ?`, [id], function (err) {
-//                 if (err) return reject(err);
-//                 resolve({ changes: this.changes });
-//             });
-//         });
-//         if (!info || info.changes === 0) throw { code: 'NOT_FOUND', message: 'Cashbox not found' };
-//         return { success: true, message: 'Cashbox deleted successfully' };
-//     }
+    async deleteCashbox(id) {
+        if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
+        const db = await dbmanager.init();
+        const info = await new Promise((resolve, reject) => {
+            db.run(`DELETE FROM cashboxes WHERE id = ?`, [id], function (err) {
+                if (err) return reject(err);
+                resolve({ changes: this.changes });
+            });
+        });
+        if (!info || info.changes === 0) throw { code: 'NOT_FOUND', message: 'Cashbox not found' };
+        return { success: true, message: 'Cashbox deleted successfully' };
+    }
  }
 
 module.exports = new CashboxController();

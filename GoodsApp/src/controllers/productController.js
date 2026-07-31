@@ -125,8 +125,7 @@ async listStockProducts(pagination = { page: 1, limit: 10 }) {
         // Get total count for pagination
         const countResult = await new Promise((resolve, reject) => {
             db.get(
-                `SELECT COUNT(DISTINCT p.id) as total FROM products p 
-                 LEFT JOIN stock_batches sb ON p.id = sb.product_id`,
+                `SELECT COUNT(id) as total FROM products`,
                 (err, row) => {
                     if (err) return reject(err);
                     resolve(row);
@@ -157,10 +156,9 @@ async listStockProducts(pagination = { page: 1, limit: 10 }) {
                     sb.expiry_date,
                     sb.notes as batch_notes,
                     sb.isActive as batch_active
-                FROM products p
+                FROM (SELECT * FROM products ORDER BY id DESC LIMIT ? OFFSET ?) p
                 LEFT JOIN stock_batches sb ON p.id = sb.product_id
-                ORDER BY p.id DESC
-                LIMIT ? OFFSET ?`,
+                ORDER BY p.id DESC`,
                 [limit, offset],
                 (err, rows) => {
                     if (err) return reject(err);
@@ -326,40 +324,44 @@ async updateStockProduct(id, input) {
         // Update stock batch if data is provided
         let stockBatch = null;
         if (input.stock_batch) {
-            // Find the stock batch for this product
-            const db = await dbmanager.init();
-            const existingBatch = await new Promise((resolve, reject) => {
-                db.get(
-                    `SELECT id FROM stock_batches WHERE product_id = ? LIMIT 1`,
-                    [id],
-                    (err, row) => {
-                        if (err) return reject(err);
-                        resolve(row);
-                    }
-                );
-            });
-
-            if (existingBatch) {
-                // Update existing batch
-                const stockBatchController = require('./stockBatchController');
-                stockBatch = await stockBatchController.updateStockBatch(existingBatch.id, input.stock_batch);
+            const stockBatchController = require('./stockBatchController');
+            
+            if (input.stock_batch.id) {
+                // Update specific batch if ID is provided
+                stockBatch = await stockBatchController.updateStockBatch(input.stock_batch.id, input.stock_batch);
             } else {
-                // Create new batch if none exists
-                const stockBatchController = require('./stockBatchController');
-                const stockBatchInput = {
-                    product_id: id,
-                    supplier_id: input.stock_batch.supplier_id || null,
-                    purchase_invoice_id: input.stock_batch.purchase_invoice_id || null,
-                    batch_code: input.stock_batch.batch_code || null,
-                    quantity: input.stock_batch.quantity || null,
-                    remaining_quantity: input.stock_batch.remaining_quantity || input.stock_batch.quantity || null,
-                    purchase_price: input.stock_batch.purchase_price || null,
-                    received_date: input.stock_batch.received_date || null,
-                    expiry_date: input.stock_batch.expiry_date || null,
-                    notes: input.stock_batch.notes || null,
-                    isActive: input.stock_batch.isActive !== undefined ? input.stock_batch.isActive : 1
-                };
-                stockBatch = await stockBatchController.createStockBatch(stockBatchInput);
+                // Find the first stock batch for this product
+                const existingBatch = await new Promise((resolve, reject) => {
+                    db.get(
+                        `SELECT id FROM stock_batches WHERE product_id = ? LIMIT 1`,
+                        [id],
+                        (err, row) => {
+                            if (err) return reject(err);
+                            resolve(row);
+                        }
+                    );
+                });
+
+                if (existingBatch) {
+                    // Update existing batch
+                    stockBatch = await stockBatchController.updateStockBatch(existingBatch.id, input.stock_batch);
+                } else {
+                    // Create new batch if none exists
+                    const stockBatchInput = {
+                        product_id: id,
+                        supplier_id: input.stock_batch.supplier_id || null,
+                        purchase_invoice_id: input.stock_batch.purchase_invoice_id || null,
+                        batch_code: input.stock_batch.batch_code || null,
+                        quantity: input.stock_batch.quantity || null,
+                        remaining_quantity: input.stock_batch.remaining_quantity || input.stock_batch.quantity || null,
+                        purchase_price: input.stock_batch.purchase_price || null,
+                        received_date: input.stock_batch.received_date || null,
+                        expiry_date: input.stock_batch.expiry_date || null,
+                        notes: input.stock_batch.notes || null,
+                        isActive: input.stock_batch.isActive !== undefined ? input.stock_batch.isActive : 1
+                    };
+                    stockBatch = await stockBatchController.createStockBatch(stockBatchInput);
+                }
             }
         } else {
             // Get existing stock batch if not updating stock fields

@@ -66,9 +66,16 @@ class PurchaseInvoiceController {
             `;
             
             const invoiceDate = input.invoice_date || new Date().toISOString().split('T')[0];
+            const formattedDate = invoiceDate.replace(/-/g, '');
+            const autoInvoiceNumber = input.invoice_number || `${input.supplier_name || 'SUP'}-${formattedDate}`;
             
+            let initialStatus = input.status ?? 'confirmed';
+            if (input.invoice_type === 'consignment' && (!input.status || input.status === 'confirmed')) {
+                initialStatus = 'commission-pending';
+            }
+
             const invoiceResult = await run(invoiceSql, [
-                input.invoice_number,
+                autoInvoiceNumber,
                 input.supplier_id ?? null,
                 input.invoice_type ?? 'standard',
                 invoiceDate,
@@ -77,7 +84,7 @@ class PurchaseInvoiceController {
                 input.tax ?? 0,
                 input.total ?? 0,
                 input.paid_amount ?? 0,
-                input.status ?? 'confirmed',
+                initialStatus,
                 input.notes ?? null
             ]);
             
@@ -238,6 +245,185 @@ class PurchaseInvoiceController {
         });
         if (!info || info.changes === 0) throw { code: 'NOT_FOUND', message: 'PurchaseInvoice not found' };
         return { success: true, message: 'PurchaseInvoice deleted successfully' };
+    }
+
+    async getPurchaseInvoiceSalesDetails(id) {
+        if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
+        const db = await dbmanager.init();
+        
+        const sales = await new Promise((resolve, reject) => {
+            db.all(`
+                SELECT 
+                    sii.id as sale_item_id,
+                    sii.quantity as quantity_sold,
+                    sii.unit_price as sale_price,
+                    sii.line_total as sale_line_total,
+                    sii.sale_invoice_id,
+                    si.invoice_number as sale_invoice_number,
+                    si.invoice_date as sale_date,
+                    sb.id as stock_batch_id,
+                    sb.batch_code,
+                    sb.product_id,
+                    sb.remaining_quantity,
+                    p.name as product_name
+                FROM sale_invoice_items sii
+                JOIN sale_invoices si ON sii.sale_invoice_id = si.id
+                JOIN stock_batches sb ON sii.stock_batch_id = sb.id
+                JOIN products p ON sb.product_id = p.id
+                WHERE sb.purchase_invoice_id = ?
+            `, [id], (err, rows) => {
+                if (err) return reject(err);
+                resolve(rows);
+            });
+        });
+
+        const remainingStock = await new Promise((resolve, reject) => {
+            db.all(`
+                SELECT 
+                    sb.id as stock_batch_id,
+                    sb.batch_code,
+                    sb.product_id,
+                    sb.quantity as total_quantity,
+                    sb.remaining_quantity,
+                    sb.purchase_price,
+                    p.name as product_name
+                FROM stock_batches sb
+                JOIN products p ON sb.product_id = p.id
+                WHERE sb.purchase_invoice_id = ? AND sb.remaining_quantity > 0
+            `, [id], (err, rows) => {
+                if (err) return reject(err);
+                resolve(rows);
+            });
+        });
+
+        return { sales, remainingStock };
+    }
+
+    async closeCommissionInvoice(id, input) {
+        if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
+        if (!input || input.commission_percentage === undefined || !input.cashbox_id) {
+            throw { code: 'VALIDATION_ERROR', message: 'commission_percentage and cashbox_id are required' };
+        }
+
+        const commissionPercentage = Number(input.commission_percentage) || 0;
+        const targetCashboxId = input.cashbox_id;
+
+        const db = await dbmanager.init();
+        
+        const run = (sql, params = []) => new Promise((resolve, reject) => {
+            db.run(sql, params, function(err) {
+                if (err) reject(err);
+                else resolve(this);
+            });
+        });
+
+        try {
+            await run('BEGIN TRANSACTION');
+
+            // 1. Verify invoice exists and is consignment
+            const invoice = await new Promise((resolve, reject) => {
+                db.get('SELECT * FROM purchase_invoices WHERE id = ?', [id], (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row);
+                });
+            });
+
+            if (!invoice) throw { code: 'NOT_FOUND', message: 'Invoice not found' };
+            if (invoice.invoice_type !== 'consignment') throw { code: 'VALIDATION_ERROR', message: 'Only consignment invoices can be closed this way' };
+
+            // 2. Calculate Total Sales Revenue
+            const salesTotalRow = await new Promise((resolve, reject) => {
+                db.get(`
+                    SELECT SUM(sii.line_total) as total_sales 
+                    FROM sale_invoice_items sii 
+                    JOIN stock_batches sb ON sii.stock_batch_id = sb.id 
+                    WHERE sb.purchase_invoice_id = ?
+                `, [id], (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row);
+                });
+            });
+            const totalSalesRevenue = salesTotalRow?.total_sales || 0;
+
+            // 3. Mark Spoilage for remaining stock
+            const remainingStock = await new Promise((resolve, reject) => {
+                db.all(`SELECT id, remaining_quantity FROM stock_batches WHERE purchase_invoice_id = ? AND remaining_quantity > 0`, [id], (err, rows) => {
+                    if (err) reject(err);
+                    else resolve(rows);
+                });
+            });
+
+            for (const batch of remainingStock) {
+                // Insert stock adjustment
+                await run(`
+                    INSERT INTO stock_adjustments (stock_batch_id, quantity, reason, notes, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+                `, [batch.id, batch.remaining_quantity, 'Spoilage upon closing', 'Auto-generated during commission invoice closing']);
+                
+                // Update batch remaining quantity to 0
+                await run(`UPDATE stock_batches SET remaining_quantity = 0, updated_at = datetime('now') WHERE id = ?`, [batch.id]);
+            }
+
+            // 4. Calculate Commission and Supplier Share
+            const commissionAmount = (totalSalesRevenue * commissionPercentage) / 100;
+            const supplierShare = totalSalesRevenue - commissionAmount;
+
+            // 5. Update Supplier Balance
+            if (invoice.supplier_id && supplierShare > 0) {
+                await run(`UPDATE suppliers SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`, [supplierShare, invoice.supplier_id]);
+            }
+
+            // 6. Deduct Supplier Share from Cashbox
+            if (supplierShare > 0) {
+                const cashboxRow = await new Promise((resolve, reject) => {
+                    db.get(`SELECT balance FROM cashboxes WHERE id = ?`, [targetCashboxId], (err, row) => {
+                        if (err) reject(err);
+                        else resolve(row);
+                    });
+                });
+                
+                if (!cashboxRow) throw { code: 'NOT_FOUND', message: 'Target cashbox not found' };
+                const balanceBefore = cashboxRow.balance;
+                const balanceAfter = balanceBefore - supplierShare;
+                
+                await run(`UPDATE cashboxes SET balance = ?, updated_at = datetime('now') WHERE id = ?`, [balanceAfter, targetCashboxId]);
+                
+                await run(`
+                    INSERT INTO cashbox_transactions (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, datetime('now'))
+                `, [
+                    targetCashboxId,
+                    'purchase',
+                    invoice.id,
+                    supplierShare,
+                    'out',
+                    balanceBefore,
+                    balanceAfter,
+                    'Transferring supplier share to balance upon closing consignment invoice ' + invoice.invoice_number
+                ]);
+            }
+
+            // 7. Update Invoice Status
+            await run(`UPDATE purchase_invoices SET status = 'closed-complete', updated_at = datetime('now') WHERE id = ?`, [id]);
+
+            await run('COMMIT');
+            
+            return {
+                success: true,
+                message: 'Invoice closed successfully',
+                details: {
+                    total_sales: totalSalesRevenue,
+                    commission_percentage: commissionPercentage,
+                    commission_amount: commissionAmount,
+                    supplier_share: supplierShare,
+                    spoilage_items_count: remainingStock.length
+                }
+            };
+            
+        } catch (error) {
+            await run('ROLLBACK');
+            throw error;
+        }
     }
 }
 

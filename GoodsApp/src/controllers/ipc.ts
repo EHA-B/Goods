@@ -34,10 +34,12 @@ const controllerDefinitions = {
     file: 'paymentController.js',
     methods: ['createPayment', 'getPayment', 'getAllPayments', 'updatePayment', 'deletePayment'],
   },
+  //use createStockProduct,updatestockproduct and getstockproduct for creating stock products, it's handles creating stock batches automatically and all logic
   product: {
     file: 'productController.js',
     methods: ['createProduct', 'getProduct', 'getAllProducts', 'updateProduct', 'deleteProduct', 'listStockProducts', 'createStockProduct', 'updateStockProduct', 'getProductWithStock'],
   },
+  //use createFullPurchaseIncoice for creating purchase invoices, it's handles creating stock batches automatically and all logic
   purchaseInvoice: {
     file: 'purchaseInvoiceController.js',
     methods: ['createPurchaseInvoice', 'createFullPurchaseInvoice', 'getPurchaseInvoice', 'getAllPurchaseInvoices', 'updatePurchaseInvoice', 'deletePurchaseInvoice', 'getPurchaseInvoiceSalesDetails', 'closeCommissionInvoice'],
@@ -46,6 +48,7 @@ const controllerDefinitions = {
     file: 'purchaseInvoiceItemController.js',
     methods: ['createPurchaseInvoiceItem', 'getPurchaseInvoiceItem', 'getAllPurchaseInvoiceItems', 'updatePurchaseInvoiceItem', 'deletePurchaseInvoiceItem'],
   },
+  //use createSaleProcess for creating sale invoices 
   saleInvoice: {
     file: 'saleInvoiceController.js',
     methods: ['createSaleInvoice', 'getSaleInvoice', 'getAllSaleInvoices', 'updateSaleInvoice', 'deleteSaleInvoice', 'getFullSaleInvoice', 'createSaleProcess'],
@@ -55,7 +58,7 @@ const controllerDefinitions = {
     methods: ['createSaleInvoiceItem', 'getSaleInvoiceItem', 'getAllSaleInvoiceItems', 'updateSaleInvoiceItem', 'deleteSaleInvoiceItem'],
   },
   saleType: {
-    file: 'saleTypeController.js',
+    file: 'saleTypeController.js',  
     methods: ['createSaleType', 'getSaleType', 'getAllSaleTypes', 'updateSaleType', 'deleteSaleType'],
   },
   setting: {

@@ -631,14 +631,14 @@ const dbmanager = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.definePro
   getDatabase,
   initDatabase
 }, Symbol.toStringTag, { value: "Module" }));
-function validationError$2(message) {
+function validationError$3(message) {
   const error = new Error(message);
   error.code = "VALIDATION_ERROR";
   return error;
 }
-function normalizeInput$2(input, partial = false) {
+function normalizeInput$3(input, partial = false) {
   if (!input || typeof input !== "object") {
-    throw validationError$2("بيانات المنتج مطلوبة.");
+    throw validationError$3("بيانات المنتج مطلوبة.");
   }
   const result = {};
   const requiredStringFields = ["name", "unit"];
@@ -647,7 +647,7 @@ function normalizeInput$2(input, partial = false) {
       const value = String(input[field] ?? "").trim();
       if (!value) {
         const labels = { name: "اسم المنتج", unit: "الوحدة" };
-        throw validationError$2(`${labels[field]} مطلوب.`);
+        throw validationError$3(`${labels[field]} مطلوب.`);
       }
       result[field] = value;
     }
@@ -669,7 +669,7 @@ function normalizeInput$2(input, partial = false) {
   }
   return result;
 }
-function normalizeDatabaseError$3(error) {
+function normalizeDatabaseError$4(error) {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = new Error(message);
   if (message.includes("UNIQUE constraint failed: products.code")) {
@@ -703,7 +703,7 @@ function registerProductIpc() {
     return getProductOrThrow(Number(id));
   });
   ipcMain.handle("products:create", async (_event, input) => {
-    const payload = normalizeInput$2(input);
+    const payload = normalizeInput$3(input);
     try {
       const [id] = await getDatabase()("products").insert({
         ...payload,
@@ -712,14 +712,14 @@ function registerProductIpc() {
       });
       return getProductOrThrow(Number(id));
     } catch (error) {
-      return normalizeDatabaseError$3(error);
+      return normalizeDatabaseError$4(error);
     }
   });
   ipcMain.handle("products:update", async (_event, id, input) => {
     const productId = Number(id);
-    const payload = normalizeInput$2(input, true);
+    const payload = normalizeInput$3(input, true);
     if (Object.keys(payload).length === 0) {
-      throw validationError$2("لا توجد بيانات لتعديلها.");
+      throw validationError$3("لا توجد بيانات لتعديلها.");
     }
     try {
       const changed = await getDatabase()("products").where({ id: productId }).update({ ...payload, updated_at: getDatabase().fn.now() });
@@ -730,7 +730,7 @@ function registerProductIpc() {
       }
       return getProductOrThrow(productId);
     } catch (error) {
-      return normalizeDatabaseError$3(error);
+      return normalizeDatabaseError$4(error);
     }
   });
   ipcMain.handle("products:remove", async (_event, id) => {
@@ -744,17 +744,17 @@ function registerProductIpc() {
       }
       return { success: true };
     } catch (error) {
-      return normalizeDatabaseError$3(error);
+      return normalizeDatabaseError$4(error);
     }
   });
   ipcMain.handle("products:adjustStock", async (_event, id, input) => {
     const productId = Number(id);
     const qty = parseFloat(input.quantity);
     if (isNaN(qty) || qty <= 0) {
-      throw validationError$2("يجب أن تكون الكمية رقمًا موجبًا.");
+      throw validationError$3("يجب أن تكون الكمية رقمًا موجبًا.");
     }
     if (!input.type || !input.reason) {
-      throw validationError$2("نوع التسوية والسبب مطلوبان.");
+      throw validationError$3("نوع التسوية والسبب مطلوبان.");
     }
     try {
       return await getDatabase().transaction(async (trx) => {
@@ -767,7 +767,7 @@ function registerProductIpc() {
         let stockBatch = await trx("stock_batches").where({ product_id: productId }).orderBy("id", "asc").first();
         if (!stockBatch) {
           if (input.type === "subtract") {
-            throw validationError$2("لا يمكن إنقاص المخزون لعدم وجود دفعات سابقة.");
+            throw validationError$3("لا يمكن إنقاص المخزون لعدم وجود دفعات سابقة.");
           }
           const [newBatchId] = await trx("stock_batches").insert({
             product_id: productId,
@@ -799,11 +799,11 @@ function registerProductIpc() {
         return { success: true, newRemaining };
       });
     } catch (error) {
-      return normalizeDatabaseError$3(error);
+      return normalizeDatabaseError$4(error);
     }
   });
 }
-function validationError$1(message) {
+function validationError$2(message) {
   const error = new Error(message);
   error.code = "VALIDATION_ERROR";
   return error;
@@ -812,14 +812,14 @@ function normalizeOptionalString$1(value) {
   const normalized = String(value ?? "").trim();
   return normalized || null;
 }
-function normalizeInput$1(input, partial = false) {
+function normalizeInput$2(input, partial = false) {
   if (!input || typeof input !== "object") {
-    throw validationError$1("بيانات المورد مطلوبة.");
+    throw validationError$2("بيانات المورد مطلوبة.");
   }
   const result = {};
   if (!partial || Object.prototype.hasOwnProperty.call(input, "name")) {
     const name = String(input.name ?? "").trim();
-    if (!name) throw validationError$1("اسم المورد مطلوب.");
+    if (!name) throw validationError$2("اسم المورد مطلوب.");
     result.name = name;
   }
   for (const field of ["phone", "email", "address", "notes"]) {
@@ -830,7 +830,7 @@ function normalizeInput$1(input, partial = false) {
   if (!partial || Object.prototype.hasOwnProperty.call(input, "balance")) {
     const balance = Number(input.balance ?? 0);
     if (!Number.isFinite(balance)) {
-      throw validationError$1("الرصيد الافتتاحي غير صالح.");
+      throw validationError$2("الرصيد الافتتاحي غير صالح.");
     }
     result.balance = balance;
   }
@@ -841,7 +841,7 @@ function normalizeInput$1(input, partial = false) {
   }
   return result;
 }
-function normalizeDatabaseError$2(error) {
+function normalizeDatabaseError$3(error) {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = new Error(message);
   if (message.includes("FOREIGN KEY constraint failed")) {
@@ -872,7 +872,7 @@ function registerSupplierIpc() {
     return getSupplierOrThrow(Number(id));
   });
   ipcMain.handle("suppliers:create", async (_event, input) => {
-    const payload = normalizeInput$1(input);
+    const payload = normalizeInput$2(input);
     try {
       const [id] = await getDatabase()("suppliers").insert({
         ...payload,
@@ -881,16 +881,16 @@ function registerSupplierIpc() {
       });
       return getSupplierOrThrow(Number(id));
     } catch (error) {
-      return normalizeDatabaseError$2(error);
+      return normalizeDatabaseError$3(error);
     }
   });
   ipcMain.handle(
     "suppliers:update",
     async (_event, id, input) => {
       const supplierId = Number(id);
-      const payload = normalizeInput$1(input, true);
+      const payload = normalizeInput$2(input, true);
       if (Object.keys(payload).length === 0) {
-        throw validationError$1("لا توجد بيانات لتعديلها.");
+        throw validationError$2("لا توجد بيانات لتعديلها.");
       }
       try {
         const changed = await getDatabase()("suppliers").where({ id: supplierId }).update({ ...payload, updated_at: getDatabase().fn.now() });
@@ -901,7 +901,7 @@ function registerSupplierIpc() {
         }
         return getSupplierOrThrow(supplierId);
       } catch (error) {
-        return normalizeDatabaseError$2(error);
+        return normalizeDatabaseError$3(error);
       }
     }
   );
@@ -916,11 +916,11 @@ function registerSupplierIpc() {
       }
       return { success: true };
     } catch (error) {
-      return normalizeDatabaseError$2(error);
+      return normalizeDatabaseError$3(error);
     }
   });
 }
-function validationError(message) {
+function validationError$1(message) {
   const error = new Error(message);
   error.code = "VALIDATION_ERROR";
   return error;
@@ -929,14 +929,14 @@ function normalizeOptionalString(value) {
   const normalized = String(value ?? "").trim();
   return normalized || null;
 }
-function normalizeInput(input, partial = false) {
+function normalizeInput$1(input, partial = false) {
   if (!input || typeof input !== "object") {
-    throw validationError("بيانات العميل مطلوبة.");
+    throw validationError$1("بيانات العميل مطلوبة.");
   }
   const result = {};
   if (!partial || Object.prototype.hasOwnProperty.call(input, "name")) {
     const name = String(input.name ?? "").trim();
-    if (!name) throw validationError("اسم العميل مطلوب.");
+    if (!name) throw validationError$1("اسم العميل مطلوب.");
     result.name = name;
   }
   for (const field of ["phone", "email", "address", "notes"]) {
@@ -947,7 +947,7 @@ function normalizeInput(input, partial = false) {
   if (!partial || Object.prototype.hasOwnProperty.call(input, "balance")) {
     const balance = Number(input.balance ?? 0);
     if (!Number.isFinite(balance)) {
-      throw validationError("الرصيد الافتتاحي غير صالح.");
+      throw validationError$1("الرصيد الافتتاحي غير صالح.");
     }
     result.balance = balance;
   }
@@ -958,7 +958,7 @@ function normalizeInput(input, partial = false) {
   }
   return result;
 }
-function normalizeDatabaseError$1(error) {
+function normalizeDatabaseError$2(error) {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = new Error(message);
   if (message.includes("FOREIGN KEY constraint failed")) {
@@ -989,7 +989,7 @@ function registerCustomerIpc() {
     return getCustomerOrThrow(Number(id));
   });
   ipcMain.handle("customers:create", async (_event, input) => {
-    const payload = normalizeInput(input);
+    const payload = normalizeInput$1(input);
     try {
       const [id] = await getDatabase()("customers").insert({
         ...payload,
@@ -998,16 +998,16 @@ function registerCustomerIpc() {
       });
       return getCustomerOrThrow(Number(id));
     } catch (error) {
-      return normalizeDatabaseError$1(error);
+      return normalizeDatabaseError$2(error);
     }
   });
   ipcMain.handle(
     "customers:update",
     async (_event, id, input) => {
       const customerId = Number(id);
-      const payload = normalizeInput(input, true);
+      const payload = normalizeInput$1(input, true);
       if (Object.keys(payload).length === 0) {
-        throw validationError("لا توجد بيانات لتعديلها.");
+        throw validationError$1("لا توجد بيانات لتعديلها.");
       }
       try {
         const changed = await getDatabase()("customers").where({ id: customerId }).update({ ...payload, updated_at: getDatabase().fn.now() });
@@ -1018,7 +1018,7 @@ function registerCustomerIpc() {
         }
         return getCustomerOrThrow(customerId);
       } catch (error) {
-        return normalizeDatabaseError$1(error);
+        return normalizeDatabaseError$2(error);
       }
     }
   );
@@ -1033,11 +1033,11 @@ function registerCustomerIpc() {
       }
       return { success: true };
     } catch (error) {
-      return normalizeDatabaseError$1(error);
+      return normalizeDatabaseError$2(error);
     }
   });
 }
-function normalizeDatabaseError(error) {
+function normalizeDatabaseError$1(error) {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = new Error(message);
   throw normalized;
@@ -1073,7 +1073,7 @@ function registerStockIpc() {
         expiring_soon_count: (expiringSoon == null ? void 0 : expiringSoon.count) || 0
       };
     } catch (error) {
-      return normalizeDatabaseError(error);
+      return normalizeDatabaseError$1(error);
     }
   });
   ipcMain.handle("stocks:items", async (_event, pagination = { page: 1, limit: 10 }) => {
@@ -1131,6 +1131,195 @@ function registerStockIpc() {
         }
       };
     } catch (error) {
+      return normalizeDatabaseError$1(error);
+    }
+  });
+}
+function validationError(message) {
+  const error = new Error(message);
+  error.code = "VALIDATION_ERROR";
+  return error;
+}
+function normalizeDatabaseError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = new Error(message);
+  if (message.includes("FOREIGN KEY constraint failed")) {
+    normalized.code = "CASHBOX_IN_USE";
+    normalized.message = "لا يمكن حذف الصندوق لوجود حركات مرتبطة به.";
+  }
+  throw normalized;
+}
+function normalizeInput(input, partial = false) {
+  if (!input || typeof input !== "object") {
+    throw validationError("بيانات الصندوق مطلوبة.");
+  }
+  const result = {};
+  if (!partial || Object.prototype.hasOwnProperty.call(input, "name")) {
+    const name = String(input.name ?? "").trim();
+    if (!name) throw validationError("اسم الصندوق مطلوب.");
+    result.name = name;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "parent_id")) {
+    result.parent_id = input.parent_id ? Number(input.parent_id) : null;
+  }
+  if (!partial || Object.prototype.hasOwnProperty.call(input, "balance")) {
+    result.balance = Number(input.balance ?? 0);
+  }
+  if (!partial || Object.prototype.hasOwnProperty.call(input, "initial_balance")) {
+    result.initial_balance = Number(input.initial_balance ?? 0);
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "currency")) {
+    result.currency = String(input.currency ?? "SAR").trim() || "SAR";
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "notes")) {
+    const notes = String(input.notes ?? "").trim();
+    result.notes = notes || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "isActive")) {
+    result.isActive = Boolean(input.isActive);
+  } else if (!partial) {
+    result.isActive = true;
+  }
+  return result;
+}
+function registerCashboxIpc() {
+  ipcMain.removeHandler("cashboxes:list");
+  ipcMain.removeHandler("cashboxes:get");
+  ipcMain.removeHandler("cashboxes:create");
+  ipcMain.removeHandler("cashboxes:update");
+  ipcMain.removeHandler("cashboxes:summary");
+  ipcMain.removeHandler("cashboxes:transfer");
+  ipcMain.handle("cashboxes:list", async () => {
+    return getDatabase()("cashboxes as c").select("c.*", "p.name as parent_name").leftJoin("cashboxes as p", "c.parent_id", "p.id").orderBy("c.id", "desc");
+  });
+  ipcMain.handle("cashboxes:get", async (_event, id) => {
+    const cashbox = await getDatabase()("cashboxes").where({ id: Number(id) }).first();
+    if (!cashbox) throw validationError("الصندوق غير موجود.");
+    return cashbox;
+  });
+  ipcMain.handle("cashboxes:create", async (_event, input) => {
+    const payload = normalizeInput(input);
+    try {
+      const [id] = await getDatabase()("cashboxes").insert({
+        ...payload,
+        created_at: getDatabase().fn.now(),
+        updated_at: getDatabase().fn.now()
+      });
+      return await getDatabase()("cashboxes").where({ id }).first();
+    } catch (error) {
+      return normalizeDatabaseError(error);
+    }
+  });
+  ipcMain.handle("cashboxes:update", async (_event, id, input) => {
+    const cashboxId = Number(id);
+    const payload = normalizeInput(input, true);
+    if (Object.keys(payload).length === 0) {
+      throw validationError("لا توجد بيانات لتعديلها.");
+    }
+    try {
+      const changed = await getDatabase()("cashboxes").where({ id: cashboxId }).update({ ...payload, updated_at: getDatabase().fn.now() });
+      if (!changed) {
+        throw validationError("الصندوق غير موجود.");
+      }
+      return await getDatabase()("cashboxes").where({ id: cashboxId }).first();
+    } catch (error) {
+      return normalizeDatabaseError(error);
+    }
+  });
+  ipcMain.handle("cashboxes:summary", async () => {
+    const cashboxStats = await getDatabase()("cashboxes").sum("balance as total_balance").sum(getDatabase().raw("CASE WHEN isActive = 1 THEN 1 ELSE 0 END as active_count")).first();
+    const transactionStats = await getDatabase()("cashbox_transactions").sum(getDatabase().raw("CASE WHEN direction = 'in' THEN amount ELSE 0 END as total_in")).sum(getDatabase().raw("CASE WHEN direction = 'out' THEN amount ELSE 0 END as total_out")).first();
+    return {
+      total_balance: (cashboxStats == null ? void 0 : cashboxStats.total_balance) || 0,
+      active_count: (cashboxStats == null ? void 0 : cashboxStats.active_count) || 0,
+      total_in: (transactionStats == null ? void 0 : transactionStats.total_in) || 0,
+      total_out: (transactionStats == null ? void 0 : transactionStats.total_out) || 0
+    };
+  });
+  ipcMain.handle("cashboxes:transfer", async (_event, from_id, to_id, amount, date, notes) => {
+    if (!from_id || !to_id || !amount) {
+      throw validationError("بيانات التحويل مطلوبة.");
+    }
+    if (from_id === to_id) {
+      throw validationError("لا يمكن التحويل لنفس الصندوق.");
+    }
+    try {
+      return await getDatabase().transaction(async (trx) => {
+        const fromCashbox = await trx("cashboxes").where({ id: from_id }).first();
+        if (!fromCashbox) throw validationError("صندوق المصدر غير موجود.");
+        if (fromCashbox.balance < amount) throw validationError("الرصيد غير كافٍ.");
+        const toCashbox = await trx("cashboxes").where({ id: to_id }).first();
+        if (!toCashbox) throw validationError("صندوق الوجهة غير موجود.");
+        const newFromBalance = Number(fromCashbox.balance) - amount;
+        const newToBalance = Number(toCashbox.balance) + amount;
+        const transactionDate = date || (/* @__PURE__ */ new Date()).toISOString();
+        await trx("cashboxes").where({ id: from_id }).update({ balance: newFromBalance, updated_at: getDatabase().fn.now() });
+        await trx("cashboxes").where({ id: to_id }).update({ balance: newToBalance, updated_at: getDatabase().fn.now() });
+        await trx("cashbox_transactions").insert([
+          {
+            cashbox_id: from_id,
+            reference_type: "transfer",
+            reference_id: to_id,
+            amount,
+            direction: "out",
+            balance_before: fromCashbox.balance,
+            balance_after: newFromBalance,
+            transaction_date: transactionDate,
+            notes: notes || null,
+            created_at: getDatabase().fn.now(),
+            updated_at: getDatabase().fn.now()
+          },
+          {
+            cashbox_id: to_id,
+            reference_type: "transfer",
+            reference_id: from_id,
+            amount,
+            direction: "in",
+            balance_before: toCashbox.balance,
+            balance_after: newToBalance,
+            transaction_date: transactionDate,
+            notes: notes || null,
+            created_at: getDatabase().fn.now(),
+            updated_at: getDatabase().fn.now()
+          }
+        ]);
+        return { success: true, message: "تم التحويل بنجاح" };
+      });
+    } catch (error) {
+      return normalizeDatabaseError(error);
+    }
+  });
+  ipcMain.removeHandler("cashboxTransactions:list");
+  ipcMain.removeHandler("cashboxTransactions:get");
+  ipcMain.removeHandler("cashboxTransactions:create");
+  ipcMain.removeHandler("cashboxTransactions:update");
+  ipcMain.removeHandler("cashboxTransactions:remove");
+  ipcMain.handle("cashboxTransactions:list", async () => {
+    return getDatabase()("cashbox_transactions").select("*").orderBy("id", "desc");
+  });
+  ipcMain.handle("cashboxTransactions:get", async (_event, id) => {
+    const tx = await getDatabase()("cashbox_transactions").where({ id: Number(id) }).first();
+    if (!tx) throw validationError("الحركة غير موجودة.");
+    return tx;
+  });
+  ipcMain.handle("cashboxTransactions:create", async (_event, input) => {
+    try {
+      const [id] = await getDatabase()("cashbox_transactions").insert({
+        ...input,
+        created_at: getDatabase().fn.now(),
+        updated_at: getDatabase().fn.now()
+      });
+      return await getDatabase()("cashbox_transactions").where({ id }).first();
+    } catch (error) {
+      return normalizeDatabaseError(error);
+    }
+  });
+  ipcMain.handle("cashboxTransactions:remove", async (_event, id) => {
+    try {
+      const deleted = await getDatabase()("cashbox_transactions").where({ id: Number(id) }).del();
+      if (!deleted) throw validationError("الحركة غير موجودة.");
+      return { success: true };
+    } catch (error) {
       return normalizeDatabaseError(error);
     }
   });
@@ -1183,6 +1372,7 @@ app.whenReady().then(async () => {
     registerSupplierIpc();
     registerCustomerIpc();
     registerStockIpc();
+    registerCashboxIpc();
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {
     console.error("Failed to initialize database:", error);

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { ipcMain } from 'electron';
+import { app, ipcMain } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -33,6 +33,32 @@ const supplierController = require(path.join(__dirname, '../../src/controllers',
 const transactionCategoryController = require(path.join(__dirname, '../../src/controllers', 'transactionCategoryController.js'));
 const transactionController = require(path.join(__dirname, '../../src/controllers', 'transactionController.js'));
 const userController = require(path.join(__dirname, '../../src/controllers', 'userController.js'));
+
+
+/**
+ * Endpoint: api:system:getAppInfo
+ * Description: Returns runtime and application information for the About page.
+ */
+ipcMain.handle('api:system:getAppInfo', async () => {
+  try {
+    const databasePath = path.join(app.getPath('userData'), 'farmer-market.db');
+
+    return success({
+      appName: 'StockLite',
+      appVersion: app.getVersion(),
+      electronVersion: process.versions.electron || '',
+      nodeVersion: process.versions.node || '',
+      chromiumVersion: process.versions.chrome || '',
+      databaseEngine: 'SQLite',
+      databasePath,
+      platform: process.platform,
+      architecture: process.arch,
+      environment: app.isPackaged ? 'production' : 'development',
+    });
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
 
 /**
  * Endpoint: api:activityLog:createActivityLog

@@ -7,6 +7,20 @@ declare namespace NodeJS {
   }
 }
 
+
+type AppInfoApiRecord = {
+  appName: string;
+  appVersion: string;
+  electronVersion: string;
+  nodeVersion: string;
+  chromiumVersion: string;
+  databaseEngine: string;
+  databasePath: string;
+  platform: string;
+  architecture: string;
+  environment: "development" | "production";
+};
+
 type ProductApiRecord = {
   id: number;
   name: string;
@@ -62,6 +76,9 @@ type GenericCrudApi = {
 interface Window {
   ipcRenderer: import("electron").IpcRenderer;
   stockliteApi: {
+    system: {
+      getAppInfo(): Promise<AppInfoApiRecord>;
+    };
     products: {
       list(): Promise<ProductApiRecord[]>;
       get(id: number): Promise<ProductApiRecord>;

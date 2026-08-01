@@ -1,27 +1,81 @@
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
-type Theme = "light" | "dark";
-type FontSize = "small" | "medium" | "large";
-type Accent = "teal" | "amber" | "blue" | "violet";
+export type Theme = "light" | "dark";
+export type FontSize = "small" | "medium" | "large";
+export type Accent = "teal" | "amber" | "blue" | "violet";
 
-type AppearanceSettings = { theme: Theme; fontSize: FontSize; accent: Accent };
+type AppearanceSettings = {
+  theme: Theme;
+  fontSize: FontSize;
+  accent: Accent;
+};
+
 type AppearanceContextValue = AppearanceSettings & {
   setTheme: (value: Theme) => void;
   setFontSize: (value: FontSize) => void;
   setAccent: (value: Accent) => void;
+  resetAppearance: () => void;
 };
 
 const STORAGE_KEY = "stocklite.appearance";
-const defaults: AppearanceSettings = { theme: "light", fontSize: "medium", accent: "teal" };
+
+export const defaultAppearance: AppearanceSettings = {
+  theme: "light",
+  fontSize: "medium",
+  accent: "teal",
+};
+
+const THEMES = new Set<Theme>(["light", "dark"]);
+const FONT_SIZES = new Set<FontSize>(["small", "medium", "large"]);
+const ACCENTS = new Set<Accent>(["teal", "amber", "blue", "violet"]);
 
 function readSettings(): AppearanceSettings {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    const accent: Accent = saved.accent === "emerald" ? "amber" : (saved.accent || defaults.accent);
-    return { theme: saved.theme || defaults.theme, fontSize: saved.fontSize || defaults.fontSize, accent };
-  } catch {
-    return defaults;
+  if (typeof window === "undefined") {
+    return defaultAppearance;
   }
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+
+    if (!raw) {
+      return defaultAppearance;
+    }
+
+    const saved = JSON.parse(raw) as Record<string, unknown>;
+    const storedAccent = typeof saved.accent === "string" ? saved.accent : "";
+    const migratedAccent = storedAccent === "emerald" ? "teal" : storedAccent;
+
+    return {
+      theme: THEMES.has(saved.theme as Theme)
+        ? (saved.theme as Theme)
+        : defaultAppearance.theme,
+      fontSize: FONT_SIZES.has(saved.fontSize as FontSize)
+        ? (saved.fontSize as FontSize)
+        : defaultAppearance.fontSize,
+      accent: ACCENTS.has(migratedAccent as Accent)
+        ? (migratedAccent as Accent)
+        : defaultAppearance.accent,
+    };
+  } catch {
+    return defaultAppearance;
+  }
+}
+
+function applyAppearance(settings: AppearanceSettings) {
+  const root = document.documentElement;
+
+  root.dataset.theme = settings.theme;
+  root.dataset.fontSize = settings.fontSize;
+  root.dataset.accent = settings.accent;
+  root.classList.toggle("dark", settings.theme === "dark");
+  root.style.colorScheme = settings.theme;
 }
 
 const AppearanceContext = createContext<AppearanceContextValue | null>(null);
@@ -31,25 +85,36 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    const root = document.documentElement;
-    root.dataset.theme = settings.theme;
-    root.dataset.fontSize = settings.fontSize;
-    root.dataset.accent = settings.accent;
-    root.style.colorScheme = settings.theme;
+    applyAppearance(settings);
   }, [settings]);
 
-  const value = useMemo(() => ({
-    ...settings,
-    setTheme: (theme: Theme) => setSettings((current) => ({ ...current, theme })),
-    setFontSize: (fontSize: FontSize) => setSettings((current) => ({ ...current, fontSize })),
-    setAccent: (accent: Accent) => setSettings((current) => ({ ...current, accent })),
-  }), [settings]);
+  const value = useMemo<AppearanceContextValue>(
+    () => ({
+      ...settings,
+      setTheme: (theme) =>
+        setSettings((current) => ({ ...current, theme })),
+      setFontSize: (fontSize) =>
+        setSettings((current) => ({ ...current, fontSize })),
+      setAccent: (accent) =>
+        setSettings((current) => ({ ...current, accent })),
+      resetAppearance: () => setSettings(defaultAppearance),
+    }),
+    [settings],
+  );
 
-  return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>;
+  return (
+    <AppearanceContext.Provider value={value}>
+      {children}
+    </AppearanceContext.Provider>
+  );
 }
 
 export function useAppearance() {
   const context = useContext(AppearanceContext);
-  if (!context) throw new Error("useAppearance must be used inside AppearanceProvider");
+
+  if (!context) {
+    throw new Error("useAppearance must be used inside AppearanceProvider");
+  }
+
   return context;
 }

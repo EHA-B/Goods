@@ -24,6 +24,9 @@ const crudApi = (entity, methodNames) => ({
   remove: (id) => invokeApi(`api:${entity}:${methodNames.remove}`, id)
 });
 const stockliteApi = {
+  system: {
+    getAppInfo: () => invokeApi("api:system:getAppInfo")
+  },
   products: {
     ...crudApi("product", {
       create: "createProduct",

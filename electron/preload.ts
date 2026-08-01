@@ -56,6 +56,10 @@ const crudApi = (entity: string, methodNames: {
 });
 
 const stockliteApi = {
+  system: {
+    getAppInfo: () =>
+      invokeApi("api:system:getAppInfo"),
+  },
   products: {
     ...crudApi("product", {
       create: "createProduct",

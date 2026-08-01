@@ -29,6 +29,25 @@ const supplierController = require$1(path.join(__dirname$2, "../../src/controlle
 const transactionCategoryController = require$1(path.join(__dirname$2, "../../src/controllers", "transactionCategoryController.js"));
 const transactionController = require$1(path.join(__dirname$2, "../../src/controllers", "transactionController.js"));
 const userController = require$1(path.join(__dirname$2, "../../src/controllers", "userController.js"));
+ipcMain.handle("api:system:getAppInfo", async () => {
+  try {
+    const databasePath = path.join(app.getPath("userData"), "farmer-market.db");
+    return success({
+      appName: "StockLite",
+      appVersion: app.getVersion(),
+      electronVersion: process.versions.electron || "",
+      nodeVersion: process.versions.node || "",
+      chromiumVersion: process.versions.chrome || "",
+      databaseEngine: "SQLite",
+      databasePath,
+      platform: process.platform,
+      architecture: process.arch,
+      environment: app.isPackaged ? "production" : "development"
+    });
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
 ipcMain.handle("api:activityLog:createActivityLog", async (_event, input) => {
   try {
     const result = await activityLogController.createActivityLog(input);

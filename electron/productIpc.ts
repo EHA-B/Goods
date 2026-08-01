@@ -200,11 +200,15 @@ export function registerProductIpc() {
         }
 
         const adjustmentAmount = input.type === "add" ? qty : -qty;
+        const quantityBefore = Number(stockBatch.remaining_quantity || 0);
+        const newRemaining = quantityBefore + adjustmentAmount;
 
         // Insert adjustment
         await trx("stock_adjustments").insert({
           stock_batch_id: stockBatch.id,
           quantity: adjustmentAmount,
+          quantity_before: quantityBefore,
+          quantity_after: newRemaining,
           reason: String(input.reason),
           notes: input.notes ? String(input.notes) : null,
           created_at: getDatabase().fn.now(),
@@ -212,7 +216,6 @@ export function registerProductIpc() {
         });
 
         // Update remaining quantity
-        const newRemaining = Number(stockBatch.remaining_quantity || 0) + adjustmentAmount;
         await trx("stock_batches")
           .where({ id: stockBatch.id })
           .update({

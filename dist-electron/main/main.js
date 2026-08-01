@@ -648,7 +648,7 @@ function normalizeInput$2(input, partial = false) {
   }
   return result;
 }
-function normalizeDatabaseError$2(error) {
+function normalizeDatabaseError$3(error) {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = new Error(message);
   if (message.includes("UNIQUE constraint failed: products.code")) {
@@ -691,7 +691,7 @@ function registerProductIpc() {
       });
       return getProductOrThrow(Number(id));
     } catch (error) {
-      return normalizeDatabaseError$2(error);
+      return normalizeDatabaseError$3(error);
     }
   });
   ipcMain.handle("products:update", async (_event, id, input) => {
@@ -709,7 +709,7 @@ function registerProductIpc() {
       }
       return getProductOrThrow(productId);
     } catch (error) {
-      return normalizeDatabaseError$2(error);
+      return normalizeDatabaseError$3(error);
     }
   });
   ipcMain.handle("products:remove", async (_event, id) => {
@@ -723,7 +723,7 @@ function registerProductIpc() {
       }
       return { success: true };
     } catch (error) {
-      return normalizeDatabaseError$2(error);
+      return normalizeDatabaseError$3(error);
     }
   });
   ipcMain.handle("products:adjustStock", async (_event, id, input) => {
@@ -759,15 +759,18 @@ function registerProductIpc() {
           stockBatch = await trx("stock_batches").where({ id: newBatchId }).first();
         }
         const adjustmentAmount = input.type === "add" ? qty : -qty;
+        const quantityBefore = Number(stockBatch.remaining_quantity || 0);
+        const newRemaining = quantityBefore + adjustmentAmount;
         await trx("stock_adjustments").insert({
           stock_batch_id: stockBatch.id,
           quantity: adjustmentAmount,
+          quantity_before: quantityBefore,
+          quantity_after: newRemaining,
           reason: String(input.reason),
           notes: input.notes ? String(input.notes) : null,
           created_at: getDatabase().fn.now(),
           updated_at: getDatabase().fn.now()
         });
-        const newRemaining = Number(stockBatch.remaining_quantity || 0) + adjustmentAmount;
         await trx("stock_batches").where({ id: stockBatch.id }).update({
           remaining_quantity: newRemaining,
           updated_at: getDatabase().fn.now()
@@ -775,7 +778,7 @@ function registerProductIpc() {
         return { success: true, newRemaining };
       });
     } catch (error) {
-      return normalizeDatabaseError$2(error);
+      return normalizeDatabaseError$3(error);
     }
   });
 }
@@ -817,7 +820,7 @@ function normalizeInput$1(input, partial = false) {
   }
   return result;
 }
-function normalizeDatabaseError$1(error) {
+function normalizeDatabaseError$2(error) {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = new Error(message);
   if (message.includes("FOREIGN KEY constraint failed")) {
@@ -857,7 +860,7 @@ function registerSupplierIpc() {
       });
       return getSupplierOrThrow(Number(id));
     } catch (error) {
-      return normalizeDatabaseError$1(error);
+      return normalizeDatabaseError$2(error);
     }
   });
   ipcMain.handle(
@@ -877,7 +880,7 @@ function registerSupplierIpc() {
         }
         return getSupplierOrThrow(supplierId);
       } catch (error) {
-        return normalizeDatabaseError$1(error);
+        return normalizeDatabaseError$2(error);
       }
     }
   );
@@ -892,7 +895,7 @@ function registerSupplierIpc() {
       }
       return { success: true };
     } catch (error) {
-      return normalizeDatabaseError$1(error);
+      return normalizeDatabaseError$2(error);
     }
   });
 }
@@ -934,7 +937,7 @@ function normalizeInput(input, partial = false) {
   }
   return result;
 }
-function normalizeDatabaseError(error) {
+function normalizeDatabaseError$1(error) {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = new Error(message);
   if (message.includes("FOREIGN KEY constraint failed")) {
@@ -974,7 +977,7 @@ function registerCustomerIpc() {
       });
       return getCustomerOrThrow(Number(id));
     } catch (error) {
-      return normalizeDatabaseError(error);
+      return normalizeDatabaseError$1(error);
     }
   });
   ipcMain.handle(
@@ -994,7 +997,7 @@ function registerCustomerIpc() {
         }
         return getCustomerOrThrow(customerId);
       } catch (error) {
-        return normalizeDatabaseError(error);
+        return normalizeDatabaseError$1(error);
       }
     }
   );
@@ -1008,6 +1011,104 @@ function registerCustomerIpc() {
         throw error;
       }
       return { success: true };
+    } catch (error) {
+      return normalizeDatabaseError$1(error);
+    }
+  });
+}
+function normalizeDatabaseError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = new Error(message);
+  throw normalized;
+}
+function registerStockIpc() {
+  ipcMain.removeHandler("stocks:summary");
+  ipcMain.removeHandler("stocks:items");
+  ipcMain.handle("stocks:summary", async () => {
+    try {
+      const db = getDatabase();
+      const totalsResult = await db("stock_batches").where("isActive", 1).andWhere("remaining_quantity", ">", 0).sum("remaining_quantity as total_units").sum(db.raw("remaining_quantity * purchase_price as total_value")).first();
+      const total_units = (totalsResult == null ? void 0 : totalsResult.total_units) || 0;
+      const total_value = (totalsResult == null ? void 0 : totalsResult.total_value) || 0;
+      const productBalances = await db("products").select("products.id").leftJoin("stock_batches", function() {
+        this.on("products.id", "=", "stock_batches.product_id");
+      }).where("products.isActive", 1).groupBy("products.id").select(db.raw("SUM(CASE WHEN stock_batches.isActive = 1 AND stock_batches.remaining_quantity > 0 THEN stock_batches.remaining_quantity ELSE 0 END) as total_qty"));
+      let low_stock_count = 0;
+      let out_of_stock_count = 0;
+      const DEFAULT_MIN_LIMIT = 10;
+      productBalances.forEach((p) => {
+        if (p.total_qty <= 0) {
+          out_of_stock_count++;
+        } else if (p.total_qty <= DEFAULT_MIN_LIMIT) {
+          low_stock_count++;
+        }
+      });
+      const expiringSoon = await db("stock_batches").count("id as count").where("isActive", 1).andWhere("remaining_quantity", ">", 0).whereNotNull("expiry_date").andWhere("expiry_date", "<=", db.raw("date('now', '+30 days')")).first();
+      return {
+        total_units,
+        total_value,
+        low_stock_count,
+        out_of_stock_count,
+        expiring_soon_count: (expiringSoon == null ? void 0 : expiringSoon.count) || 0
+      };
+    } catch (error) {
+      return normalizeDatabaseError(error);
+    }
+  });
+  ipcMain.handle("stocks:items", async (_event, pagination = { page: 1, limit: 10 }) => {
+    try {
+      const db = getDatabase();
+      const page = parseInt(pagination.page) || 1;
+      const limit = parseInt(pagination.limit) || 10;
+      const offset = (page - 1) * limit;
+      const countResult = await db("products").count("id as total").where("isActive", 1).first();
+      const rows = await db.raw(`
+        SELECT 
+            p.id as product_id,
+            p.name as product_name,
+            p.code as product_code,
+            p.unit as product_unit,
+            p.category as product_category,
+            SUM(CASE WHEN sb.isActive = 1 THEN sb.remaining_quantity ELSE 0 END) as current_balance,
+            SUM(CASE WHEN sb.isActive = 1 THEN sb.remaining_quantity * sb.purchase_price ELSE 0 END) as total_value,
+            COUNT(CASE WHEN sb.isActive = 1 AND sb.remaining_quantity > 0 THEN sb.id END) as batch_count,
+            GROUP_CONCAT(DISTINCT s.name) as suppliers
+        FROM (SELECT * FROM products WHERE isActive = 1 ORDER BY id DESC LIMIT ? OFFSET ?) p
+        LEFT JOIN stock_batches sb ON p.id = sb.product_id AND sb.isActive = 1 AND sb.remaining_quantity > 0
+        LEFT JOIN suppliers s ON sb.supplier_id = s.id
+        GROUP BY p.id
+        ORDER BY p.id DESC
+      `, [limit, offset]);
+      const items = rows.map((row) => {
+        const DEFAULT_MIN_LIMIT = 10;
+        const balance = row.current_balance || 0;
+        let status = "متوفر";
+        if (balance <= 0) status = "نافد";
+        else if (balance <= DEFAULT_MIN_LIMIT) status = "مخزون منخفض";
+        return {
+          product_id: row.product_id,
+          product_name: row.product_name,
+          product_code: row.product_code,
+          product_category: row.product_category,
+          product_unit: row.product_unit,
+          current_balance: balance,
+          total_value: row.total_value || 0,
+          average_purchase_price: balance > 0 ? row.total_value / balance : 0,
+          batch_count: row.batch_count || 0,
+          suppliers: row.suppliers ? row.suppliers.split(",") : [],
+          status,
+          min_limit: DEFAULT_MIN_LIMIT
+        };
+      });
+      return {
+        data: items,
+        pagination: {
+          page,
+          limit,
+          total: (countResult == null ? void 0 : countResult.total) || 0,
+          totalPages: Math.ceil((Number(countResult == null ? void 0 : countResult.total) || 0) / limit)
+        }
+      };
     } catch (error) {
       return normalizeDatabaseError(error);
     }
@@ -1060,6 +1161,7 @@ app.whenReady().then(async () => {
     registerProductIpc();
     registerSupplierIpc();
     registerCustomerIpc();
+    registerStockIpc();
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {
     console.error("Failed to initialize database:", error);

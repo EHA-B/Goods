@@ -481,18 +481,21 @@ async updateStockProduct(id, input) {
             // Calculate adjustment amount (positive for add, negative for subtract)
             const adjustmentAmount = input.type === 'add' ? qty : -qty;
 
+            const quantityBefore = stockBatch.remaining_quantity || 0;
+            const newRemaining = quantityBefore + adjustmentAmount;
+
             // Create stock adjustment record
             const stockAdjustmentController = require('./stockAdjustmentController');
             await stockAdjustmentController.createStockAdjustment({
                 stock_batch_id: stockBatch.id,
                 quantity: adjustmentAmount,
+                quantity_before: quantityBefore,
+                quantity_after: newRemaining,
                 reason: input.reason,
                 notes: input.notes || null
             });
 
             // Update the stock batch's remaining quantity
-            const newRemaining = (stockBatch.remaining_quantity || 0) + adjustmentAmount;
-            
             await stockBatchController.updateStockBatch(stockBatch.id, {
                 remaining_quantity: newRemaining
             });

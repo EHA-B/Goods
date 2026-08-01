@@ -4,7 +4,7 @@ import path from "path";
 import bcrypt from "bcrypt";
 import { fileURLToPath } from "node:url";
 import path$1 from "node:path";
-async function up$3(knex2) {
+async function up$4(knex2) {
   await knex2.schema.createTable("customers", (table) => {
     table.increments("id").primary();
     table.string("name", 100).notNullable();
@@ -299,7 +299,7 @@ async function up$3(knex2) {
     table.index(["party_type", "party_id", "payment_date"]);
   });
 }
-async function down$3(knex2) {
+async function down$4(knex2) {
   await knex2.schema.dropTableIfExists("activity_logs");
   await knex2.schema.dropTableIfExists("payments");
   await knex2.schema.dropTableIfExists("transactions");
@@ -320,10 +320,10 @@ async function down$3(knex2) {
 }
 const initialSchema = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$3,
-  up: up$3
+  down: down$4,
+  up: up$4
 }, Symbol.toStringTag, { value: "Module" }));
-async function up$2(knex2) {
+async function up$3(knex2) {
   await knex2.schema.alterTable("suppliers", (table) => {
     table.decimal("balance", 15, 2).defaultTo(0);
   });
@@ -359,7 +359,7 @@ async function up$2(knex2) {
     });
   }
 }
-async function down$2(knex2) {
+async function down$3(knex2) {
   await knex2.schema.dropTableIfExists("stock_adjustments");
   await knex2.schema.alterTable("stock_batches", (table) => {
     table.dropColumn("purchase_invoice_id");
@@ -373,10 +373,10 @@ async function down$2(knex2) {
 }
 const consignmentMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$2,
-  up: up$2
+  down: down$3,
+  up: up$3
 }, Symbol.toStringTag, { value: "Module" }));
-async function up$1(knex2) {
+async function up$2(knex2) {
   const hasCode = await knex2.schema.hasColumn("products", "code");
   if (!hasCode) {
     await knex2.schema.alterTable("products", (table) => {
@@ -392,7 +392,7 @@ async function up$1(knex2) {
     "CREATE UNIQUE INDEX IF NOT EXISTS products_code_unique ON products(code)"
   );
 }
-async function down$1(knex2) {
+async function down$2(knex2) {
   await knex2.raw("DROP INDEX IF EXISTS products_code_unique");
   const hasCode = await knex2.schema.hasColumn("products", "code");
   if (hasCode) {
@@ -403,10 +403,10 @@ async function down$1(knex2) {
 }
 const productCodeMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$1,
-  up: up$1
+  down: down$2,
+  up: up$2
 }, Symbol.toStringTag, { value: "Module" }));
-async function up(knex2) {
+async function up$1(knex2) {
   const hasCode = await knex2.schema.hasColumn("products", "code");
   if (!hasCode) return;
   await knex2("products").where("code", "").update({ code: null });
@@ -415,7 +415,7 @@ async function up(knex2) {
     "CREATE UNIQUE INDEX IF NOT EXISTS products_code_unique ON products(code) WHERE code IS NOT NULL"
   );
 }
-async function down(knex2) {
+async function down$1(knex2) {
   const hasCode = await knex2.schema.hasColumn("products", "code");
   if (!hasCode) return;
   await knex2.raw("DROP INDEX IF EXISTS products_code_unique");
@@ -424,6 +424,23 @@ async function down(knex2) {
   );
 }
 const optionalProductCodeMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  down: down$1,
+  up: up$1
+}, Symbol.toStringTag, { value: "Module" }));
+async function up(knex2) {
+  await knex2.schema.alterTable("stock_adjustments", (table) => {
+    table.decimal("quantity_before", 15, 3).notNullable().defaultTo(0);
+    table.decimal("quantity_after", 15, 3).notNullable().defaultTo(0);
+  });
+}
+async function down(knex2) {
+  await knex2.schema.alterTable("stock_adjustments", (table) => {
+    table.dropColumn("quantity_before");
+    table.dropColumn("quantity_after");
+  });
+}
+const quantityBeforeAfterMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   down,
   up
@@ -489,7 +506,8 @@ class MigrationSource {
       "20250101000000_initial_schema.ts",
       "20260728141424_consignment_support.ts",
       "20260731190000_add_product_code.ts",
-      "20260731210000_make_product_code_optional.ts"
+      "20260731210000_make_product_code_optional.ts",
+      "20260801135327_add_quantity_before_after_to_stock_adjustments.ts"
     ]);
   }
   getMigrationName(migration) {
@@ -507,6 +525,9 @@ class MigrationSource {
     }
     if (migration === "20260731210000_make_product_code_optional.ts") {
       return optionalProductCodeMigration;
+    }
+    if (migration === "20260801135327_add_quantity_before_after_to_stock_adjustments.ts") {
+      return quantityBeforeAfterMigration;
     }
     throw new Error(`Migration ${migration} not found`);
   }

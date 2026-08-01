@@ -28,7 +28,7 @@ type ProductApiInput = {
   isActive?: boolean;
 };
 
-type SupplierApiRecord = {
+type PartyApiRecord = {
   id: number;
   name: string;
   phone: string | null;
@@ -41,7 +41,7 @@ type SupplierApiRecord = {
   updated_at: string | null;
 };
 
-type SupplierApiInput = {
+type PartyApiInput = {
   name: string;
   phone?: string | null;
   email?: string | null;
@@ -51,6 +51,14 @@ type SupplierApiInput = {
   isActive?: boolean;
 };
 
+type GenericCrudApi = {
+  create(input: unknown): Promise<unknown>;
+  get(id: number): Promise<unknown>;
+  list(): Promise<unknown[]>;
+  update(id: number, input: unknown): Promise<unknown>;
+  remove(id: number): Promise<unknown>;
+};
+
 interface Window {
   ipcRenderer: import("electron").IpcRenderer;
   stockliteApi: {
@@ -58,21 +66,56 @@ interface Window {
       list(): Promise<ProductApiRecord[]>;
       get(id: number): Promise<ProductApiRecord>;
       create(input: ProductApiInput): Promise<ProductApiRecord>;
-      update(
-        id: number,
-        input: Partial<ProductApiInput>,
-      ): Promise<ProductApiRecord>;
-      remove(id: number): Promise<{ success: boolean }>;
+      update(id: number, input: Partial<ProductApiInput>): Promise<ProductApiRecord>;
+      remove(id: number): Promise<unknown>;
+      adjustStock(productId: number, input: unknown): Promise<unknown>;
+      getWithStock(productId: number): Promise<unknown>;
+    };
+    customers: {
+      list(): Promise<PartyApiRecord[]>;
+      get(id: number): Promise<PartyApiRecord>;
+      create(input: PartyApiInput): Promise<PartyApiRecord>;
+      update(id: number, input: Partial<PartyApiInput>): Promise<PartyApiRecord>;
+      remove(id: number): Promise<unknown>;
     };
     suppliers: {
-      list(): Promise<SupplierApiRecord[]>;
-      get(id: number): Promise<SupplierApiRecord>;
-      create(input: SupplierApiInput): Promise<SupplierApiRecord>;
-      update(
-        id: number,
-        input: Partial<SupplierApiInput>,
-      ): Promise<SupplierApiRecord>;
-      remove(id: number): Promise<{ success: boolean }>;
+      list(): Promise<PartyApiRecord[]>;
+      get(id: number): Promise<PartyApiRecord>;
+      create(input: PartyApiInput): Promise<PartyApiRecord>;
+      update(id: number, input: Partial<PartyApiInput>): Promise<PartyApiRecord>;
+      remove(id: number): Promise<unknown>;
     };
+    stockBatches: GenericCrudApi & {
+      summary(): Promise<unknown>;
+      inventoryItems(pagination?: { page?: number; limit?: number }): Promise<unknown>;
+    };
+    stockAdjustments: GenericCrudApi;
+    cashboxes: {
+      create(input: unknown): Promise<unknown>;
+      get(id: number): Promise<unknown>;
+      list(): Promise<unknown[]>;
+      update(id: number, input: unknown): Promise<unknown>;
+      summary(): Promise<unknown>;
+      transfer(fromId: number, toId: number, amount: number, date: string, notes?: string): Promise<unknown>;
+    };
+    cashboxTransactions: GenericCrudApi;
+    payments: GenericCrudApi;
+    purchaseInvoices: GenericCrudApi & {
+      createFull(input: unknown): Promise<unknown>;
+      getSalesDetails(id: number): Promise<unknown>;
+      closeCommission(id: number, input?: unknown): Promise<unknown>;
+    };
+    purchaseInvoiceItems: GenericCrudApi;
+    saleInvoices: GenericCrudApi & {
+      getFull(id: number): Promise<unknown>;
+      createProcess(input: unknown): Promise<unknown>;
+    };
+    saleInvoiceItems: GenericCrudApi;
+    saleTypes: GenericCrudApi;
+    settings: GenericCrudApi;
+    transactionCategories: GenericCrudApi;
+    transactions: GenericCrudApi;
+    users: GenericCrudApi;
+    activityLogs: GenericCrudApi;
   };
 }

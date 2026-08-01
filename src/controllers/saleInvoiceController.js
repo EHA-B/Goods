@@ -261,6 +261,25 @@ class SaleInvoiceController {
                 const profit = qty * (unitPrice - costPrice);
                 const stockBatchId = item.stockBatchId || item.stock_batch_id;
 
+                const currentBatch = await new Promise((resolve, reject) => {
+                    db.get(`SELECT remaining_quantity FROM stock_batches WHERE id = ?`, [stockBatchId], (err, row) => {
+                        if (err) return reject(err);
+                        resolve(row);
+                    });
+                });
+
+                if (!currentBatch) {
+                    const err = new Error('الدفعة غير موجودة');
+                    err.code = 'VALIDATION_ERROR';
+                    throw err;
+                }
+
+                if (currentBatch.remaining_quantity < qty) {
+                    const err = new Error('الكمية المباعة أكبر من الكمية المتوفرة في المخزون');
+                    err.code = 'VALIDATION_ERROR';
+                    throw err;
+                }
+
                 await new Promise((resolve, reject) => {
                     const sql = `
                         INSERT INTO sale_invoice_items (sale_invoice_id, stock_batch_id, quantity, unit_price, line_total, cost_price, profit, notes, created_at, updated_at)

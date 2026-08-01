@@ -452,9 +452,17 @@ async updateStockProduct(id, input) {
 
             // Get or create stock batch
             let stockBatch = await new Promise((resolve, reject) => {
+                let query = `SELECT * FROM stock_batches WHERE product_id = ?`;
+                let params = [id];
+                if (input.purchase_invoice_id) {
+                    query += ` AND purchase_invoice_id = ?`;
+                    params.push(input.purchase_invoice_id);
+                }
+                query += ` ORDER BY id ASC LIMIT 1`;
+
                 db.get(
-                    `SELECT * FROM stock_batches WHERE product_id = ? ORDER BY id ASC LIMIT 1`,
-                    [id],
+                    query,
+                    params,
                     (err, row) => {
                         if (err) return reject(err);
                         resolve(row);
@@ -473,6 +481,7 @@ async updateStockProduct(id, input) {
                     product_id: id,
                     quantity: 0,
                     remaining_quantity: 0,
+                    purchase_invoice_id: input.purchase_invoice_id || null,
                     isActive: 1
                 };
                 stockBatch = await stockBatchController.createStockBatch(newBatchInput);
@@ -483,6 +492,12 @@ async updateStockProduct(id, input) {
 
             const quantityBefore = stockBatch.remaining_quantity || 0;
             const newRemaining = quantityBefore + adjustmentAmount;
+
+            if (newRemaining < 0) {
+                const err = new Error('الكمية المراد خصمها أكبر من الكمية المتوفرة');
+                err.code = 'VALIDATION_ERROR';
+                throw err;
+            }
 
             // Create stock adjustment record
             const stockAdjustmentController = require('./stockAdjustmentController');

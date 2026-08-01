@@ -9,7 +9,9 @@
   },
   "files": [
     "dist",
-    "dist-electron"
+    "dist-electron",
+    "src/controllers/**/*",
+    "src/database/**/*"
   ],
   "mac": {
     "target": [

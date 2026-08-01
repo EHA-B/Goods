@@ -86,8 +86,8 @@ interface Window {
       remove(id: number): Promise<unknown>;
     };
     stockBatches: GenericCrudApi & {
-      summary(): Promise<unknown>;
-      inventoryItems(pagination?: { page?: number; limit?: number }): Promise<unknown>;
+      summary(): Promise<Record<string, unknown>>;
+      inventoryItems(pagination?: { page?: number; limit?: number }): Promise<Record<string, unknown>>;
     };
     stockAdjustments: GenericCrudApi;
     cashboxes: {

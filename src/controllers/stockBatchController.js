@@ -4,32 +4,22 @@ const dbmanager = require(path.join(__dirname, '../database/databaseManager'));
 class StockBatchController {
 
     async createStockBatch(input) {
-        if (!input || input.product_id === undefined || input.product_id === null) {
-            const err = new Error('product_id is required');
-            err.code = 'VALIDATION_ERROR';
-            throw err;
-        }
+        const productId = Number(input?.product_id);
+        const supplierId = Number(input?.supplier_id);
+        const quantity = Number(input?.quantity);
+        const purchasePrice = Number(input?.purchase_price);
+        if (!Number.isInteger(productId) || productId <= 0) throw { code: 'VALIDATION_ERROR', message: 'يجب تحديد المنتج.' };
+        if (!Number.isInteger(supplierId) || supplierId <= 0) throw { code: 'VALIDATION_ERROR', message: 'يجب اختيار المورد.' };
+        if (!Number.isFinite(quantity) || quantity <= 0) throw { code: 'VALIDATION_ERROR', message: 'يجب أن تكون كمية الدفعة أكبر من صفر.' };
+        if (!Number.isFinite(purchasePrice) || purchasePrice < 0) throw { code: 'VALIDATION_ERROR', message: 'سعر الشراء غير صالح.' };
+        if (!input?.received_date) throw { code: 'VALIDATION_ERROR', message: 'تاريخ الاستلام مطلوب.' };
+        if (input.expiry_date && input.expiry_date < input.received_date) throw { code: 'VALIDATION_ERROR', message: 'تاريخ الانتهاء يجب أن يكون بعد تاريخ الاستلام.' };
         const db = await dbmanager.init();
-        const sql = `
-            INSERT INTO stock_batches (product_id, supplier_id, purchase_invoice_id, batch_code, quantity, remaining_quantity, purchase_price, received_date, expiry_date, notes, isActive, created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))
-        `;
+        const sql = `INSERT INTO stock_batches (product_id, supplier_id, purchase_invoice_id, batch_code, quantity, remaining_quantity, purchase_price, received_date, expiry_date, notes, isActive, created_at, updated_at)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))`;
         const id = await new Promise((resolve, reject) => {
-            db.run(sql, [
-                input.product_id ?? null,
-                input.supplier_id ?? null,
-                input.purchase_invoice_id ?? null,
-                input.batch_code ?? null,
-                input.quantity ?? null,
-                input.remaining_quantity ?? null,
-                input.purchase_price ?? null,
-                input.received_date ?? null,
-                input.expiry_date ?? null,
-                input.notes ?? null,
-                input.isActive ?? null
-            ], function (err) {
-                if (err) return reject(err);
-                resolve(this.lastID);
+            db.run(sql, [productId, supplierId, input.purchase_invoice_id ?? null, input.batch_code && String(input.batch_code).trim() ? String(input.batch_code).trim() : null, quantity, quantity, purchasePrice, input.received_date, input.expiry_date || null, input.notes || null, input.isActive ?? 1], function (err) {
+                if (err) return reject(err); resolve(this.lastID);
             });
         });
         return this.getStockBatch(id);
@@ -40,7 +30,7 @@ class StockBatchController {
         const db = await dbmanager.init();
         return await new Promise((resolve, reject) => {
             db.get(
-                `SELECT * FROM stock_batches WHERE id = ?`,
+                `SELECT sb.*, s.name AS supplier_name, p.name AS product_name, p.code AS product_code FROM stock_batches sb LEFT JOIN suppliers s ON s.id = sb.supplier_id LEFT JOIN products p ON p.id = sb.product_id WHERE sb.id = ?`,
                 [id],
                 (err, row) => {
                     if (err) return reject(err);
@@ -55,7 +45,7 @@ class StockBatchController {
         const db = await dbmanager.init();
         return await new Promise((resolve, reject) => {
             db.all(
-                `SELECT * FROM stock_batches`,
+                `SELECT sb.*, s.name AS supplier_name, p.name AS product_name, p.code AS product_code FROM stock_batches sb LEFT JOIN suppliers s ON s.id = sb.supplier_id LEFT JOIN products p ON p.id = sb.product_id ORDER BY sb.id DESC`,
                 [],
                 (err, rows) => {
                     if (err) return reject(err);

@@ -421,114 +421,29 @@ async updateStockProduct(id, input) {
 }
 
     async adjustProductStock(id, input) {
-        if (!id) {
-            const err = new Error('Product ID is required');
-            err.code = 'VALIDATION_ERROR';
-            throw err;
-        }
-        if (!input || !input.quantity || !input.type || !input.reason) {
-            const err = new Error('Quantity, type, and reason are required');
-            err.code = 'VALIDATION_ERROR';
-            throw err;
-        }
-
-        const qty = parseFloat(input.quantity);
-        if (isNaN(qty) || qty <= 0) {
-            const err = new Error('Quantity must be a positive number');
-            err.code = 'VALIDATION_ERROR';
-            throw err;
-        }
-
+        const productId = Number(id);
+        const batchId = Number(input?.stock_batch_id);
+        const qty = Number(input?.quantity);
+        if (!Number.isInteger(productId) || productId <= 0) throw { code: 'VALIDATION_ERROR', message: 'معرف المنتج مطلوب.' };
+        if (!Number.isInteger(batchId) || batchId <= 0) throw { code: 'VALIDATION_ERROR', message: 'يجب اختيار الدفعة.' };
+        if (!['add', 'subtract'].includes(input?.type)) throw { code: 'VALIDATION_ERROR', message: 'نوع التسوية غير صالح.' };
+        if (!Number.isFinite(qty) || qty <= 0) throw { code: 'VALIDATION_ERROR', message: 'يجب أن تكون الكمية أكبر من صفر.' };
+        if (!input?.reason || !String(input.reason).trim()) throw { code: 'VALIDATION_ERROR', message: 'سبب التسوية مطلوب.' };
         const db = await dbmanager.init();
-
+        await new Promise((resolve, reject) => db.run('BEGIN IMMEDIATE TRANSACTION', err => err ? reject(err) : resolve()));
         try {
-            // Start transaction
-            await new Promise((resolve, reject) => {
-                db.run('BEGIN TRANSACTION', (err) => {
-                    if (err) return reject(err);
-                    resolve();
-                });
-            });
-
-            // Get or create stock batch
-            let stockBatch = await new Promise((resolve, reject) => {
-                let query = `SELECT * FROM stock_batches WHERE product_id = ?`;
-                let params = [id];
-                if (input.purchase_invoice_id) {
-                    query += ` AND purchase_invoice_id = ?`;
-                    params.push(input.purchase_invoice_id);
-                }
-                query += ` ORDER BY id ASC LIMIT 1`;
-
-                db.get(
-                    query,
-                    params,
-                    (err, row) => {
-                        if (err) return reject(err);
-                        resolve(row);
-                    }
-                );
-            });
-
-            const stockBatchController = require('./stockBatchController');
-            
-            if (!stockBatch) {
-                if (input.type === 'subtract') {
-                    throw new Error('Cannot subtract stock: no stock batches exist for this product.');
-                }
-                // Create a new batch
-                const newBatchInput = {
-                    product_id: id,
-                    quantity: 0,
-                    remaining_quantity: 0,
-                    purchase_invoice_id: input.purchase_invoice_id || null,
-                    isActive: 1
-                };
-                stockBatch = await stockBatchController.createStockBatch(newBatchInput);
-            }
-
-            // Calculate adjustment amount (positive for add, negative for subtract)
-            const adjustmentAmount = input.type === 'add' ? qty : -qty;
-
-            const quantityBefore = stockBatch.remaining_quantity || 0;
-            const newRemaining = quantityBefore + adjustmentAmount;
-
-            if (newRemaining < 0) {
-                const err = new Error('الكمية المراد خصمها أكبر من الكمية المتوفرة');
-                err.code = 'VALIDATION_ERROR';
-                throw err;
-            }
-
-            // Create stock adjustment record
-            const stockAdjustmentController = require('./stockAdjustmentController');
-            await stockAdjustmentController.createStockAdjustment({
-                stock_batch_id: stockBatch.id,
-                quantity: adjustmentAmount,
-                quantity_before: quantityBefore,
-                quantity_after: newRemaining,
-                reason: input.reason,
-                notes: input.notes || null
-            });
-
-            // Update the stock batch's remaining quantity
-            await stockBatchController.updateStockBatch(stockBatch.id, {
-                remaining_quantity: newRemaining
-            });
-
-            // Commit transaction
-            await new Promise((resolve, reject) => {
-                db.run('COMMIT', (err) => {
-                    if (err) return reject(err);
-                    resolve();
-                });
-            });
-
-            return this.getProductWithStock(id);
+            const batch = await new Promise((resolve, reject) => db.get('SELECT * FROM stock_batches WHERE id = ? AND product_id = ? AND isActive = 1', [batchId, productId], (err, row) => err ? reject(err) : resolve(row)));
+            if (!batch) throw { code: 'NOT_FOUND', message: 'الدفعة المحددة غير موجودة أو لا تتبع لهذا المنتج.' };
+            const before = Number(batch.remaining_quantity || 0);
+            const signed = input.type === 'add' ? qty : -qty;
+            const after = before + signed;
+            if (after < 0) throw { code: 'INSUFFICIENT_STOCK', message: 'الكمية المطلوب خصمها أكبر من رصيد الدفعة.' };
+            await new Promise((resolve, reject) => db.run(`INSERT INTO stock_adjustments (stock_batch_id, quantity, quantity_before, quantity_after, reason, notes, created_at, updated_at) VALUES (?,?,?,?,?,?, datetime('now'), datetime('now'))`, [batchId, signed, before, after, String(input.reason).trim(), input.notes || null], function(err){ err ? reject(err) : resolve(this.lastID); }));
+            await new Promise((resolve, reject) => db.run(`UPDATE stock_batches SET remaining_quantity = ?, updated_at = datetime('now') WHERE id = ?`, [after, batchId], function(err){ err ? reject(err) : resolve(this.changes); }));
+            await new Promise((resolve, reject) => db.run('COMMIT', err => err ? reject(err) : resolve()));
+            return this.getProductWithStock(productId);
         } catch (error) {
-            // Rollback on error
-            await new Promise((resolve) => {
-                db.run('ROLLBACK', () => resolve());
-            });
+            await new Promise(resolve => db.run('ROLLBACK', () => resolve()));
             throw error;
         }
     }
@@ -547,7 +462,7 @@ async updateStockProduct(id, input) {
         const db = await dbmanager.init();
         const stockBatches = await new Promise((resolve, reject) => {
             db.all(
-                `SELECT * FROM stock_batches WHERE product_id = ?`,
+                `SELECT sb.*, s.name AS supplier_name FROM stock_batches sb LEFT JOIN suppliers s ON s.id = sb.supplier_id WHERE sb.product_id = ? ORDER BY sb.id DESC`,
                 [id],
                 (err, rows) => {
                     if (err) return reject(err);

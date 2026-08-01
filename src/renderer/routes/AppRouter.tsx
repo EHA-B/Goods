@@ -8,7 +8,6 @@ import ProductInventoryDetailsPage from "../pages/inventory/ProductInventoryDeta
 import StockAdjustmentPage from "../pages/inventory/StockAdjustmentPage";
 import StockBatchFormPage from "../pages/inventory/StockBatchFormPage";
 import StockMovementDetailsPage from "../pages/inventory/StockMovementDetailsPage";
-import { InventoryProvider } from "../pages/inventory/InventoryContext";
 import ProductsPage from "../pages/products/ProductsPage";
 import ProductFormPage from "../pages/products/ProductFormPage";
 import CustomersPage from "../pages/customers/CustomersPage";
@@ -46,8 +45,7 @@ import { PATHS } from "./path";
 function AppRouter() {
   return (
     <HashRouter>
-      <InventoryProvider>
-              <Routes>
+      <Routes>
                 <Route path={PATHS.LOGIN} element={<LoginPage />} />
                 <Route element={<ProtectedRoute />}>
                   <Route element={<MainLayout />}>
@@ -101,8 +99,7 @@ function AppRouter() {
                     <Route path="*" element={<Navigate to={PATHS.DASHBOARD} replace />} />
                   </Route>
                 </Route>
-              </Routes>
-      </InventoryProvider>
+      </Routes>
     </HashRouter>
   );
 }

@@ -12,7 +12,7 @@ class StockAdjustmentController {
         const db = await dbmanager.init();
         const sql = `
             INSERT INTO stock_adjustments (stock_batch_id, quantity, quantity_before, quantity_after, reason, notes, created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?, datetime('now'), datetime('now'))
+            VALUES (?,?,?,?,?,?, datetime('now'), datetime('now'))
         `;
         const id = await new Promise((resolve, reject) => {
             db.run(sql, [

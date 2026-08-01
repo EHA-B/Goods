@@ -43,7 +43,6 @@ export default function PrintableInvoice(props: Props) {
     <section className="invoice-meta">
       <div className="invoice-party-card"><span>{props.partyLabel}</span><strong>{props.partyName}</strong></div>
       <div><span>حالة الفاتورة</span><strong>{props.statusLabel}</strong></div>
-      {props.company.taxNumber && <div><span>الرقم الضريبي</span><strong><bdi>{props.company.taxNumber}</bdi></strong></div>}
       {props.company.commercialRegister && <div><span>السجل التجاري</span><strong><bdi>{props.company.commercialRegister}</bdi></strong></div>}
     </section>
 

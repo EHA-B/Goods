@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import { registerProductIpc } from './productIpc'
 import { registerSupplierIpc } from './supplierIpc'
 import { registerCustomerIpc } from './customerIpc'
+import { registerDebugIpc } from "./debugIpc";
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
@@ -79,6 +80,7 @@ app.whenReady().then(async () => {
     registerProductIpc();
     registerSupplierIpc();
     registerCustomerIpc();
+    registerDebugIpc();
     console.log('Database initialized successfully from electron/main.ts');
   } catch (error) {
     console.error('Failed to initialize database:', error);

@@ -610,14 +610,14 @@ const dbmanager = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.definePro
   getDatabase,
   initDatabase
 }, Symbol.toStringTag, { value: "Module" }));
-function validationError$2(message) {
+function validationError$3(message) {
   const error = new Error(message);
   error.code = "VALIDATION_ERROR";
   return error;
 }
 function normalizeInput$2(input, partial = false) {
   if (!input || typeof input !== "object") {
-    throw validationError$2("بيانات المنتج مطلوبة.");
+    throw validationError$3("بيانات المنتج مطلوبة.");
   }
   const result = {};
   const requiredStringFields = ["name", "unit"];
@@ -626,7 +626,7 @@ function normalizeInput$2(input, partial = false) {
       const value = String(input[field] ?? "").trim();
       if (!value) {
         const labels = { name: "اسم المنتج", unit: "الوحدة" };
-        throw validationError$2(`${labels[field]} مطلوب.`);
+        throw validationError$3(`${labels[field]} مطلوب.`);
       }
       result[field] = value;
     }
@@ -698,7 +698,7 @@ function registerProductIpc() {
     const productId = Number(id);
     const payload = normalizeInput$2(input, true);
     if (Object.keys(payload).length === 0) {
-      throw validationError$2("لا توجد بيانات لتعديلها.");
+      throw validationError$3("لا توجد بيانات لتعديلها.");
     }
     try {
       const changed = await getDatabase()("products").where({ id: productId }).update({ ...payload, updated_at: getDatabase().fn.now() });
@@ -727,7 +727,7 @@ function registerProductIpc() {
     }
   });
 }
-function validationError$1(message) {
+function validationError$2(message) {
   const error = new Error(message);
   error.code = "VALIDATION_ERROR";
   return error;
@@ -738,12 +738,12 @@ function normalizeOptionalString$1(value) {
 }
 function normalizeInput$1(input, partial = false) {
   if (!input || typeof input !== "object") {
-    throw validationError$1("بيانات المورد مطلوبة.");
+    throw validationError$2("بيانات المورد مطلوبة.");
   }
   const result = {};
   if (!partial || Object.prototype.hasOwnProperty.call(input, "name")) {
     const name = String(input.name ?? "").trim();
-    if (!name) throw validationError$1("اسم المورد مطلوب.");
+    if (!name) throw validationError$2("اسم المورد مطلوب.");
     result.name = name;
   }
   for (const field of ["phone", "email", "address", "notes"]) {
@@ -754,7 +754,7 @@ function normalizeInput$1(input, partial = false) {
   if (!partial || Object.prototype.hasOwnProperty.call(input, "balance")) {
     const balance = Number(input.balance ?? 0);
     if (!Number.isFinite(balance)) {
-      throw validationError$1("الرصيد الافتتاحي غير صالح.");
+      throw validationError$2("الرصيد الافتتاحي غير صالح.");
     }
     result.balance = balance;
   }
@@ -814,7 +814,7 @@ function registerSupplierIpc() {
       const supplierId = Number(id);
       const payload = normalizeInput$1(input, true);
       if (Object.keys(payload).length === 0) {
-        throw validationError$1("لا توجد بيانات لتعديلها.");
+        throw validationError$2("لا توجد بيانات لتعديلها.");
       }
       try {
         const changed = await getDatabase()("suppliers").where({ id: supplierId }).update({ ...payload, updated_at: getDatabase().fn.now() });
@@ -844,7 +844,7 @@ function registerSupplierIpc() {
     }
   });
 }
-function validationError(message) {
+function validationError$1(message) {
   const error = new Error(message);
   error.code = "VALIDATION_ERROR";
   return error;
@@ -855,12 +855,12 @@ function normalizeOptionalString(value) {
 }
 function normalizeInput(input, partial = false) {
   if (!input || typeof input !== "object") {
-    throw validationError("بيانات العميل مطلوبة.");
+    throw validationError$1("بيانات العميل مطلوبة.");
   }
   const result = {};
   if (!partial || Object.prototype.hasOwnProperty.call(input, "name")) {
     const name = String(input.name ?? "").trim();
-    if (!name) throw validationError("اسم العميل مطلوب.");
+    if (!name) throw validationError$1("اسم العميل مطلوب.");
     result.name = name;
   }
   for (const field of ["phone", "email", "address", "notes"]) {
@@ -871,7 +871,7 @@ function normalizeInput(input, partial = false) {
   if (!partial || Object.prototype.hasOwnProperty.call(input, "balance")) {
     const balance = Number(input.balance ?? 0);
     if (!Number.isFinite(balance)) {
-      throw validationError("الرصيد الافتتاحي غير صالح.");
+      throw validationError$1("الرصيد الافتتاحي غير صالح.");
     }
     result.balance = balance;
   }
@@ -931,7 +931,7 @@ function registerCustomerIpc() {
       const customerId = Number(id);
       const payload = normalizeInput(input, true);
       if (Object.keys(payload).length === 0) {
-        throw validationError("لا توجد بيانات لتعديلها.");
+        throw validationError$1("لا توجد بيانات لتعديلها.");
       }
       try {
         const changed = await getDatabase()("customers").where({ id: customerId }).update({ ...payload, updated_at: getDatabase().fn.now() });
@@ -960,6 +960,66 @@ function registerCustomerIpc() {
       return normalizeDatabaseError(error);
     }
   });
+}
+const ALLOWED_TABLES = /* @__PURE__ */ new Set([
+  "products",
+  "customers",
+  "suppliers",
+  "stock_batches",
+  "stock_adjustments",
+  "purchase_invoices",
+  "purchase_invoice_items",
+  "sale_invoices",
+  "sale_invoice_items",
+  "cashboxes",
+  "cashbox_transactions",
+  "transactions",
+  "transaction_categories",
+  "payments",
+  "users",
+  "settings",
+  "activity_logs"
+]);
+function validationError(message) {
+  const error = new Error(message);
+  error.code = "VALIDATION_ERROR";
+  return error;
+}
+function registerDebugIpc() {
+  ipcMain.removeHandler("debug:table");
+  ipcMain.handle(
+    "debug:table",
+    async (_event, tableName) => {
+      if (typeof tableName !== "string") {
+        throw validationError("اسم الجدول غير صالح.");
+      }
+      const normalizedTableName = tableName.trim();
+      if (!ALLOWED_TABLES.has(normalizedTableName)) {
+        throw validationError(
+          `غير مسموح بعرض الجدول: ${normalizedTableName}`
+        );
+      }
+      const rows = await getDatabase()(
+        normalizedTableName
+      ).select("*").orderBy("id", "desc");
+      console.log(
+        `
+========== TABLE: ${normalizedTableName} ==========`
+      );
+      if (rows.length === 0) {
+        console.log("الجدول فارغ.");
+      } else {
+        console.table(rows);
+      }
+      console.log(
+        `عدد السجلات: ${rows.length}`
+      );
+      console.log(
+        "================================================\n"
+      );
+      return rows;
+    }
+  );
 }
 const __dirname$1 = path$1.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path$1.join(__dirname$1, "../..");
@@ -1008,6 +1068,7 @@ app.whenReady().then(async () => {
     registerProductIpc();
     registerSupplierIpc();
     registerCustomerIpc();
+    registerDebugIpc();
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {
     console.error("Failed to initialize database:", error);

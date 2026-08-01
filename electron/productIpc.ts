@@ -159,4 +159,74 @@ export function registerProductIpc() {
       return normalizeDatabaseError(error);
     }
   });
+
+  ipcMain.handle("products:adjustStock", async (_event, id: number, input: any) => {
+    const productId = Number(id);
+    const qty = parseFloat(input.quantity);
+    if (isNaN(qty) || qty <= 0) {
+      throw validationError("يجب أن تكون الكمية رقمًا موجبًا.");
+    }
+    if (!input.type || !input.reason) {
+      throw validationError("نوع التسوية والسبب مطلوبان.");
+    }
+
+    try {
+      return await getDatabase().transaction(async (trx) => {
+        // Get product to ensure it exists
+        const product = await trx("products").where({ id: productId }).first();
+        if (!product) {
+          const error = new Error("المنتج غير موجود.") as Error & { code?: string };
+          error.code = "NOT_FOUND";
+          throw error;
+        }
+
+        // Get first available stock batch
+        let stockBatch = await trx("stock_batches").where({ product_id: productId }).orderBy("id", "asc").first();
+
+        if (!stockBatch) {
+          if (input.type === "subtract") {
+            throw validationError("لا يمكن إنقاص المخزون لعدم وجود دفعات سابقة.");
+          }
+          // Create new batch
+          const [newBatchId] = await trx("stock_batches").insert({
+            product_id: productId,
+            quantity: 0,
+            remaining_quantity: 0,
+            isActive: true,
+            created_at: getDatabase().fn.now(),
+            updated_at: getDatabase().fn.now(),
+          });
+          stockBatch = await trx("stock_batches").where({ id: newBatchId }).first();
+        }
+
+        const adjustmentAmount = input.type === "add" ? qty : -qty;
+        const quantityBefore = Number(stockBatch.remaining_quantity || 0);
+        const newRemaining = quantityBefore + adjustmentAmount;
+
+        // Insert adjustment
+        await trx("stock_adjustments").insert({
+          stock_batch_id: stockBatch.id,
+          quantity: adjustmentAmount,
+          quantity_before: quantityBefore,
+          quantity_after: newRemaining,
+          reason: String(input.reason),
+          notes: input.notes ? String(input.notes) : null,
+          created_at: getDatabase().fn.now(),
+          updated_at: getDatabase().fn.now(),
+        });
+
+        // Update remaining quantity
+        await trx("stock_batches")
+          .where({ id: stockBatch.id })
+          .update({
+            remaining_quantity: newRemaining,
+            updated_at: getDatabase().fn.now(),
+          });
+
+        return { success: true, newRemaining };
+      });
+    } catch (error) {
+      return normalizeDatabaseError(error);
+    }
+  });
 }

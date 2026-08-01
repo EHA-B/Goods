@@ -11,13 +11,15 @@ class StockAdjustmentController {
         }
         const db = await dbmanager.init();
         const sql = `
-            INSERT INTO stock_adjustments (stock_batch_id, quantity, reason, notes, created_at, updated_at)
-            VALUES (?,?,?,?, datetime('now'), datetime('now'))
+            INSERT INTO stock_adjustments (stock_batch_id, quantity, quantity_before, quantity_after, reason, notes, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?, datetime('now'), datetime('now'))
         `;
         const id = await new Promise((resolve, reject) => {
             db.run(sql, [
                 input.stock_batch_id ?? null,
                 input.quantity ?? null,
+                input.quantity_before ?? 0,
+                input.quantity_after ?? 0,
                 input.reason ?? null,
                 input.notes ?? null
             ], function (err) {
@@ -64,6 +66,8 @@ class StockAdjustmentController {
         const mapping = {
             stock_batch_id: 'stock_batch_id',
             quantity: 'quantity',
+            quantity_before: 'quantity_before',
+            quantity_after: 'quantity_after',
             reason: 'reason',
             notes: 'notes'
         };

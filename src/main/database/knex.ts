@@ -7,6 +7,7 @@ import * as initialSchema from './migrations/20250101000000_initial_schema';
 import * as consignmentMigration from './migrations/20260728141424_consignment_support';
 import * as productCodeMigration from './migrations/20260731190000_add_product_code';
 import * as optionalProductCodeMigration from './migrations/20260731210000_make_product_code_optional';
+import * as quantityBeforeAfterMigration from './migrations/20260801135327_add_quantity_before_after_to_stock_adjustments';
 import * as cashboxesSeed from './seeds/01_cashboxes';
 import * as usersSeed from './seeds/02_users';
 import * as commissionCashboxSeed from './seeds/01_commission_cashbox';
@@ -20,6 +21,7 @@ class MigrationSource {
       '20260728141424_consignment_support.ts',
       '20260731190000_add_product_code.ts',
       '20260731210000_make_product_code_optional.ts',
+      '20260801135327_add_quantity_before_after_to_stock_adjustments.ts',
     ]);
   }
   getMigrationName(migration: string) {
@@ -37,6 +39,9 @@ class MigrationSource {
     }
     if (migration === '20260731210000_make_product_code_optional.ts') {
       return optionalProductCodeMigration;
+    }
+    if (migration === '20260801135327_add_quantity_before_after_to_stock_adjustments.ts') {
+      return quantityBeforeAfterMigration;
     }
     throw new Error(`Migration ${migration} not found`);
   }

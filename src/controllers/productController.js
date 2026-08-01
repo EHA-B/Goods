@@ -420,34 +420,129 @@ async updateStockProduct(id, input) {
     }
 }
 
-async getProductWithStock(id) {
-    if (!id) {
-        const err = new Error('Product ID is required');
-        err.code = 'VALIDATION_ERROR';
-        throw err;
+    async adjustProductStock(id, input) {
+        if (!id) {
+            const err = new Error('Product ID is required');
+            err.code = 'VALIDATION_ERROR';
+            throw err;
+        }
+        if (!input || !input.quantity || !input.type || !input.reason) {
+            const err = new Error('Quantity, type, and reason are required');
+            err.code = 'VALIDATION_ERROR';
+            throw err;
+        }
+
+        const qty = parseFloat(input.quantity);
+        if (isNaN(qty) || qty <= 0) {
+            const err = new Error('Quantity must be a positive number');
+            err.code = 'VALIDATION_ERROR';
+            throw err;
+        }
+
+        const db = await dbmanager.init();
+
+        try {
+            // Start transaction
+            await new Promise((resolve, reject) => {
+                db.run('BEGIN TRANSACTION', (err) => {
+                    if (err) return reject(err);
+                    resolve();
+                });
+            });
+
+            // Get or create stock batch
+            let stockBatch = await new Promise((resolve, reject) => {
+                db.get(
+                    `SELECT * FROM stock_batches WHERE product_id = ? ORDER BY id ASC LIMIT 1`,
+                    [id],
+                    (err, row) => {
+                        if (err) return reject(err);
+                        resolve(row);
+                    }
+                );
+            });
+
+            const stockBatchController = require('./stockBatchController');
+            
+            if (!stockBatch) {
+                if (input.type === 'subtract') {
+                    throw new Error('Cannot subtract stock: no stock batches exist for this product.');
+                }
+                // Create a new batch
+                const newBatchInput = {
+                    product_id: id,
+                    quantity: 0,
+                    remaining_quantity: 0,
+                    isActive: 1
+                };
+                stockBatch = await stockBatchController.createStockBatch(newBatchInput);
+            }
+
+            // Calculate adjustment amount (positive for add, negative for subtract)
+            const adjustmentAmount = input.type === 'add' ? qty : -qty;
+
+            // Create stock adjustment record
+            const stockAdjustmentController = require('./stockAdjustmentController');
+            await stockAdjustmentController.createStockAdjustment({
+                stock_batch_id: stockBatch.id,
+                quantity: adjustmentAmount,
+                reason: input.reason,
+                notes: input.notes || null
+            });
+
+            // Update the stock batch's remaining quantity
+            const newRemaining = (stockBatch.remaining_quantity || 0) + adjustmentAmount;
+            
+            await stockBatchController.updateStockBatch(stockBatch.id, {
+                remaining_quantity: newRemaining
+            });
+
+            // Commit transaction
+            await new Promise((resolve, reject) => {
+                db.run('COMMIT', (err) => {
+                    if (err) return reject(err);
+                    resolve();
+                });
+            });
+
+            return this.getProductWithStock(id);
+        } catch (error) {
+            // Rollback on error
+            await new Promise((resolve) => {
+                db.run('ROLLBACK', () => resolve());
+            });
+            throw error;
+        }
     }
 
-    // Get the product using existing method
-    const product = await this.getProduct(id);
+    async getProductWithStock(id) {
+        if (!id) {
+            const err = new Error('Product ID is required');
+            err.code = 'VALIDATION_ERROR';
+            throw err;
+        }
 
-    // Get all stock batches for this product
-    const db = await dbmanager.init();
-    const stockBatches = await new Promise((resolve, reject) => {
-        db.all(
-            `SELECT * FROM stock_batches WHERE product_id = ?`,
-            [id],
-            (err, rows) => {
-                if (err) return reject(err);
-                resolve(rows);
-            }
-        );
-    });
+        // Get the product using existing method
+        const product = await this.getProduct(id);
 
-    return {
-        product,
-        stock_batches: stockBatches
-    };
-}
+        // Get all stock batches for this product
+        const db = await dbmanager.init();
+        const stockBatches = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT * FROM stock_batches WHERE product_id = ?`,
+                [id],
+                (err, rows) => {
+                    if (err) return reject(err);
+                    resolve(rows);
+                }
+            );
+        });
+
+        return {
+            product,
+            stock_batches: stockBatches
+        };
+    }
 }
 
 module.exports = new ProductController();

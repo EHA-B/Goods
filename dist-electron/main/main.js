@@ -726,6 +726,58 @@ function registerProductIpc() {
       return normalizeDatabaseError$2(error);
     }
   });
+  ipcMain.handle("products:adjustStock", async (_event, id, input) => {
+    const productId = Number(id);
+    const qty = parseFloat(input.quantity);
+    if (isNaN(qty) || qty <= 0) {
+      throw validationError$2("يجب أن تكون الكمية رقمًا موجبًا.");
+    }
+    if (!input.type || !input.reason) {
+      throw validationError$2("نوع التسوية والسبب مطلوبان.");
+    }
+    try {
+      return await getDatabase().transaction(async (trx) => {
+        const product = await trx("products").where({ id: productId }).first();
+        if (!product) {
+          const error = new Error("المنتج غير موجود.");
+          error.code = "NOT_FOUND";
+          throw error;
+        }
+        let stockBatch = await trx("stock_batches").where({ product_id: productId }).orderBy("id", "asc").first();
+        if (!stockBatch) {
+          if (input.type === "subtract") {
+            throw validationError$2("لا يمكن إنقاص المخزون لعدم وجود دفعات سابقة.");
+          }
+          const [newBatchId] = await trx("stock_batches").insert({
+            product_id: productId,
+            quantity: 0,
+            remaining_quantity: 0,
+            isActive: true,
+            created_at: getDatabase().fn.now(),
+            updated_at: getDatabase().fn.now()
+          });
+          stockBatch = await trx("stock_batches").where({ id: newBatchId }).first();
+        }
+        const adjustmentAmount = input.type === "add" ? qty : -qty;
+        await trx("stock_adjustments").insert({
+          stock_batch_id: stockBatch.id,
+          quantity: adjustmentAmount,
+          reason: String(input.reason),
+          notes: input.notes ? String(input.notes) : null,
+          created_at: getDatabase().fn.now(),
+          updated_at: getDatabase().fn.now()
+        });
+        const newRemaining = Number(stockBatch.remaining_quantity || 0) + adjustmentAmount;
+        await trx("stock_batches").where({ id: stockBatch.id }).update({
+          remaining_quantity: newRemaining,
+          updated_at: getDatabase().fn.now()
+        });
+        return { success: true, newRemaining };
+      });
+    } catch (error) {
+      return normalizeDatabaseError$2(error);
+    }
+  });
 }
 function validationError$1(message) {
   const error = new Error(message);

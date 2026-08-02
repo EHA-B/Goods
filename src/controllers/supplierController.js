@@ -117,6 +117,54 @@ class SupplierController {
         if (!info || info.changes === 0) throw { code: 'NOT_FOUND', message: 'Supplier not found' };
         return { success: true, message: 'Supplier deleted successfully' };
     }
+
+    async getSupplierTransactions(id) {
+        if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
+        const db = await dbmanager.init();
+        
+        const payments = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT * FROM payments WHERE party_type = 'supplier' AND party_id = ? ORDER BY payment_date DESC`,
+                [id],
+                (err, rows) => {
+                    if (err) return reject(err);
+                    resolve(rows || []);
+                }
+            );
+        });
+
+        const purchases = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT * FROM purchase_invoices WHERE supplier_id = ? ORDER BY invoice_date DESC`,
+                [id],
+                (err, rows) => {
+                    if (err) return reject(err);
+                    resolve(rows || []);
+                }
+            );
+        });
+
+        const stockBatches = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT sb.*, p.name as product_name 
+                 FROM stock_batches sb 
+                 LEFT JOIN products p ON sb.product_id = p.id 
+                 WHERE sb.supplier_id = ? 
+                 ORDER BY sb.received_date DESC`,
+                [id],
+                (err, rows) => {
+                    if (err) return reject(err);
+                    resolve(rows || []);
+                }
+            );
+        });
+
+        return {
+            payments,
+            purchases,
+            stockBatches
+        };
+    }
 }
 
 module.exports = new SupplierController();

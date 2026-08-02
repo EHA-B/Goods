@@ -45,13 +45,16 @@ const stockliteApi = {
     update: "updateCustomer",
     remove: "deleteCustomer"
   }),
-  suppliers: crudApi("supplier", {
-    create: "createSupplier",
-    get: "getSupplier",
-    list: "getAllSuppliers",
-    update: "updateSupplier",
-    remove: "deleteSupplier"
-  }),
+  suppliers: {
+    ...crudApi("supplier", {
+      create: "createSupplier",
+      get: "getSupplier",
+      list: "getAllSuppliers",
+      update: "updateSupplier",
+      remove: "deleteSupplier"
+    }),
+    getTransactions: (id) => invokeApi("api:supplier:getSupplierTransactions", id)
+  },
   stockBatches: {
     ...crudApi("stockBatch", {
       create: "createStockBatch",
@@ -75,15 +78,13 @@ const stockliteApi = {
     get: (id) => invokeApi("api:cashbox:getCashbox", id),
     list: () => invokeApi("api:cashbox:getAllCashboxs"),
     update: (id, input) => invokeApi("api:cashbox:updateCashbox", id, input),
+    remove: (id) => invokeApi("api:cashbox:deleteCashbox", id),
     summary: () => invokeApi("api:cashbox:getCashboxesSummary"),
-    transfer: (fromId, toId, amount, date, notes) => invokeApi(
-      "api:cashbox:transfer",
-      fromId,
-      toId,
-      amount,
-      date,
-      notes ?? ""
-    )
+    getDetails: (id) => invokeApi("api:cashbox:getDetails", id),
+    movements: (cashboxId, filters) => invokeApi("api:cashbox:getMovements", cashboxId, filters),
+    createMovement: (input) => invokeApi("api:cashbox:createMovement", input),
+    transfer: (input) => invokeApi("api:cashbox:transferBetween", input),
+    reverseMovement: (transactionId, reason) => invokeApi("api:cashbox:reverseMovement", transactionId, reason)
   },
   cashboxTransactions: crudApi("cashboxTransaction", {
     create: "createCashboxTransaction",

@@ -1,10 +1,49 @@
-export type Cashbox={id:number;name:string;parentId:number|null;parentName?:string;balance:number;initialBalance:number;currency:string;isActive:boolean;notes:string;createdAt:string};
-export type CashboxMovement={id:number;cashboxId:number;referenceType:'sale'|'purchase'|'expense'|'income'|'transfer';referenceId:number;amount:number;direction:'in'|'out';balanceBefore:number;balanceAfter:number;transactionDate:string;notes:string};
-export type FinancialTransaction={id:number;categoryId:number;categoryName:string;cashboxId:number;cashboxName:string;amount:number;direction:'expense'|'income';transactionDate:string;description:string;referenceNumber:string;notes:string};
-export type TransactionCategory={id:number;name:string;type:'expense'|'income';description:string;isActive:boolean};
-let cashboxes:Cashbox[]=[{id:1,name:'الصندوق الرئيسي',parentId:null,balance:18500,initialBalance:10000,currency:'SAR',isActive:true,notes:'الصندوق الأساسي للمنشأة',createdAt:'2026-07-01'},{id:2,name:'صندوق الفرع',parentId:1,parentName:'الصندوق الرئيسي',balance:4200,initialBalance:3000,currency:'SAR',isActive:true,notes:'فرع المبيعات',createdAt:'2026-07-04'},{id:3,name:'صندوق العمولات',parentId:1,parentName:'الصندوق الرئيسي',balance:2300,initialBalance:0,currency:'SAR',isActive:true,notes:'مبالغ العمولات والأمانة',createdAt:'2026-07-06'}];
-let categories:TransactionCategory[]=[{id:1,name:'إيجار المحل',type:'expense',description:'إيجارات الفروع',isActive:true},{id:2,name:'كهرباء ومياه',type:'expense',description:'الخدمات الشهرية',isActive:true},{id:3,name:'نقل وشحن',type:'expense',description:'تكاليف النقل',isActive:true},{id:4,name:'إيراد عمولات',type:'income',description:'عمولات البيع',isActive:true},{id:5,name:'إيراد آخر',type:'income',description:'إيرادات متنوعة',isActive:true}];
-let txs:FinancialTransaction[]=[{id:1,categoryId:4,categoryName:'إيراد عمولات',cashboxId:1,cashboxName:'الصندوق الرئيسي',amount:800,direction:'income',transactionDate:'2026-07-28',description:'عمولة مبيعات',referenceNumber:'INC-001',notes:''},{id:2,categoryId:2,categoryName:'كهرباء ومياه',cashboxId:1,cashboxName:'الصندوق الرئيسي',amount:350,direction:'expense',transactionDate:'2026-07-27',description:'فاتورة كهرباء',referenceNumber:'EXP-001',notes:''}];
-let movements:CashboxMovement[]=[{id:1,cashboxId:1,referenceType:'sale',referenceId:1001,amount:3200,direction:'in',balanceBefore:14800,balanceAfter:18000,transactionDate:'2026-07-29',notes:'دفعة فاتورة بيع'},{id:2,cashboxId:1,referenceType:'income',referenceId:1,amount:800,direction:'in',balanceBefore:14000,balanceAfter:14800,transactionDate:'2026-07-28',notes:'إيراد عمولات'},{id:3,cashboxId:1,referenceType:'expense',referenceId:2,amount:350,direction:'out',balanceBefore:14350,balanceAfter:14000,transactionDate:'2026-07-27',notes:'فاتورة كهرباء'},{id:4,cashboxId:2,referenceType:'transfer',referenceId:1,amount:1200,direction:'in',balanceBefore:3000,balanceAfter:4200,transactionDate:'2026-07-26',notes:'تحويل من الصندوق الرئيسي'}];
-const syncParents=()=>{cashboxes=cashboxes.map(c=>({...c,parentName:cashboxes.find(p=>p.id===c.parentId)?.name}))};
-export const cashboxesService={list:()=>[...cashboxes],get:(id:number)=>cashboxes.find(x=>x.id===id),save:(data:Omit<Cashbox,'id'|'createdAt'|'parentName'>,id?:number)=>{if(id){cashboxes=cashboxes.map(x=>x.id===id?{...x,...data}:x)}else{cashboxes.push({...data,id:Date.now(),createdAt:new Date().toISOString().slice(0,10)})}syncParents()},remove:(id:number)=>{cashboxes=cashboxes.filter(x=>x.id!==id)},canDelete:(id:number)=>!movements.some(m=>m.cashboxId===id)&&!cashboxes.some(c=>c.parentId===id),movements:(id:number)=>movements.filter(m=>m.cashboxId===id),transactions:()=>[...txs],getTransaction:(id:number)=>txs.find(x=>x.id===id),categories:()=>[...categories],saveCategory:(data:Omit<TransactionCategory,'id'>,id?:number)=>{if(id)categories=categories.map(x=>x.id===id?{...x,...data}:x);else categories.push({...data,id:Date.now()})},removeCategory:(id:number)=>{if(!txs.some(t=>t.categoryId===id))categories=categories.filter(x=>x.id!==id)},saveTransaction:(data:Omit<FinancialTransaction,'id'|'categoryName'|'cashboxName'>,editId?:number)=>{if(editId){const old=txs.find(x=>x.id===editId);if(old){const oldBox=cashboxes.find(x=>x.id===old.cashboxId);if(oldBox)oldBox.balance+=old.direction==='income'?-old.amount:old.amount;movements=movements.filter(m=>!(m.referenceId===editId&&(m.referenceType==='income'||m.referenceType==='expense')));txs=txs.filter(x=>x.id!==editId)}}const box=cashboxes.find(x=>x.id===data.cashboxId);const cat=categories.find(x=>x.id===data.categoryId);if(!box||!cat)throw new Error('بيانات غير صحيحة');if(data.direction==='expense'&&data.amount>box.balance)throw new Error('الرصيد غير كافٍ');const before=box.balance;box.balance+=data.direction==='income'?data.amount:-data.amount;const id=editId||Date.now();txs.push({...data,id,categoryName:cat.name,cashboxName:box.name});movements.push({id,cashboxId:box.id,referenceType:data.direction,referenceId:id,amount:data.amount,direction:data.direction==='income'?'in':'out',balanceBefore:before,balanceAfter:box.balance,transactionDate:data.transactionDate,notes:data.description})},addTransaction:(data:Omit<FinancialTransaction,'id'|'categoryName'|'cashboxName'>)=>cashboxesService.saveTransaction(data),removeTransaction:(id:number)=>{const old=txs.find(x=>x.id===id);if(!old)return;const box=cashboxes.find(x=>x.id===old.cashboxId);if(box)box.balance+=old.direction==='income'?-old.amount:old.amount;txs=txs.filter(x=>x.id!==id);movements=movements.filter(m=>!(m.referenceId===id&&(m.referenceType==='income'||m.referenceType==='expense')))},transfer:(fromId:number,toId:number,amount:number,date:string,notes:string)=>{const from=cashboxes.find(x=>x.id===fromId),to=cashboxes.find(x=>x.id===toId);if(!from||!to||fromId===toId)throw new Error('اختر صندوقين مختلفين');if(amount>from.balance)throw new Error('الرصيد غير كافٍ');const id=Date.now(),fb=from.balance,tb=to.balance;from.balance-=amount;to.balance+=amount;movements.push({id,cashboxId:fromId,referenceType:'transfer',referenceId:id,amount,direction:'out',balanceBefore:fb,balanceAfter:from.balance,transactionDate:date,notes},{id:id+1,cashboxId:toId,referenceType:'transfer',referenceId:id,amount,direction:'in',balanceBefore:tb,balanceAfter:to.balance,transactionDate:date,notes})}};
+/**
+ * cashboxesService.ts
+ *
+ * Typed API wrappers over window.stockliteApi.cashboxes.
+ * No mock data, no local state mutation — all operations go through the backend.
+ */
+
+const api = () => window.stockliteApi.cashboxes;
+
+// Re-export backend types for use in components
+export type { CashboxApiRecord as Cashbox, CashboxDetails, CashboxMovementRecord as CashboxMovement, PaginatedCashboxMovements, CreateCashboxMovementInput, TransferCashboxesInput, CashboxMovementFilters };
+
+export const cashboxesService = {
+  /** List all cashboxes */
+  list: () => api().list(),
+
+  /** Get a single cashbox */
+  get: (id: number) => api().get(id),
+
+  /** Get cashbox with stats and recent movements */
+  getDetails: (id: number) => api().getDetails(id),
+
+  /** Summary totals (total_balance, active_count, total_in, total_out) */
+  summary: () => api().summary(),
+
+  /** Create a new cashbox (balance is set from initial_balance atomically) */
+  create: (input: Partial<CashboxApiRecord> & { name: string }) => api().create(input),
+
+  /** Update allowed fields only (balance/initial_balance are rejected by backend) */
+  update: (id: number, input: { name?: string; parent_id?: number | null; currency?: string; isActive?: boolean; notes?: string | null }) =>
+    api().update(id, input),
+
+  /** Hard-delete a cashbox (only succeeds if zero balance, no movements, no children) */
+  remove: (id: number) => api().remove(id),
+
+  /** Get paginated movements for a cashbox */
+  movements: (cashboxId: number, filters?: CashboxMovementFilters) =>
+    api().movements(cashboxId, filters),
+
+  /** Create a manual income/expense movement (atomically updates cashbox balance) */
+  createMovement: (input: CreateCashboxMovementInput) => api().createMovement(input),
+
+  /** Transfer between two cashboxes (currency/balance/active validated by backend) */
+  transfer: (input: TransferCashboxesInput) => api().transfer(input),
+
+  /** Reverse an approved movement */
+  reverseMovement: (transactionId: number, reason: string) =>
+    api().reverseMovement(transactionId, reason),
+};

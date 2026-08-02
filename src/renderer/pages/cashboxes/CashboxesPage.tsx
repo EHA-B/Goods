@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeftRight,
   Eye,
   Pencil,
   Plus,
-  Trash2,
+  RefreshCw,
   WalletCards,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -28,60 +28,100 @@ import {
   StatusBadge,
 } from "../../components/ui";
 import { PATHS } from "../../routes/path";
-import { cashboxesService, type Cashbox } from "./cashboxesService";
+import { cashboxesService } from "./cashboxesService";
 
 const money = (value: number, currency = "SAR") =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-  }).format(value);
+  new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value);
 
 export default function CashboxesPage() {
   const navigate = useNavigate();
-  const [cashboxes, setCashboxes] = useState(cashboxesService.list());
+
+  const [cashboxes, setCashboxes] = useState<CashboxApiRecord[]>([]);
+  const [summary, setSummary] = useState<{ total_balance: number; active_count: number; total_in: number; total_out: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [pendingDelete, setPendingDelete] = useState<Cashbox | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<CashboxApiRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [list, sum] = await Promise.all([
+        cashboxesService.list(),
+        cashboxesService.summary(),
+      ]);
+      setCashboxes(list);
+      setSummary(sum);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "تعذر تحميل بيانات الصناديق");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const filteredCashboxes = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-
-    return cashboxes.filter((cashbox) => {
+    return cashboxes.filter((c) => {
       const matchesSearch =
         !query ||
-        cashbox.name.toLowerCase().includes(query) ||
-        cashbox.parentName?.toLowerCase().includes(query);
+        c.name.toLowerCase().includes(query) ||
+        (c.parent_name?.toLowerCase().includes(query) ?? false);
       const matchesStatus =
         statusFilter === "all" ||
-        cashbox.isActive === (statusFilter === "active");
-
+        (statusFilter === "active" ? c.isActive : !c.isActive);
       return matchesSearch && matchesStatus;
     });
   }, [cashboxes, searchQuery, statusFilter]);
 
-  const totalBalance = cashboxes.reduce(
-    (sum, cashbox) => sum + cashbox.balance,
-    0,
-  );
-  const movements = cashboxes.flatMap((cashbox) =>
-    cashboxesService.movements(cashbox.id),
-  );
-  const totalIn = movements
-    .filter((movement) => movement.direction === "in")
-    .reduce((sum, movement) => sum + movement.amount, 0);
-  const totalOut = movements
-    .filter((movement) => movement.direction === "out")
-    .reduce((sum, movement) => sum + movement.amount, 0);
-  const filtersAreActive =
-    Boolean(searchQuery.trim()) || statusFilter !== "all";
+  const filtersAreActive = Boolean(searchQuery.trim()) || statusFilter !== "all";
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!pendingDelete) return;
-
-    cashboxesService.remove(pendingDelete.id);
-    setCashboxes(cashboxesService.list());
-    setPendingDelete(null);
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await cashboxesService.remove(pendingDelete.id);
+      setPendingDelete(null);
+      await loadData();
+    } catch (e: unknown) {
+      const err = e as { code?: string; message?: string };
+      const codeMessages: Record<string, string> = {
+        CASHBOX_IN_USE: "لا يمكن حذف صندوق مرتبط بحركات أو صناديق فرعية أو مدفوعات.",
+        NOT_FOUND: "الصندوق غير موجود.",
+      };
+      setDeleteError(codeMessages[err.code ?? ""] ?? err.message ?? "تعذر الحذف");
+    } finally {
+      setDeleting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center gap-3 text-[var(--text-muted)]">
+        <RefreshCw size={20} className="animate-spin" />
+        <span>جارٍ التحميل…</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center gap-4">
+        <p className="text-[var(--danger)]">{error}</p>
+        <Button variant="secondary" startIcon={<RefreshCw size={16} />} onClick={loadData}>
+          إعادة المحاولة
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -110,21 +150,19 @@ export default function CashboxesPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <p className="text-xs text-[var(--text-muted)]">إجمالي الأرصدة</p>
-          <p className="mt-2 text-2xl font-bold">{money(totalBalance)}</p>
+          <p className="mt-2 text-2xl font-bold">{money(summary?.total_balance ?? 0)}</p>
         </Card>
         <Card>
           <p className="text-xs text-[var(--text-muted)]">الصناديق النشطة</p>
-          <p className="mt-2 text-2xl font-bold">
-            {cashboxes.filter((cashbox) => cashbox.isActive).length}
-          </p>
+          <p className="mt-2 text-2xl font-bold">{summary?.active_count ?? 0}</p>
         </Card>
         <Card>
           <p className="text-xs text-[var(--text-muted)]">إجمالي الدخول</p>
-          <p className="mt-2 text-2xl font-bold">{money(totalIn)}</p>
+          <p className="mt-2 text-2xl font-bold">{money(summary?.total_in ?? 0)}</p>
         </Card>
         <Card>
           <p className="text-xs text-[var(--text-muted)]">إجمالي الخروج</p>
-          <p className="mt-2 text-2xl font-bold">{money(totalOut)}</p>
+          <p className="mt-2 text-2xl font-bold">{money(summary?.total_out ?? 0)}</p>
         </Card>
       </div>
 
@@ -152,10 +190,7 @@ export default function CashboxesPage() {
           <Button
             variant="secondary"
             disabled={!filtersAreActive}
-            onClick={() => {
-              setSearchQuery("");
-              setStatusFilter("all");
-            }}
+            onClick={() => { setSearchQuery(""); setStatusFilter("all"); }}
           >
             مسح الفلاتر
           </Button>
@@ -177,70 +212,44 @@ export default function CashboxesPage() {
               </DataTableHead>
 
               <DataTableBody>
-                {filteredCashboxes.map((cashbox) => {
-                  const canDelete = cashboxesService.canDelete(cashbox.id);
-
-                  return (
-                    <DataTableRow key={cashbox.id}>
-                      <DataTableCell className="font-bold text-[var(--text-primary)]">
-                        {cashbox.name}
-                      </DataTableCell>
-                      <DataTableCell>
-                        {cashbox.parentName || "—"}
-                      </DataTableCell>
-                      <DataTableCell>
-                        {money(cashbox.initialBalance, cashbox.currency)}
-                      </DataTableCell>
-                      <DataTableCell className="font-bold text-[var(--text-primary)]">
-                        {money(cashbox.balance, cashbox.currency)}
-                      </DataTableCell>
-                      <DataTableCell>{cashbox.currency}</DataTableCell>
-                      <DataTableCell>
-                        <StatusBadge
-                          status={cashbox.isActive ? "active" : "inactive"}
-                        />
-                      </DataTableCell>
-                      <DataTableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            startIcon={<Eye size={15} />}
-                            onClick={() =>
-                              navigate(`/cashboxes/${cashbox.id}`)
-                            }
-                          >
-                            استعراض
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            startIcon={<Pencil size={15} />}
-                            onClick={() =>
-                              navigate(`/cashboxes/${cashbox.id}/edit`)
-                            }
-                          >
-                            تعديل
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            startIcon={<Trash2 size={15} />}
-                            disabled={!canDelete}
-                            title={
-                              canDelete
-                                ? undefined
-                                : "لا يمكن حذف صندوق مرتبط بحركات أو صناديق فرعية"
-                            }
-                            onClick={() => setPendingDelete(cashbox)}
-                          >
-                            حذف
-                          </Button>
-                        </div>
-                      </DataTableCell>
-                    </DataTableRow>
-                  );
-                })}
+                {filteredCashboxes.map((cashbox) => (
+                  <DataTableRow key={cashbox.id}>
+                    <DataTableCell className="font-bold text-[var(--text-primary)]">
+                      {cashbox.name}
+                    </DataTableCell>
+                    <DataTableCell>{cashbox.parent_name || "—"}</DataTableCell>
+                    <DataTableCell>
+                      {money(Number(cashbox.initial_balance), cashbox.currency)}
+                    </DataTableCell>
+                    <DataTableCell className="font-bold text-[var(--text-primary)]">
+                      {money(Number(cashbox.balance), cashbox.currency)}
+                    </DataTableCell>
+                    <DataTableCell>{cashbox.currency}</DataTableCell>
+                    <DataTableCell>
+                      <StatusBadge status={cashbox.isActive ? "active" : "inactive"} />
+                    </DataTableCell>
+                    <DataTableCell>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          startIcon={<Eye size={15} />}
+                          onClick={() => navigate(`/cashboxes/${cashbox.id}`)}
+                        >
+                          استعراض
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          startIcon={<Pencil size={15} />}
+                          onClick={() => navigate(`/cashboxes/${cashbox.id}/edit`)}
+                        >
+                          تعديل
+                        </Button>
+                      </div>
+                    </DataTableCell>
+                  </DataTableRow>
+                ))}
               </DataTableBody>
             </DataTable>
 
@@ -263,17 +272,22 @@ export default function CashboxesPage() {
         )}
 
         <div className="border-t border-[var(--border)] px-5 py-3 text-xs text-[var(--text-muted)]">
-          ملاحظة: لا يمكن حذف صندوق يحتوي حركات مالية أو صناديق فرعية؛
-          يمكن تعطيله بدلًا من ذلك. الرصيد الحالي لا يُعدّل يدويًا.
+          ملاحظة: لا يمكن حذف صندوق يحتوي حركات مالية أو صناديق فرعية؛ يمكن تعطيله بدلًا من ذلك.
+          الرصيد الحالي لا يُعدّل يدويًا.
         </div>
       </Card>
 
       <ConfirmDialog
         open={Boolean(pendingDelete)}
         title="حذف الصندوق"
-        message={`هل تريد حذف ${pendingDelete?.name || ""}؟`}
-        onCancel={() => setPendingDelete(null)}
+        message={
+          deleteError
+            ? deleteError
+            : `هل تريد حذف "${pendingDelete?.name ?? ""}"؟ لا يمكن التراجع عن هذا الإجراء.`
+        }
+        onCancel={() => { setPendingDelete(null); setDeleteError(null); }}
         onConfirm={handleDelete}
+        confirmLabel={deleting ? "جارٍ الحذف…" : "حذف"}
       />
     </>
   );

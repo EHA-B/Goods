@@ -187,9 +187,8 @@ ipcMain.handle('api:cashbox:getCashboxesSummary', async (_event) => {
 });
 
 /**
- * Endpoint: api:cashbox:transfer
+ * Endpoint: api:cashbox:transfer (legacy positional-args wrapper)
  * Description: Executes transfer on cashboxController.
- * Usage: Invoked by frontend to perform transfer operation.
  */
 ipcMain.handle('api:cashbox:transfer', async (_event, from_id, to_id, amount, date, notes) => {
   try {
@@ -208,6 +207,84 @@ ipcMain.handle('api:cashbox:transfer', async (_event, from_id, to_id, amount, da
 ipcMain.handle('api:cashbox:updateCashbox', async (_event, id, input) => {
   try {
     const result = await cashboxController.updateCashbox(id, input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:cashbox:getDetails
+ * Description: Returns cashbox data plus total_in, total_out, movement_count, recent_movements.
+ */
+ipcMain.handle('api:cashbox:getDetails', async (_event, id) => {
+  try {
+    const result = await cashboxController.getCashboxDetails(id);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:cashbox:getMovements
+ * Description: Returns paginated, filtered cashbox_transactions for a cashbox.
+ */
+ipcMain.handle('api:cashbox:getMovements', async (_event, cashboxId, filters) => {
+  try {
+    const result = await cashboxController.getCashboxMovements(cashboxId, filters);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:cashbox:createMovement
+ * Description: Creates a manual income/expense movement and atomically updates cashbox balance.
+ */
+ipcMain.handle('api:cashbox:createMovement', async (_event, input) => {
+  try {
+    const result = await cashboxController.createCashboxMovement(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:cashbox:transferBetween
+ * Description: Transfers between two cashboxes using object-based input with full validation.
+ */
+ipcMain.handle('api:cashbox:transferBetween', async (_event, input) => {
+  try {
+    const result = await cashboxController.transferBetweenCashboxes(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:cashbox:reverseMovement
+ * Description: Reverses an approved movement by creating an opposite movement.
+ */
+ipcMain.handle('api:cashbox:reverseMovement', async (_event, transactionId, reason) => {
+  try {
+    const result = await cashboxController.reverseCashboxMovement(transactionId, reason);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:cashbox:deleteCashbox
+ * Description: Hard-deletes a cashbox only if it has zero balance and no linked records.
+ */
+ipcMain.handle('api:cashbox:deleteCashbox', async (_event, id) => {
+  try {
+    const result = await cashboxController.deleteCashbox(id);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
@@ -1244,6 +1321,20 @@ ipcMain.handle('api:supplier:updateSupplier', async (_event, id, input) => {
 ipcMain.handle('api:supplier:deleteSupplier', async (_event, id) => {
   try {
     const result = await supplierController.deleteSupplier(id);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:supplier:getSupplierTransactions
+ * Description: Executes getSupplierTransactions on supplierController.
+ * Usage: Invoked by frontend to perform getSupplierTransactions operation.
+ */
+ipcMain.handle('api:supplier:getSupplierTransactions', async (_event, id) => {
+  try {
+    const result = await supplierController.getSupplierTransactions(id);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);

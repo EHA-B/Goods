@@ -1,8 +1,8 @@
-import { ArrowRight, Save } from "lucide-react";
+import { Save } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Button, Card, FormField, Input, LoadingSpinner, NumberInput, PageHeader, Select, Textarea } from "../../components/ui";
+import { BackButton, Button, Card, FormField, Input, LoadingSpinner, NumberInput, PageHeader, Select, Textarea } from "../../components/ui";
 import { suppliersService, type Supplier } from "../suppliers/suppliersService";
 import { getInventoryErrorMessage, inventoryService, type InventoryItem } from "./inventoryService";
 
@@ -25,7 +25,7 @@ export default function StockBatchFormPage() {
   if (isLoading) return <div className="flex min-h-[60vh] items-center justify-center"><LoadingSpinner size="lg" /></div>;
   if (!product) return <Card><p className="text-sm text-[var(--danger)]">{error || "تعذر العثور على المادة."}</p></Card>;
   return <form onSubmit={submit} className="space-y-6">
-    <PageHeader title="إضافة دفعة مخزون" description="ربط دفعة حقيقية بالمادة والمورد." actions={<Button variant="secondary" startIcon={<ArrowRight size={17} />} onClick={() => navigate(-1)}>رجوع</Button>} />
+    <PageHeader title="إضافة دفعة مخزون" description="ربط دفعة حقيقية بالمادة والمورد." actions={<BackButton />} />
     <Card header="المادة المحددة"><div className="grid gap-4 md:grid-cols-3"><Info label="المادة" value={product.productName} /><Info label="الكود" value={product.productCode} /><Info label="الرصيد الحالي" value={`${product.totalQuantity.toLocaleString()} ${product.unit}`} /></div></Card>
     <Card header="بيانات الدفعة"><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
       <FormField label="رقم الدفعة" hint="اختياري"><Input dir="ltr" value={batchCode} placeholder="مثال: BAT-2026-001" onChange={(e) => setBatchCode(e.target.value)} /></FormField>

@@ -921,3 +921,12 @@ html[data-theme="dark"] .appearance-choice.is-active, html[data-theme="dark"] .a
 html[data-theme="dark"] .bg-gray-100 { background-color:var(--surface-hover)!important; }
 html[data-theme="dark"] .text-gray-700 { color:var(--text-secondary)!important; }
 html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!important; }
+@media print {
+  body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  button, [role="button"] { box-shadow: none !important; }
+  table { width: 100% !important; border-collapse: collapse !important; }
+  thead { display: table-header-group !important; }
+  tfoot { display: table-footer-group !important; }
+  tr, td, th { break-inside: avoid; page-break-inside: avoid; }
+  a { color: inherit !important; text-decoration: none !important; }
+}

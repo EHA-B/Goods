@@ -1,8 +1,8 @@
-import { ArrowRight, PackageCheck } from "lucide-react";
+import { PackageCheck } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Button, Card, FormField, LoadingSpinner, NumberInput, PageHeader, Select, Textarea } from "../../components/ui";
+import { BackButton, Button, Card, FormField, LoadingSpinner, NumberInput, PageHeader, Select, Textarea } from "../../components/ui";
 import { getInventoryErrorMessage, inventoryService, type InventoryItem, type StockBatch } from "./inventoryService";
 
 const OPERATION_OPTIONS = [{ value: "add", label: "إضافة إلى الدفعة" }, { value: "subtract", label: "خصم من الدفعة" }];
@@ -32,7 +32,7 @@ export default function StockAdjustmentPage() {
   if (isLoading) return <div className="flex min-h-[60vh] items-center justify-center"><LoadingSpinner size="lg" /></div>;
   if (!product) return <Card><p className="text-sm text-[var(--danger)]">{error || "تعذر العثور على المادة."}</p></Card>;
   return <form onSubmit={submit} className="space-y-6">
-    <PageHeader title="تسوية المخزون" description="تنفيذ إضافة أو خصم على دفعة محددة مع تسجيل الرصيد قبل وبعد." actions={<Button variant="secondary" startIcon={<ArrowRight size={17} />} onClick={() => navigate(-1)}>رجوع</Button>} />
+    <PageHeader title="تسوية المخزون" description="تنفيذ إضافة أو خصم على دفعة محددة مع تسجيل الرصيد قبل وبعد." actions={<BackButton />} />
     <Card header="المادة المحددة"><div className="grid gap-4 md:grid-cols-3"><Info label="المادة" value={product.productName} /><Info label="الكود" value={product.productCode} /><Info label="الرصيد الإجمالي" value={`${product.totalQuantity.toLocaleString()} ${product.unit}`} /></div></Card>
     <Card header="بيانات التسوية"><div className="grid gap-5 md:grid-cols-2">
       <FormField label="الدفعة" required><Select value={batchId} placeholder={batches.length ? "اختر الدفعة" : "لا توجد دفعات"} options={batches.map((b) => ({ value: String(b.id), label: `${b.batchCode} — المتبقي ${b.remainingQuantity.toLocaleString()} ${product.unit}` }))} onChange={(e) => { setBatchId(e.target.value); setError(""); }} /></FormField>

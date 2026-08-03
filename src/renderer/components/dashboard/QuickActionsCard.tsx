@@ -15,25 +15,25 @@ const actions = [
     title: "إضافة منتج جديد",
     description: "تسجيل منتج جديد",
     icon: Package,
-    to: PATHS.PRODUCTS,
+    to: PATHS.PRODUCT_NEW,
   },
   {
     title: "تسجيل عملية بيع",
     description: "إنشاء فاتورة جديدة",
     icon: ShoppingCart,
-    to: PATHS.SALES,
+    to: PATHS.SALE_NEW,
   },
   {
     title: "إضافة عميل",
     description: "تسجيل عميل",
     icon: Users,
-    to: PATHS.CUSTOMERS,
+    to: PATHS.CUSTOMER_NEW,
   },
   {
     title: "إضافة مورد",
     description: "تسجيل مورد",
     icon: Truck,
-    to: PATHS.SUPPLIERS,
+    to: PATHS.SUPPLIER_NEW,
   },
 ];
 

@@ -102,6 +102,25 @@ class TransactionCategoryController {
     async deleteTransactionCategory(id) {
         if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
         const db = await dbmanager.init();
+
+        const usage = await new Promise((resolve, reject) => {
+            db.get(
+                `SELECT COUNT(*) AS count FROM transactions WHERE category_id = ?`,
+                [id],
+                (err, row) => {
+                    if (err) return reject(err);
+                    resolve(Number(row?.count || 0));
+                }
+            );
+        });
+
+        if (usage > 0) {
+            throw {
+                code: 'CATEGORY_IN_USE',
+                message: 'Cannot delete a transaction category that is used by existing transactions'
+            };
+        }
+
         const info = await new Promise((resolve, reject) => {
             db.run(`DELETE FROM transaction_categories WHERE id = ?`, [id], function (err) {
                 if (err) return reject(err);

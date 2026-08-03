@@ -2,6 +2,17 @@ import { ipcMain, app, BrowserWindow } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { createRequire } from "node:module";
+let currentUser = null;
+function setCurrentUser(user) {
+  currentUser = { ...user };
+  return currentUser;
+}
+function getCurrentUser() {
+  return currentUser ? { ...currentUser } : null;
+}
+function clearCurrentUser() {
+  currentUser = null;
+}
 const require$1 = createRequire(import.meta.url);
 const __filename$1 = fileURLToPath(import.meta.url);
 const __dirname$2 = path.dirname(__filename$1);
@@ -11,6 +22,7 @@ function success(data) {
 function failure(code, message, details) {
   return { success: false, error: { code, message, details } };
 }
+const authController = require$1(path.join(__dirname$2, "../../src/controllers", "authController.js"));
 const activityLogController = require$1(path.join(__dirname$2, "../../src/controllers", "activityLogController.js"));
 const cashboxController = require$1(path.join(__dirname$2, "../../src/controllers", "cashboxController.js"));
 const cashboxTransactionController = require$1(path.join(__dirname$2, "../../src/controllers", "cashboxTransactionController.js"));
@@ -29,6 +41,39 @@ const supplierController = require$1(path.join(__dirname$2, "../../src/controlle
 const transactionCategoryController = require$1(path.join(__dirname$2, "../../src/controllers", "transactionCategoryController.js"));
 const transactionController = require$1(path.join(__dirname$2, "../../src/controllers", "transactionController.js"));
 const userController = require$1(path.join(__dirname$2, "../../src/controllers", "userController.js"));
+ipcMain.handle("api:auth:login", async (_event, input) => {
+  try {
+    const user = await authController.login(input);
+    setCurrentUser(user);
+    return success(user);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:auth:logout", async () => {
+  clearCurrentUser();
+  return success({ success: true });
+});
+ipcMain.handle("api:auth:getCurrentUser", async () => {
+  return success(getCurrentUser());
+});
+ipcMain.handle("api:auth:changePassword", async (_event, input) => {
+  try {
+    const user = getCurrentUser();
+    if (!user) return failure("UNAUTHENTICATED", "Authentication is required");
+    const result = await authController.changePassword(user.id, input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+const registerProtectedHandler = ipcMain.handle.bind(ipcMain);
+ipcMain.handle = (channel, listener) => registerProtectedHandler(channel, async (...args) => {
+  if (!getCurrentUser()) {
+    return failure("UNAUTHENTICATED", "Authentication is required");
+  }
+  return listener(...args);
+});
 ipcMain.handle("api:system:getAppInfo", async () => {
   try {
     const databasePath = path.join(app.getPath("userData"), "farmer-market.db");
@@ -973,7 +1018,11 @@ app.on("activate", () => {
 });
 app.whenReady().then(async () => {
   try {
+<<<<<<< HEAD
     const { initDatabase } = await import("./dbmanager-D7YpDb5N.js");
+=======
+    const { initDatabase } = await import("./dbmanager-73iPAjuQ.js");
+>>>>>>> c43df77202db305c3c288b8883a48b8fd1a66f3d
     await initDatabase();
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {

@@ -251,9 +251,9 @@ function Sidebar() {
     setIsLogoutDialogOpen(true);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsLogoutDialogOpen(false);
-    auth.logout();
+    await auth.logout();
     navigate(PATHS.LOGIN, { replace: true });
   };
 

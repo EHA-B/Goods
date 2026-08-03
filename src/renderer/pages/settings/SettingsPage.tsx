@@ -1,4 +1,4 @@
-import { Building2, DatabaseBackup, Info, ArrowLeft, Palette } from "lucide-react";
+import { Building2, DatabaseBackup, Info, ArrowLeft, Palette, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, PageHeader } from "../../components/ui";
 import { PATHS } from "../../routes/path";
@@ -23,6 +23,12 @@ const items = [
     icon: Palette,
   },
   {
+    title: "الأمان وتسجيل الدخول",
+    description: "تغيير كلمة مرور حساب النظام وحماية الدخول إلى التطبيق.",
+    path: PATHS.SETTINGS_SECURITY,
+    icon: ShieldCheck,
+  },
+  {
     title: "حول البرنامج",
     description: "معلومات الإصدار وقاعدة البيانات وبيانات البرنامج.",
     path: PATHS.SETTINGS_ABOUT,
@@ -35,7 +41,7 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="الإعدادات"
-        description="إدارة معلومات الشركة والنسخ الاحتياطي ومعلومات البرنامج."
+        description="إدارة معلومات الشركة والأمان والواجهة والنسخ الاحتياطي ومعلومات البرنامج."
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

@@ -1,5 +1,5 @@
-import { Banknote, Pencil, Plus, Printer, ReceiptText, XCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Banknote, HandCoins, Pencil, Plus, Printer, ReceiptText, Trash2 } from "lucide-react";
+import { useState,useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DataTable from "../../components/common/DataTable";
 import DataTableBody from "../../components/common/DataTableBody";
@@ -56,26 +56,8 @@ export default function PurchaseDetailsPage() {
   };
 
   return <>
-    <PageHeader
-      title={`فاتورة الشراء ${invoice.invoice_number}`}
-      description="تفاصيل المورد والأصناف ودفعات المخزون والمدفوعات."
-      actions={
-        <div className="flex flex-wrap gap-2">
-          <BackButton to={PATHS.PURCHASES} />
-          {invoice.status !== "cancelled" && invoice.status !== "paid" && (
-            <Button startIcon={<Plus size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/payments/new`)}>تسجيل دفعة</Button>
-          )}
-          <Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/print`)}>طباعة / PDF</Button>
-          {invoice.status === "confirmed" || invoice.status === "partially_paid" ? (
-            <Button variant="danger" startIcon={<XCircle size={17} />} onClick={() => setCancelOpen(true)}>إلغاء الفاتورة</Button>
-          ) : null}
-          {invoice.status === "draft" && (
-            <Button variant="secondary" startIcon={<Pencil size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/edit`)}>تعديل</Button>
-          )}
-        </div>
-      }
-    />
-    {error && <div className="mb-4 rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
+    <PageHeader title={`فاتورة الشراء ${purchase.invoiceNumber}`} description="تفاصيل المورد والأصناف ودفعات المخزون والمدفوعات." actions={<div className="flex flex-wrap gap-2"><BackButton to={PATHS.PURCHASES} /><Button variant="secondary" startIcon={<Pencil size={17} />} disabled={!editable} title={!editable ? "التعديل متاح للفواتير المسودة فقط" : undefined} onClick={() => navigate(`/purchases/${purchase.id}/edit`)}>تعديل</Button><Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/purchases/${purchase.id}/print`)}>طباعة / PDF</Button>{purchase.purchaseType === "consignment" && <Button variant="secondary" startIcon={<HandCoins size={17} />} onClick={() => navigate(`/purchases/${purchase.id}/consignment`)}>متابعة الأمانة</Button>}{purchase.status !== "paid" && purchase.status !== "cancelled" && <Button startIcon={<Plus size={17} />} onClick={() => navigate(`/purchases/${purchase.id}/payments/new`)}>تسجيل دفعة</Button>}<Button variant="danger" startIcon={<Trash2 size={17} />} disabled={!editable} title={!editable ? "الحذف متاح للفواتير المسودة فقط" : undefined} onClick={() => setDeleteOpen(true)}>حذف</Button></div>} />
+    <p className="mb-5 text-xs text-[var(--text-muted)]">ملاحظة: التعديل والحذف متاحان للفواتير <strong className="text-[var(--text-secondary)]">المسودة</strong> فقط، بينما الفواتير المؤكدة والمدفوعة تكون للقراءة فقط حفاظًا على سلامة المخزون والبيانات المالية.</p>
     <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
       <div className="space-y-5">
         <Card header="بيانات الفاتورة">

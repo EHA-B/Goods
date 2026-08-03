@@ -390,8 +390,13 @@ type PaginatedInvoices<T> = {
 // ─── Window Interface ─────────────────────────────────────────────────────────
 
 interface Window {
-  ipcRenderer: import("electron").IpcRenderer;
   stockliteApi: {
+    auth: {
+      login(input: { username: string; password: string }): Promise<AuthUserApiRecord>;
+      logout(): Promise<{ success: true }>;
+      getCurrentUser(): Promise<AuthUserApiRecord | null>;
+      changePassword(input: { currentPassword: string; newPassword: string }): Promise<{ success: true; message?: string }>;
+    };
     system: {
       getAppInfo(): Promise<AppInfoApiRecord>;
     };
@@ -481,7 +486,6 @@ interface Window {
     settings: GenericCrudApi;
     transactionCategories: GenericCrudApi;
     transactions: GenericCrudApi;
-    users: GenericCrudApi;
     activityLogs: GenericCrudApi;
   };
 }

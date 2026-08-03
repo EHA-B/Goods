@@ -3,6 +3,7 @@ import { app, ipcMain } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { clearCurrentUser, getCurrentUser, setCurrentUser } from '../services/sessionService';
 
 const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
@@ -15,6 +16,7 @@ function failure(code, message, details) {
   return { success: false, error: { code, message, details } };
 }
 
+const authController = require(path.join(__dirname, '../../src/controllers', 'authController.js'));
 const activityLogController = require(path.join(__dirname, '../../src/controllers', 'activityLogController.js'));
 const cashboxController = require(path.join(__dirname, '../../src/controllers', 'cashboxController.js'));
 const cashboxTransactionController = require(path.join(__dirname, '../../src/controllers', 'cashboxTransactionController.js'));
@@ -34,6 +36,64 @@ const transactionCategoryController = require(path.join(__dirname, '../../src/co
 const transactionController = require(path.join(__dirname, '../../src/controllers', 'transactionController.js'));
 const userController = require(path.join(__dirname, '../../src/controllers', 'userController.js'));
 
+
+
+/**
+ * Endpoint: api:auth:login
+ * Description: Authenticates the single system user and starts an in-memory Electron session.
+ */
+ipcMain.handle('api:auth:login', async (_event, input) => {
+  try {
+    const user = await authController.login(input);
+    setCurrentUser(user);
+    return success(user);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:auth:logout
+ * Description: Clears the current Electron session.
+ */
+ipcMain.handle('api:auth:logout', async () => {
+  clearCurrentUser();
+  return success({ success: true });
+});
+
+/**
+ * Endpoint: api:auth:getCurrentUser
+ * Description: Returns the authenticated session user, or null when signed out.
+ */
+ipcMain.handle('api:auth:getCurrentUser', async () => {
+  return success(getCurrentUser());
+});
+
+/**
+ * Endpoint: api:auth:changePassword
+ * Description: Changes the password of the authenticated single user.
+ */
+ipcMain.handle('api:auth:changePassword', async (_event, input) => {
+  try {
+    const user = getCurrentUser();
+    if (!user) return failure('UNAUTHENTICATED', 'Authentication is required');
+    const result = await authController.changePassword(user.id, input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+// All API handlers registered after this point require an authenticated session.
+// Authentication endpoints above remain public so the user can sign in.
+const registerProtectedHandler = ipcMain.handle.bind(ipcMain);
+ipcMain.handle = ((channel, listener) =>
+  registerProtectedHandler(channel, async (...args) => {
+    if (!getCurrentUser()) {
+      return failure('UNAUTHENTICATED', 'Authentication is required');
+    }
+    return listener(...args);
+  })) as typeof ipcMain.handle;
 
 /**
  * Endpoint: api:system:getAppInfo

@@ -26,6 +26,9 @@ export const PATHS = {
     PURCHASE_EDIT: "/purchases/:purchaseId/edit",
     PURCHASE_PAYMENT_NEW: "/purchases/:purchaseId/payments/new",
     PURCHASE_PRINT: "/purchases/:purchaseId/print",
+    PURCHASE_CONSIGNMENT: "/purchases/:purchaseId/consignment",
+    PURCHASE_CLOSE_CONSIGNMENT: "/purchases/:purchaseId/close-consignment",
+    PURCHASE_CONSIGNMENT_SETTLEMENT: "/purchases/:purchaseId/consignment-settlement",
     SALES: "/sales",
     SALE_NEW: "/sales/new",
     SALE_DETAILS: "/sales/:saleId",
@@ -55,4 +58,5 @@ export const PATHS = {
     SETTINGS_BACKUP: "/settings/backup",
     SETTINGS_ABOUT: "/settings/about",
     SETTINGS_APPEARANCE: "/settings/appearance",
+    SETTINGS_SECURITY: "/settings/security",
 } as const;

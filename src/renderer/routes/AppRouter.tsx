@@ -24,6 +24,9 @@ import PurchasesPage from "../pages/purchases/PurchasesPage";
 import PurchaseFormPage from "../pages/purchases/PurchaseFormPage";
 import PurchaseDetailsPage from "../pages/purchases/PurchaseDetailsPage";
 import PurchasePaymentPage from "../pages/purchases/PurchasePaymentPage";
+import ConsignmentOverviewPage from "../pages/purchases/consignment/ConsignmentOverviewPage";
+import CloseConsignmentPage from "../pages/purchases/consignment/CloseConsignmentPage";
+import ConsignmentSettlementDetailsPage from "../pages/purchases/consignment/ConsignmentSettlementDetailsPage";
 import CashboxesPage from "../pages/cashboxes/CashboxesPage";
 import CashboxFormPage from "../pages/cashboxes/CashboxFormPage";
 import CashboxDetailsPage from "../pages/cashboxes/CashboxDetailsPage";
@@ -40,6 +43,7 @@ import CompanySettingsPage from "../pages/settings/CompanySettingsPage";
 import BackupSettingsPage from "../pages/settings/BackupSettingsPage";
 import AboutSettingsPage from "../pages/settings/AboutSettingsPage";
 import AppearanceSettingsPage from "../pages/settings/AppearanceSettingsPage";
+import SecuritySettingsPage from "../pages/settings/SecuritySettingsPage";
 import InvoicePrintPage from "../pages/invoices/InvoicePrintPage";
 import ActivityLogsPage from "../pages/activity-logs/ActivityLogsPage";
 import ActivityLogDetailsPage from "../pages/activity-logs/ActivityLogDetailsPage";
@@ -81,6 +85,9 @@ function AppRouter() {
                     <Route path={PATHS.PURCHASE_EDIT} element={<PurchaseFormPage />} />
                     <Route path={PATHS.PURCHASE_PAYMENT_NEW} element={<PurchasePaymentPage />} />
                     <Route path={PATHS.PURCHASE_PRINT} element={<InvoicePrintPage type="purchase" />} />
+                    <Route path={PATHS.PURCHASE_CONSIGNMENT} element={<ConsignmentOverviewPage />} />
+                    <Route path={PATHS.PURCHASE_CLOSE_CONSIGNMENT} element={<CloseConsignmentPage />} />
+                    <Route path={PATHS.PURCHASE_CONSIGNMENT_SETTLEMENT} element={<ConsignmentSettlementDetailsPage />} />
                     <Route path={PATHS.CASHBOXES} element={<CashboxesPage />} />
                     <Route path={PATHS.CASHBOX_NEW} element={<CashboxFormPage />} />
                     <Route path={PATHS.CASHBOX_DETAILS} element={<CashboxDetailsPage />} />
@@ -102,6 +109,7 @@ function AppRouter() {
                     <Route path={PATHS.SETTINGS_BACKUP} element={<BackupSettingsPage />} />
                     <Route path={PATHS.SETTINGS_ABOUT} element={<AboutSettingsPage />} />
                     <Route path={PATHS.SETTINGS_APPEARANCE} element={<AppearanceSettingsPage />} />
+                    <Route path={PATHS.SETTINGS_SECURITY} element={<SecuritySettingsPage />} />
                     <Route path="*" element={<Navigate to={PATHS.DASHBOARD} replace />} />
                   </Route>
                 </Route>

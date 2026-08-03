@@ -4,7 +4,7 @@ import {
   BackButton, Button, Card, FormField, Input, PageHeader, Select, Textarea,
 } from "../../components/ui";
 import { PATHS } from "../../routes/path";
-import { cashboxesService } from "./cashboxesService";
+import { cashboxesService, translateCashboxError } from "./cashboxesService";
 import { RefreshCw } from "lucide-react";
 
 export default function CashboxTransferPage() {
@@ -53,15 +53,7 @@ export default function CashboxTransferPage() {
       });
       nav(PATHS.CASHBOXES);
     } catch (e: unknown) {
-      const err = e as { code?: string; message?: string };
-      const codeMessages: Record<string, string> = {
-        INSUFFICIENT_BALANCE: "رصيد الصندوق المصدر غير كافٍ.",
-        CURRENCY_MISMATCH: "لا يمكن التحويل بين صناديق بعملات مختلفة.",
-        INACTIVE_CASHBOX: "أحد الصندوقين غير نشط.",
-        VALIDATION_ERROR: err.message ?? "بيانات غير صحيحة.",
-        NOT_FOUND: "أحد الصندوقين غير موجود.",
-      };
-      setError(codeMessages[err.code ?? ""] ?? err.message ?? "تعذر التحويل");
+      setError(translateCashboxError(e));
     } finally {
       setSaving(false);
     }
@@ -80,7 +72,7 @@ export default function CashboxTransferPage() {
     <>
       <PageHeader
         title="تحويل بين الصناديق"
-        description="ينشئ التحويل حركة خروج من المصدر وحركة دخول إلى الوجهة."
+        description="ينشئ التحويل حركة خروج من المصدر وحركة دخول إلى الوجهة. يمكن عكس التحويل من صفحة تفاصيل الصندوق."
         actions={<BackButton to={PATHS.CASHBOXES} />}
       />
 

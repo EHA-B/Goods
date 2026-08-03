@@ -139,15 +139,19 @@ const stockliteApi = {
       invokeApi("api:cashbox:transferBetween", input),
     reverseMovement: (transactionId: number, reason: string) =>
       invokeApi("api:cashbox:reverseMovement", transactionId, reason),
+    reverseTransfer: (transferGroupId: string, reason: string) =>
+      invokeApi("api:cashbox:reverseTransfer", transferGroupId, reason),
   },
 
-  cashboxTransactions: crudApi("cashboxTransaction", {
-    create: "createCashboxTransaction",
-    get: "getCashboxTransaction",
-    list: "getAllCashboxTransactions",
-    update: "updateCashboxTransaction",
-    remove: "deleteCashboxTransaction",
-  }),
+  // cashboxTransactions: read-only access retained for diagnostic/admin purposes.
+  // IMPORTANT: create/update/remove are intentionally excluded — all balance-changing
+  // operations must go through the cashboxes business API above.
+  cashboxTransactions: {
+    get: (id: number) =>
+      invokeApi("api:cashboxTransaction:getCashboxTransaction", id),
+    list: () =>
+      invokeApi("api:cashboxTransaction:getAllCashboxTransactions"),
+  },
 
   payments: crudApi("payment", {
     create: "createPayment",

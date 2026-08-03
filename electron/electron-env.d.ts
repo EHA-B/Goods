@@ -93,20 +93,57 @@ type CashboxApiRecord = {
 type CashboxMovementRecord = {
   id: number;
   cashbox_id: number;
-  reference_type: 'opening_balance' | 'sale' | 'purchase' | 'expense' | 'income' | 'transfer' | 'adjustment' | 'reversal';
+  reference_type:
+    | 'opening_balance'
+    | 'sale'
+    | 'purchase'
+    | 'expense'
+    | 'income'
+    | 'transfer'
+    | 'adjustment'
+    | 'reversal';
   reference_id: number | null;
   amount: number;
   direction: 'in' | 'out';
-  balance_before: number;
-  balance_after: number;
+  balance_before: number | null;
+  balance_after: number | null;
+  transfer_group_id: string | null;
+  reversed_transaction_id: number | null;
+  reversal_reason: string | null;
   transaction_date: string;
   notes: string | null;
   created_at: string | null;
 };
 
+type CashboxSummaryByCurrency = {
+  currency: string;
+  balance: number;
+  totalIn: number;
+  totalOut: number;
+  openingBalance: number;
+};
+
+type CashboxesSummary = {
+  balancesByCurrency: CashboxSummaryByCurrency[];
+  activeCashboxesCount: number;
+  inactiveCashboxesCount: number;
+};
+
+type CashboxDetailSummary = {
+  operational_in: number;
+  operational_out: number;
+  opening_balance: number;
+  movements_count: number;
+  reversals_count: number;
+};
+
 type CashboxDetails = CashboxApiRecord & {
+  summary: CashboxDetailSummary;
+  /** @deprecated use summary.operational_in */
   total_in: number;
+  /** @deprecated use summary.operational_out */
   total_out: number;
+  /** @deprecated use summary.movements_count */
   movement_count: number;
   recent_movements: CashboxMovementRecord[];
 };
@@ -141,6 +178,13 @@ type CashboxMovementFilters = {
   reference_type?: string;
   date_from?: string;
   date_to?: string;
+};
+
+type ReverseTransferResult = {
+  reversal_group_id: string;
+  source: { cashbox: CashboxApiRecord; reversal: CashboxMovementRecord };
+  destination: { cashbox: CashboxApiRecord; reversal: CashboxMovementRecord };
+  original: { out: CashboxMovementRecord; in: CashboxMovementRecord };
 };
 
 // ─── Window Interface ─────────────────────────────────────────────────────────
@@ -186,14 +230,19 @@ interface Window {
       list(): Promise<CashboxApiRecord[]>;
       update(id: number, input: { name?: string; parent_id?: number | null; currency?: string; isActive?: boolean; notes?: string | null }): Promise<CashboxApiRecord>;
       remove(id: number): Promise<{ success: true }>;
-      summary(): Promise<{ total_balance: number; active_count: number; total_in: number; total_out: number }>;
+      summary(): Promise<CashboxesSummary>;
       getDetails(id: number): Promise<CashboxDetails>;
       movements(cashboxId: number, filters?: CashboxMovementFilters): Promise<PaginatedCashboxMovements>;
       createMovement(input: CreateCashboxMovementInput): Promise<{ movement: CashboxMovementRecord; cashbox: CashboxApiRecord }>;
       transfer(input: TransferCashboxesInput): Promise<{ transfer_group_id: string; from: { cashbox: CashboxApiRecord; movement: CashboxMovementRecord }; to: { cashbox: CashboxApiRecord; movement: CashboxMovementRecord } }>;
       reverseMovement(transactionId: number, reason: string): Promise<{ reversal: CashboxMovementRecord; original: CashboxMovementRecord; cashbox: CashboxApiRecord }>;
+      reverseTransfer(transferGroupId: string, reason: string): Promise<ReverseTransferResult>;
     };
-    cashboxTransactions: GenericCrudApi;
+    /** Read-only access to cashbox transactions. Write operations go through cashboxes business API. */
+    cashboxTransactions: {
+      get(id: number): Promise<CashboxMovementRecord>;
+      list(): Promise<CashboxMovementRecord[]>;
+    };
     payments: GenericCrudApi;
     purchaseInvoices: GenericCrudApi & {
       createFull(input: unknown): Promise<unknown>;

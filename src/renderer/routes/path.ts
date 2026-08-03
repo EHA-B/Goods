@@ -37,6 +37,7 @@ export const PATHS = {
     CASHBOX_DETAILS: "/cashboxes/:id",
     CASHBOX_EDIT: "/cashboxes/:id/edit",
     CASHBOX_TRANSACTION_NEW: "/cashboxes/:cashboxId/transactions/new",
+    CASHBOX_MOVEMENTS: "/cashboxes/:id/movements",
     CASHBOX_TRANSFER_NEW: "/cashboxes/transfers/new",
     TRANSACTIONS: "/transactions",
     TRANSACTION_NEW: "/transactions/new",

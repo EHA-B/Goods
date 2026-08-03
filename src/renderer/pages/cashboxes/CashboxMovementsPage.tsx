@@ -1,11 +1,15 @@
-import { useEffect, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, History, Pencil, Plus, RefreshCw, RotateCcw } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
-import { BackButton, Button, Card, EmptyState, PageHeader, StatusBadge } from "../../components/ui";
+import { useCallback, useEffect, useState } from "react";
 import {
-  DataTable, DataTableBody, DataTableCell, DataTableHead, DataTableHeaderCell, DataTableRow,
+  ArrowDownLeft, ArrowUpRight, RefreshCw, RotateCcw,
+} from "lucide-react";
+import { useParams } from "react-router-dom";
+import {
+  DataTable, DataTableBody, DataTableCell, DataTableHead,
+  DataTableHeaderCell, DataTableRow,
 } from "../../components/common";
-import { PATHS } from "../../routes/path";
+import {
+  BackButton, Button, Card, EmptyState, Input, PageHeader, Select,
+} from "../../components/ui";
 import { cashboxesService, translateCashboxError } from "./cashboxesService";
 
 const money = (v: number | null, c = "SYP") => {
@@ -24,7 +28,24 @@ const MOVEMENT_LABELS: Record<string, string> = {
   reversal:        "عكس حركة",
 };
 
-/** Types that can be reversed by the single-movement reversal API */
+const REFERENCE_TYPE_OPTIONS = [
+  { value: "", label: "كل الأنواع" },
+  { value: "opening_balance", label: "رصيد افتتاحي" },
+  { value: "income",          label: "إيراد" },
+  { value: "expense",         label: "مصروف" },
+  { value: "adjustment",      label: "تسوية" },
+  { value: "transfer",        label: "تحويل" },
+  { value: "reversal",        label: "عكس حركة" },
+  { value: "sale",            label: "مبيعات" },
+  { value: "purchase",        label: "مشتريات" },
+];
+
+const DIRECTION_OPTIONS = [
+  { value: "", label: "كل الاتجاهات" },
+  { value: "in",  label: "دخول" },
+  { value: "out", label: "خروج" },
+];
+
 const REVERSIBLE_TYPES = new Set(["income", "expense", "adjustment"]);
 
 type ReversalState = {
@@ -35,38 +56,55 @@ type ReversalState = {
   error: string | null;
 };
 
-export default function CashboxDetailsPage() {
-  const nav = useNavigate();
+export default function CashboxMovementsPage() {
   const { id } = useParams();
 
-  const [details, setDetails] = useState<CashboxDetails | null>(null);
+  const [cashbox, setCashbox] = useState<CashboxApiRecord | null>(null);
+  const [items, setItems] = useState<CashboxMovementRecord[]>([]);
+  const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Filters
+  const [direction, setDirection] = useState("");
+  const [refType, setRefType] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
+
   const [reversal, setReversal] = useState<ReversalState>({
-    movementId: null,
-    transferGroupId: null,
-    reason: "",
-    submitting: false,
-    error: null,
+    movementId: null, transferGroupId: null, reason: "", submitting: false, error: null,
   });
 
-  const loadDetails = async () => {
+  const loadData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await cashboxesService.getDetails(Number(id));
-      setDetails(data);
+      const [cbData, movData] = await Promise.all([
+        cashboxesService.get(Number(id)),
+        cashboxesService.movements(Number(id), {
+          page,
+          limit: 25,
+          direction: (direction as "in" | "out") || undefined,
+          reference_type: refType || undefined,
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+        }),
+      ]);
+      setCashbox(cbData);
+      setItems(movData.items);
+      setPagination(movData.pagination);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذر تحميل بيانات الصندوق");
+      setError(translateCashboxError(e));
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, page, direction, refType, dateFrom, dateTo]);
 
   useEffect(() => {
-    loadDetails();
-  }, [id]);
+    loadData();
+  }, [loadData]);
 
   const handleReverse = async () => {
     const { movementId, transferGroupId, reason } = reversal;
@@ -82,144 +120,97 @@ export default function CashboxDetailsPage() {
         await cashboxesService.reverseMovement(movementId, reason.trim());
       }
       setReversal({ movementId: null, transferGroupId: null, reason: "", submitting: false, error: null });
-      await loadDetails();
-    } catch (e: unknown) {
+      await loadData();
+    } catch (e) {
       setReversal((r) => ({ ...r, submitting: false, error: translateCashboxError(e) }));
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center gap-3 text-[var(--text-muted)]">
-        <RefreshCw size={20} className="animate-spin" />
-        <span>جارٍ التحميل…</span>
-      </div>
-    );
-  }
+  const currency = cashbox?.currency ?? "SYP";
+  const isReversalOpen = reversal.movementId !== null || reversal.transferGroupId !== null;
 
-  if (error || !details) {
-    return (
-      <div className="flex h-64 flex-col items-center justify-center gap-4">
-        <p className="text-[var(--danger)]">{error ?? "الصندوق غير موجود"}</p>
-        <Button variant="secondary" startIcon={<RefreshCw size={16} />} onClick={loadDetails}>
-          إعادة المحاولة
-        </Button>
-      </div>
-    );
-  }
-
-  const currency = details.currency;
-  const summary = details.summary;
-  const isReversalDialogOpen = reversal.movementId !== null || reversal.transferGroupId !== null;
+  const detailPath = `/cashboxes/${id}`;
 
   return (
     <>
-      <BackButton to={PATHS.CASHBOXES} />
+      <BackButton to={detailPath} />
       <PageHeader
-        title={details.name}
-        description="تفاصيل الصندوق وسجل الحركات المالية."
+        title={cashbox ? `سجل حركات: ${cashbox.name}` : "سجل الحركات"}
+        description="عرض كامل لحركات الصندوق مع إمكانية الفلترة والتصفح."
         actions={
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              startIcon={<History size={16} />}
-              onClick={() => nav(`/cashboxes/${details.id}/movements`)}
-            >
-              كل الحركات
-            </Button>
-            <Button
-              variant="secondary"
-              startIcon={<Pencil size={16} />}
-              onClick={() => nav(`/cashboxes/${details.id}/edit`)}
-            >
-              تعديل
-            </Button>
-            <Button
-              startIcon={<Plus size={16} />}
-              onClick={() => nav(`/cashboxes/${details.id}/transactions/new`)}
-            >
-              حركة جديدة
-            </Button>
-          </div>
+          <Button variant="secondary" startIcon={<RefreshCw size={16} />} onClick={loadData}>
+            تحديث
+          </Button>
         }
       />
 
-      {/* ── Summary stats ──────────────────────────────────────────────── */}
-      <div className="grid gap-4 md:grid-cols-5">
-        <Card>
-          <p className="text-xs text-[var(--text-muted)]">الرصيد الحالي</p>
-          <p className="mt-2 text-2xl font-bold">{money(Number(details.balance), currency)}</p>
-        </Card>
-        <Card>
-          <p className="text-xs text-[var(--text-muted)]">رصيد الافتتاح</p>
-          <p className="mt-2 text-2xl font-bold">{money(summary?.opening_balance ?? Number(details.initial_balance), currency)}</p>
-        </Card>
-        <Card>
-          <p className="text-xs text-[var(--text-muted)]">دخول تشغيلي</p>
-          <p className="mt-2 text-2xl font-bold text-[var(--success)]">{money(summary?.operational_in ?? details.total_in, currency)}</p>
-        </Card>
-        <Card>
-          <p className="text-xs text-[var(--text-muted)]">خروج تشغيلي</p>
-          <p className="mt-2 text-2xl font-bold text-[var(--danger)]">{money(summary?.operational_out ?? details.total_out, currency)}</p>
-        </Card>
-        <Card>
-          <p className="text-xs text-[var(--text-muted)]">الحركات / الإلغاءات</p>
-          <p className="mt-2 text-2xl font-bold">{summary?.movements_count ?? details.movement_count}</p>
-          {(summary?.reversals_count ?? 0) > 0 && (
-            <p className="mt-1 text-xs text-[var(--warning)]">{summary?.reversals_count} إلغاء</p>
-          )}
-        </Card>
-      </div>
-
-      {/* ── Cashbox info ───────────────────────────────────────────────── */}
-      <Card className="mt-5" header="معلومات الصندوق">
-        <div className="grid gap-4 text-sm md:grid-cols-3">
-          <div>
-            <span className="text-[var(--text-muted)]">الصندوق الأب</span>
-            <p className="font-bold">{details.parent_name || "—"}</p>
-          </div>
-          <div>
-            <span className="text-[var(--text-muted)]">الرصيد الافتتاحي</span>
-            <p className="font-bold">{money(Number(details.initial_balance), currency)}</p>
-          </div>
-          <div>
-            <span className="text-[var(--text-muted)]">العملة</span>
-            <p className="font-bold">{currency}</p>
-          </div>
-          <div>
-            <span className="text-[var(--text-muted)]">الحالة</span>
-            <p>
-              <StatusBadge variant={details.isActive ? "success" : "warning"}>
-                {details.isActive ? "نشط" : "غير نشط"}
-              </StatusBadge>
-            </p>
-          </div>
-          <div className="md:col-span-2">
-            <span className="text-[var(--text-muted)]">الملاحظات</span>
-            <p>{details.notes || "—"}</p>
-          </div>
+      {/* ── Filters ──────────────────────────────────────────────────── */}
+      <Card className="mb-4">
+        <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_1fr_auto]">
+          <Select
+            value={direction}
+            onChange={(e) => { setDirection(e.target.value); setPage(1); }}
+            options={DIRECTION_OPTIONS}
+          />
+          <Select
+            value={refType}
+            onChange={(e) => { setRefType(e.target.value); setPage(1); }}
+            options={REFERENCE_TYPE_OPTIONS}
+          />
+          <Input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+            placeholder="من تاريخ"
+          />
+          <Input
+            type="date"
+            value={dateTo}
+            onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+            placeholder="إلى تاريخ"
+          />
+          <Button
+            variant="secondary"
+            disabled={!direction && !refType && !dateFrom && !dateTo}
+            onClick={() => { setDirection(""); setRefType(""); setDateFrom(""); setDateTo(""); setPage(1); }}
+          >
+            مسح
+          </Button>
         </div>
       </Card>
 
-      {/* ── Recent movements ──────────────────────────────────────────── */}
-      <Card padding={false} className="mt-5" header="آخر الحركات">
-        {details.recent_movements.length ? (
+      {/* ── Table ────────────────────────────────────────────────────── */}
+      <Card padding={false}>
+        {loading ? (
+          <div className="flex h-48 items-center justify-center gap-3 text-[var(--text-muted)]">
+            <RefreshCw size={20} className="animate-spin" />
+            <span>جارٍ التحميل…</span>
+          </div>
+        ) : error ? (
+          <div className="flex h-48 flex-col items-center justify-center gap-4">
+            <p className="text-[var(--danger)]">{error}</p>
+            <Button variant="secondary" onClick={loadData}>إعادة المحاولة</Button>
+          </div>
+        ) : items.length === 0 ? (
+          <EmptyState title="لا توجد حركات" description="لا توجد حركات تطابق الفلاتر المحددة." />
+        ) : (
           <>
             <DataTable>
               <DataTableHead>
                 <DataTableRow>
+                  <DataTableHeaderCell>#</DataTableHeaderCell>
                   <DataTableHeaderCell>التاريخ</DataTableHeaderCell>
                   <DataTableHeaderCell>النوع</DataTableHeaderCell>
                   <DataTableHeaderCell>دخول</DataTableHeaderCell>
                   <DataTableHeaderCell>خروج</DataTableHeaderCell>
                   <DataTableHeaderCell>الرصيد قبل</DataTableHeaderCell>
                   <DataTableHeaderCell>الرصيد بعد</DataTableHeaderCell>
-                  <DataTableHeaderCell>البيان</DataTableHeaderCell>
+                  <DataTableHeaderCell>الملاحظات</DataTableHeaderCell>
                   <DataTableHeaderCell>إجراء</DataTableHeaderCell>
                 </DataTableRow>
               </DataTableHead>
               <DataTableBody>
-                {details.recent_movements.map((m) => {
+                {items.map((m) => {
                   const isReversible = REVERSIBLE_TYPES.has(m.reference_type);
                   const isTransfer   = m.reference_type === "transfer";
                   const isOpening    = m.reference_type === "opening_balance";
@@ -227,22 +218,24 @@ export default function CashboxDetailsPage() {
 
                   return (
                     <DataTableRow key={m.id}>
+                      <DataTableCell className="text-[var(--text-muted)] text-xs">{m.id}</DataTableCell>
                       <DataTableCell>{m.transaction_date}</DataTableCell>
                       <DataTableCell>
-                        <span
-                          className={
-                            isOpening  ? "text-[var(--primary)] font-semibold" :
-                            isTransfer ? "text-[var(--warning)]" :
-                            isReversal ? "text-[var(--text-muted)] italic" :
-                            ""
-                          }
-                        >
+                        <span className={
+                          isOpening  ? "text-[var(--primary)] font-semibold text-sm" :
+                          isTransfer ? "text-[var(--warning)] text-sm" :
+                          isReversal ? "text-[var(--text-muted)] italic text-sm" :
+                          "text-sm"
+                        }>
                           {MOVEMENT_LABELS[m.reference_type] ?? m.reference_type}
                         </span>
+                        {m.transfer_group_id && (
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">مجموعة: {m.transfer_group_id.slice(-8)}</p>
+                        )}
                       </DataTableCell>
                       <DataTableCell>
                         {m.direction === "in" ? (
-                          <span className="inline-flex items-center gap-1 text-[var(--success)]">
+                          <span className="inline-flex items-center gap-1 text-[var(--success)] font-semibold">
                             <ArrowDownLeft size={14} />
                             {money(m.amount, currency)}
                           </span>
@@ -250,15 +243,17 @@ export default function CashboxDetailsPage() {
                       </DataTableCell>
                       <DataTableCell>
                         {m.direction === "out" ? (
-                          <span className="inline-flex items-center gap-1 text-[var(--danger)]">
+                          <span className="inline-flex items-center gap-1 text-[var(--danger)] font-semibold">
                             <ArrowUpRight size={14} />
                             {money(m.amount, currency)}
                           </span>
                         ) : "—"}
                       </DataTableCell>
-                      <DataTableCell>{money(m.balance_before, currency)}</DataTableCell>
+                      <DataTableCell className="text-[var(--text-muted)]">{money(m.balance_before, currency)}</DataTableCell>
                       <DataTableCell className="font-bold">{money(m.balance_after, currency)}</DataTableCell>
-                      <DataTableCell className="max-w-xs truncate">{m.notes || m.reversal_reason || "—"}</DataTableCell>
+                      <DataTableCell className="max-w-xs truncate text-sm text-[var(--text-muted)]">
+                        {m.notes || m.reversal_reason || "—"}
+                      </DataTableCell>
                       <DataTableCell>
                         {isReversible && (
                           <Button
@@ -290,27 +285,34 @@ export default function CashboxDetailsPage() {
               </DataTableBody>
             </DataTable>
 
-            <div className="border-t border-[var(--border)] px-4 py-3">
-              <Button
-                variant="secondary"
-                startIcon={<History size={15} />}
-                onClick={() => nav(`/cashboxes/${details.id}/movements`)}
-                size="sm"
-              >
-                عرض كل الحركات
-              </Button>
+            {/* Pagination */}
+            <div className="flex items-center justify-between border-t border-[var(--border)] px-4 py-3 text-sm text-[var(--text-muted)]">
+              <span>{pagination.total} حركة — صفحة {pagination.page} من {pagination.totalPages}</span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  السابق
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={page >= pagination.totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  التالي
+                </Button>
+              </div>
             </div>
           </>
-        ) : (
-          <EmptyState
-            title="لا توجد حركات"
-            description="لم تُسجّل حركات على هذا الصندوق بعد."
-          />
         )}
       </Card>
 
       {/* ── Reversal dialog ───────────────────────────────────────────── */}
-      {isReversalDialogOpen && (
+      {isReversalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl bg-[var(--surface)] p-6 shadow-xl">
             <h2 className="mb-1 text-lg font-bold">
@@ -321,7 +323,6 @@ export default function CashboxDetailsPage() {
                 ? "سيتم عكس كلا طرفي التحويل بشكل مجمّع وذري."
                 : "سيتم إنشاء حركة عكسية لإلغاء هذه الحركة."}
             </p>
-
             <label className="block text-sm font-medium mb-1">سبب الإلغاء *</label>
             <textarea
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
@@ -330,13 +331,11 @@ export default function CashboxDetailsPage() {
               onChange={(e) => setReversal((r) => ({ ...r, reason: e.target.value }))}
               placeholder="أدخل سبب الإلغاء..."
             />
-
             {reversal.error && (
               <p className="mt-2 rounded-md bg-[var(--danger-muted)] px-3 py-2 text-sm text-[var(--danger)]">
                 {reversal.error}
               </p>
             )}
-
             <div className="mt-4 flex justify-end gap-2">
               <Button
                 variant="secondary"

@@ -28,16 +28,17 @@ import {
   StatusBadge,
 } from "../../components/ui";
 import { PATHS } from "../../routes/path";
-import { cashboxesService } from "./cashboxesService";
+import { cashboxesService, translateCashboxError } from "./cashboxesService";
 
-const money = (value: number, currency = "SAR") =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value);
+const money = (value: number, currency = "SYP") =>
+  new Intl.NumberFormat("ar-SY", { style: "decimal", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(value) +
+  " " + currency;
 
 export default function CashboxesPage() {
   const navigate = useNavigate();
 
   const [cashboxes, setCashboxes] = useState<CashboxApiRecord[]>([]);
-  const [summary, setSummary] = useState<{ total_balance: number; active_count: number; total_in: number; total_out: number } | null>(null);
+  const [summary, setSummary] = useState<CashboxesSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -92,12 +93,7 @@ export default function CashboxesPage() {
       setPendingDelete(null);
       await loadData();
     } catch (e: unknown) {
-      const err = e as { code?: string; message?: string };
-      const codeMessages: Record<string, string> = {
-        CASHBOX_IN_USE: "لا يمكن حذف صندوق مرتبط بحركات أو صناديق فرعية أو مدفوعات.",
-        NOT_FOUND: "الصندوق غير موجود.",
-      };
-      setDeleteError(codeMessages[err.code ?? ""] ?? err.message ?? "تعذر الحذف");
+      setDeleteError(translateCashboxError(e));
     } finally {
       setDeleting(false);
     }
@@ -147,23 +143,44 @@ export default function CashboxesPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <p className="text-xs text-[var(--text-muted)]">إجمالي الأرصدة</p>
-          <p className="mt-2 text-2xl font-bold">{money(summary?.total_balance ?? 0)}</p>
-        </Card>
-        <Card>
-          <p className="text-xs text-[var(--text-muted)]">الصناديق النشطة</p>
-          <p className="mt-2 text-2xl font-bold">{summary?.active_count ?? 0}</p>
-        </Card>
-        <Card>
-          <p className="text-xs text-[var(--text-muted)]">إجمالي الدخول</p>
-          <p className="mt-2 text-2xl font-bold">{money(summary?.total_in ?? 0)}</p>
-        </Card>
-        <Card>
-          <p className="text-xs text-[var(--text-muted)]">إجمالي الخروج</p>
-          <p className="mt-2 text-2xl font-bold">{money(summary?.total_out ?? 0)}</p>
-        </Card>
+      {/* ── Multi-currency summary ───────────────────────────────────── */}
+      <div className="grid gap-4 md:grid-cols-[auto_1fr_1fr]">
+        {/* Active / Inactive count */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Card>
+            <p className="text-xs text-[var(--text-muted)]">الصناديق النشطة</p>
+            <p className="mt-2 text-2xl font-bold">{summary?.activeCashboxesCount ?? 0}</p>
+          </Card>
+          <Card>
+            <p className="text-xs text-[var(--text-muted)]">الصناديق غير النشطة</p>
+            <p className="mt-2 text-2xl font-bold">{summary?.inactiveCashboxesCount ?? 0}</p>
+          </Card>
+        </div>
+
+        {/* Per-currency balance cards */}
+        {(summary?.balancesByCurrency ?? []).length === 0 ? (
+          <Card className="sm:col-span-2">
+            <p className="text-xs text-[var(--text-muted)]">لا توجد أرصدة مسجّلة بعد.</p>
+          </Card>
+        ) : (
+          (summary?.balancesByCurrency ?? []).map((entry) => (
+            <Card key={entry.currency}>
+              <p className="text-xs font-semibold text-[var(--text-muted)]">{entry.currency}</p>
+              <p className="mt-2 text-2xl font-bold">
+                {new Intl.NumberFormat("ar-SY", { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(entry.balance)}
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                <span className="text-[var(--success)]">↓ دخول: {new Intl.NumberFormat("ar-SY").format(entry.totalIn)}</span>
+                <span className="text-[var(--danger)]">↑ خروج: {new Intl.NumberFormat("ar-SY").format(entry.totalOut)}</span>
+              </div>
+              {entry.openingBalance > 0 && (
+                <p className="mt-1 text-xs text-[var(--text-muted)]">
+                  رصيد افتتاحي: {new Intl.NumberFormat("ar-SY").format(entry.openingBalance)}
+                </p>
+              )}
+            </Card>
+          ))
+        )}
       </div>
 
       <Card
@@ -226,7 +243,9 @@ export default function CashboxesPage() {
                     </DataTableCell>
                     <DataTableCell>{cashbox.currency}</DataTableCell>
                     <DataTableCell>
-                      <StatusBadge status={cashbox.isActive ? "active" : "inactive"} />
+                      <StatusBadge variant={cashbox.isActive ? "success" : "warning"}>
+                        {cashbox.isActive ? "نشط" : "غير نشط"}
+                      </StatusBadge>
                     </DataTableCell>
                     <DataTableCell>
                       <div className="flex items-center gap-2">
@@ -273,7 +292,7 @@ export default function CashboxesPage() {
 
         <div className="border-t border-[var(--border)] px-5 py-3 text-xs text-[var(--text-muted)]">
           ملاحظة: لا يمكن حذف صندوق يحتوي حركات مالية أو صناديق فرعية؛ يمكن تعطيله بدلًا من ذلك.
-          الرصيد الحالي لا يُعدّل يدويًا.
+          الرصيد الحالي لا يُعدّل يدويًا. الأرصدة مجمّعة حسب العملة.
         </div>
       </Card>
 
@@ -287,7 +306,7 @@ export default function CashboxesPage() {
         }
         onCancel={() => { setPendingDelete(null); setDeleteError(null); }}
         onConfirm={handleDelete}
-        confirmLabel={deleting ? "جارٍ الحذف…" : "حذف"}
+        confirmText={deleting ? "جارٍ الحذف…" : "حذف"}
       />
     </>
   );

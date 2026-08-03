@@ -29,6 +29,7 @@ import CashboxFormPage from "../pages/cashboxes/CashboxFormPage";
 import CashboxDetailsPage from "../pages/cashboxes/CashboxDetailsPage";
 import CashboxTransactionFormPage from "../pages/cashboxes/CashboxTransactionFormPage";
 import CashboxTransferPage from "../pages/cashboxes/CashboxTransferPage";
+import CashboxMovementsPage from "../pages/cashboxes/CashboxMovementsPage";
 import TransactionsPage from "../pages/transactions/TransactionsPage";
 import TransactionFormPage from "../pages/transactions/TransactionFormPage";
 import TransactionDetailsPage from "../pages/transactions/TransactionDetailsPage";
@@ -83,6 +84,7 @@ function AppRouter() {
                     <Route path={PATHS.CASHBOX_DETAILS} element={<CashboxDetailsPage />} />
                     <Route path={PATHS.CASHBOX_EDIT} element={<CashboxFormPage />} />
                     <Route path={PATHS.CASHBOX_TRANSACTION_NEW} element={<CashboxTransactionFormPage />} />
+                    <Route path={PATHS.CASHBOX_MOVEMENTS} element={<CashboxMovementsPage />} />
                     <Route path={PATHS.CASHBOX_TRANSFER_NEW} element={<CashboxTransferPage />} />
                     <Route path={PATHS.TRANSACTIONS} element={<TransactionsPage />} />
                     <Route path={PATHS.TRANSACTION_NEW} element={<TransactionFormPage />} />

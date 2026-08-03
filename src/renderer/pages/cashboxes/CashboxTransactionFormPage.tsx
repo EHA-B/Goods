@@ -4,13 +4,26 @@ import {
   BackButton, Button, Card, FormField, Input, PageHeader, Select, Textarea,
 } from "../../components/ui";
 import { PATHS } from "../../routes/path";
-import { cashboxesService } from "./cashboxesService";
+import { cashboxesService, translateCashboxError } from "./cashboxesService";
 import { RefreshCw } from "lucide-react";
 
-const DIRECTION_OPTIONS = [
-  { value: "expense", label: "مصروف (خروج)" },
-  { value: "income", label: "إيراد (دخول)" },
+type MovementKind = "income" | "expense" | "adjustment_in" | "adjustment_out";
+
+const DIRECTION_OPTIONS: { value: MovementKind; label: string }[] = [
+  { value: "expense",        label: "مصروف (خروج)" },
+  { value: "income",         label: "إيراد (دخول)" },
+  { value: "adjustment_in",  label: "تسوية زيادة (دخول)" },
+  { value: "adjustment_out", label: "تسوية نقص (خروج)" },
 ];
+
+function mapKindToApi(kind: MovementKind): { direction: "in" | "out"; reference_type: "income" | "expense" | "adjustment" } {
+  switch (kind) {
+    case "income":         return { direction: "in",  reference_type: "income"     };
+    case "expense":        return { direction: "out", reference_type: "expense"    };
+    case "adjustment_in":  return { direction: "in",  reference_type: "adjustment" };
+    case "adjustment_out": return { direction: "out", reference_type: "adjustment" };
+  }
+}
 
 export default function CashboxTransactionFormPage() {
   const nav = useNavigate();
@@ -23,7 +36,7 @@ export default function CashboxTransactionFormPage() {
 
   // Form fields
   const [boxId, setBoxId] = useState(cashboxId ?? "");
-  const [direction, setDirection] = useState<"income" | "expense">("expense");
+  const [kind, setKind] = useState<MovementKind>("expense");
   const [amount, setAmount] = useState(0);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
@@ -41,32 +54,33 @@ export default function CashboxTransactionFormPage() {
   }, []);
 
   const back = cashboxId ? `/cashboxes/${cashboxId}` : PATHS.CASHBOXES;
+  const selectedBox = cashboxes.find((c) => c.id === Number(boxId));
+  const isOutgoing = kind === "expense" || kind === "adjustment_out";
 
   const handleSave = async () => {
     if (!boxId || amount <= 0) {
       setError("يرجى اختيار الصندوق وإدخال مبلغ صحيح");
       return;
     }
+    if (!date) {
+      setError("التاريخ مطلوب");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
+      const { direction, reference_type } = mapKindToApi(kind);
       await cashboxesService.createMovement({
         cashbox_id: Number(boxId),
-        direction: direction === "income" ? "in" : "out",
+        direction,
         amount,
-        reference_type: direction === "income" ? "income" : "expense",
+        reference_type,
         transaction_date: date,
         notes: notes || null,
       });
       nav(back);
     } catch (e: unknown) {
-      const err = e as { code?: string; message?: string };
-      const codeMessages: Record<string, string> = {
-        INSUFFICIENT_BALANCE: "الرصيد غير كافٍ لتنفيذ هذه الحركة.",
-        INACTIVE_CASHBOX: "الصندوق غير نشط.",
-        VALIDATION_ERROR: err.message ?? "بيانات غير صحيحة.",
-      };
-      setError(codeMessages[err.code ?? ""] ?? err.message ?? "تعذر الحفظ");
+      setError(translateCashboxError(e));
     } finally {
       setSaving(false);
     }
@@ -81,12 +95,17 @@ export default function CashboxTransactionFormPage() {
     );
   }
 
-  const selectedBox = cashboxes.find((c) => c.id === Number(boxId));
+  const pageTitle = {
+    expense:        "إضافة مصروف",
+    income:         "إضافة إيراد",
+    adjustment_in:  "تسوية زيادة",
+    adjustment_out: "تسوية نقص",
+  }[kind];
 
   return (
     <>
       <PageHeader
-        title={direction === "expense" ? "إضافة مصروف" : "إضافة إيراد"}
+        title={pageTitle}
         description="تُحدّث هذه الحركة رصيد الصندوق تلقائيًا."
         actions={<BackButton to={back} />}
       />
@@ -95,8 +114,8 @@ export default function CashboxTransactionFormPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <FormField label="نوع الحركة">
             <Select
-              value={direction}
-              onChange={(e) => setDirection(e.target.value as "income" | "expense")}
+              value={kind}
+              onChange={(e) => setKind(e.target.value as MovementKind)}
               options={DIRECTION_OPTIONS}
             />
           </FormField>
@@ -135,7 +154,7 @@ export default function CashboxTransactionFormPage() {
           </FormField>
         </div>
 
-        {selectedBox && direction === "expense" && (
+        {selectedBox && isOutgoing && (
           <p className="mt-3 text-sm text-[var(--text-muted)]">
             الرصيد الحالي للصندوق:{" "}
             <strong>{Number(selectedBox.balance).toLocaleString("en-US")} {selectedBox.currency}</strong>

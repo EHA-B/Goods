@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BackButton, Button, Card, FormField, Input, PageHeader, Select, Switch, Textarea } from "../../components/ui";
 import { PATHS } from "../../routes/path";
-import { cashboxesService } from "./cashboxesService";
+import { cashboxesService, translateCashboxError } from "./cashboxesService";
 import { RefreshCw } from "lucide-react";
 
 const CURRENCIES = [
-  { value: "SAR", label: "SAR - ريال سعودي" },
+  { value: "SYP", label: "SYP - ليرة سورية" },
   { value: "USD", label: "USD - دولار أمريكي" },
   { value: "EUR", label: "EUR - يورو" },
+  { value: "SAR", label: "SAR - ريال سعودي" },
 ];
 
 export default function CashboxFormPage() {
@@ -20,12 +21,13 @@ export default function CashboxFormPage() {
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMovements, setHasMovements] = useState(false);
 
   // Form fields
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState("");
   const [initialBalance, setInitialBalance] = useState(0);
-  const [currency, setCurrency] = useState("SAR");
+  const [currency, setCurrency] = useState("SYP");
   const [active, setActive] = useState(true);
   const [notes, setNotes] = useState("");
 
@@ -44,6 +46,14 @@ export default function CashboxFormPage() {
             setCurrency(existing.currency);
             setActive(Boolean(existing.isActive));
             setNotes(existing.notes ?? "");
+
+            // Check if cashbox has movements (to disable currency edit)
+            try {
+              const details = await cashboxesService.getDetails(Number(id));
+              setHasMovements(details.movement_count > 0);
+            } catch {
+              setHasMovements(false);
+            }
           }
         }
       } catch (e) {
@@ -55,7 +65,10 @@ export default function CashboxFormPage() {
     fetchData();
   }, [id, isEditMode]);
 
-  const availableParents = allCashboxes.filter((c) => c.id !== Number(id));
+  // Filter parent options: exclude self and inactive cashboxes
+  const availableParents = allCashboxes.filter(
+    (c) => c.id !== Number(id) && Boolean(c.isActive)
+  );
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -85,13 +98,7 @@ export default function CashboxFormPage() {
       }
       nav(PATHS.CASHBOXES);
     } catch (e: unknown) {
-      const err = e as { code?: string; message?: string };
-      const codeMessages: Record<string, string> = {
-        PARENT_CYCLE: "هذا الاختيار سيُنشئ دورة في علاقات الصناديق الأب.",
-        VALIDATION_ERROR: err.message ?? "بيانات غير صحيحة.",
-        NOT_FOUND: "الصندوق الأب غير موجود.",
-      };
-      setError(codeMessages[err.code ?? ""] ?? err.message ?? "تعذر الحفظ");
+      setError(translateCashboxError(e));
     } finally {
       setSaving(false);
     }
@@ -144,11 +151,19 @@ export default function CashboxFormPage() {
             </FormField>
           )}
 
-          <FormField label="العملة">
+          <FormField
+            label="العملة"
+            hint={
+              isEditMode && hasMovements
+                ? "لا يمكن تغيير العملة بعد تسجيل حركات على الصندوق."
+                : undefined
+            }
+          >
             <Select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
               options={CURRENCIES}
+              disabled={isEditMode && hasMovements}
             />
           </FormField>
 

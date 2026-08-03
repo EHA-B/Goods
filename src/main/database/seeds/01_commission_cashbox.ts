@@ -11,7 +11,7 @@ export async function seed(knex: Knex): Promise<void> {
     // You could also link this to a parent_id here if you have a specific main cashbox id, 
     // but for now it's an independent root cashbox.
     await knex('cashboxes').insert({
-      name: 'Commission Holding Cashbox',
+      name: 'صندوق العمولة',
       balance: 0,
       initial_balance: 0,
       currency: 'SAR',

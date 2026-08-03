@@ -200,6 +200,20 @@ ipcMain.handle('api:cashbox:transfer', async (_event, from_id, to_id, amount, da
 });
 
 /**
+ * Endpoint: api:cashbox:reverseTransfer
+ * Description: Atomically reverses both sides of a transfer using its transfer_group_id.
+ * This is the only safe way to reverse a transfer movement.
+ */
+ipcMain.handle('api:cashbox:reverseTransfer', async (_event, transferGroupId, reason) => {
+  try {
+    const result = await cashboxController.reverseCashboxTransfer(transferGroupId, reason);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
  * Endpoint: api:cashbox:updateCashbox
  * Description: Executes updateCashbox on cashboxController.
  * Usage: Invoked by frontend to perform updateCashbox operation.
@@ -292,23 +306,11 @@ ipcMain.handle('api:cashbox:deleteCashbox', async (_event, id) => {
 });
 
 /**
- * Endpoint: api:cashboxTransaction:createCashboxTransaction
- * Description: Executes createCashboxTransaction on cashboxTransactionController.
- * Usage: Invoked by frontend to perform createCashboxTransaction operation.
- */
-ipcMain.handle('api:cashboxTransaction:createCashboxTransaction', async (_event, input) => {
-  try {
-    const result = await cashboxTransactionController.createCashboxTransaction(input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
  * Endpoint: api:cashboxTransaction:getCashboxTransaction
- * Description: Executes getCashboxTransaction on cashboxTransactionController.
- * Usage: Invoked by frontend to perform getCashboxTransaction operation.
+ * Description: Read-only. Returns a single cashbox transaction by ID.
+ * NOTE: Create/Update/Delete of cashbox transactions is intentionally removed from
+ * the renderer-accessible API. All balance-changing operations must use the
+ * dedicated cashboxes business API (createMovement, transfer, reverseMovement, etc.).
  */
 ipcMain.handle('api:cashboxTransaction:getCashboxTransaction', async (_event, id) => {
   try {
@@ -321,40 +323,11 @@ ipcMain.handle('api:cashboxTransaction:getCashboxTransaction', async (_event, id
 
 /**
  * Endpoint: api:cashboxTransaction:getAllCashboxTransactions
- * Description: Executes getAllCashboxTransactions on cashboxTransactionController.
- * Usage: Invoked by frontend to perform getAllCashboxTransactions operation.
+ * Description: Read-only. Returns all cashbox transactions.
  */
 ipcMain.handle('api:cashboxTransaction:getAllCashboxTransactions', async (_event) => {
   try {
     const result = await cashboxTransactionController.getAllCashboxTransactions();
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
- * Endpoint: api:cashboxTransaction:updateCashboxTransaction
- * Description: Executes updateCashboxTransaction on cashboxTransactionController.
- * Usage: Invoked by frontend to perform updateCashboxTransaction operation.
- */
-ipcMain.handle('api:cashboxTransaction:updateCashboxTransaction', async (_event, id, input) => {
-  try {
-    const result = await cashboxTransactionController.updateCashboxTransaction(id, input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
- * Endpoint: api:cashboxTransaction:deleteCashboxTransaction
- * Description: Executes deleteCashboxTransaction on cashboxTransactionController.
- * Usage: Invoked by frontend to perform deleteCashboxTransaction operation.
- */
-ipcMain.handle('api:cashboxTransaction:deleteCashboxTransaction', async (_event, id) => {
-  try {
-    const result = await cashboxTransactionController.deleteCashboxTransaction(id);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);

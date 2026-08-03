@@ -128,6 +128,14 @@ ipcMain.handle("api:cashbox:transfer", async (_event, from_id, to_id, amount, da
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
+ipcMain.handle("api:cashbox:reverseTransfer", async (_event, transferGroupId, reason) => {
+  try {
+    const result = await cashboxController.reverseCashboxTransfer(transferGroupId, reason);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
 ipcMain.handle("api:cashbox:updateCashbox", async (_event, id, input) => {
   try {
     const result = await cashboxController.updateCashbox(id, input);
@@ -184,14 +192,6 @@ ipcMain.handle("api:cashbox:deleteCashbox", async (_event, id) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:cashboxTransaction:createCashboxTransaction", async (_event, input) => {
-  try {
-    const result = await cashboxTransactionController.createCashboxTransaction(input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
-  }
-});
 ipcMain.handle("api:cashboxTransaction:getCashboxTransaction", async (_event, id) => {
   try {
     const result = await cashboxTransactionController.getCashboxTransaction(id);
@@ -203,22 +203,6 @@ ipcMain.handle("api:cashboxTransaction:getCashboxTransaction", async (_event, id
 ipcMain.handle("api:cashboxTransaction:getAllCashboxTransactions", async (_event) => {
   try {
     const result = await cashboxTransactionController.getAllCashboxTransactions();
-    return success(result);
-  } catch (e) {
-    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
-  }
-});
-ipcMain.handle("api:cashboxTransaction:updateCashboxTransaction", async (_event, id, input) => {
-  try {
-    const result = await cashboxTransactionController.updateCashboxTransaction(id, input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
-  }
-});
-ipcMain.handle("api:cashboxTransaction:deleteCashboxTransaction", async (_event, id) => {
-  try {
-    const result = await cashboxTransactionController.deleteCashboxTransaction(id);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
@@ -949,7 +933,7 @@ app.on("activate", () => {
 });
 app.whenReady().then(async () => {
   try {
-    const { initDatabase } = await import("./dbmanager-Jx8JBaII.js");
+    const { initDatabase } = await import("./dbmanager-BvoTxvEi.js");
     await initDatabase();
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {

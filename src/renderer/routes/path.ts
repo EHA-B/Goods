@@ -48,6 +48,8 @@ export const PATHS = {
     TRANSACTION_CATEGORY_EDIT: "/transaction-categories/:id/edit",
     USERS: "/users",
     REPORTS: "/reports",
+    ACTIVITY_LOGS: "/activity-logs",
+    ACTIVITY_LOG_DETAILS: "/activity-logs/:activityLogId",
     SETTINGS: "/settings",
     SETTINGS_COMPANY: "/settings/company",
     SETTINGS_BACKUP: "/settings/backup",

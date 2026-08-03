@@ -1,5 +1,5 @@
-import { Banknote, Pencil, Plus, Printer, ReceiptText, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Banknote, Plus, Printer, ReceiptText, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DataTable from "../../components/common/DataTable";
 import DataTableBody from "../../components/common/DataTableBody";
@@ -13,25 +13,171 @@ import { PATHS } from "../../routes/path";
 import { salesService } from "./salesService";
 
 const money = (value: number) => value.toLocaleString("en-US");
-const paymentLabels = { cash: "نقدي", bank: "تحويل بنكي", credit_card: "بطاقة", cheque: "شيك", online: "إلكتروني" };
+
 export default function SaleDetailsPage() {
   const navigate = useNavigate();
   const { saleId } = useParams();
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const sale = salesService.getById(Number(saleId));
-  if (!sale) return <EmptyState icon={<ReceiptText size={32} />} title="الفاتورة غير موجودة" description="تعذر العثور على فاتورة البيع المطلوبة." />;
-  const cost = sale.items.reduce((sum, item) => sum + item.quantity * item.costPrice, 0);
-  const profit = sale.items.reduce((sum, item) => sum + item.profit, 0);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [details, setDetails] = useState<SaleInvoiceDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+
+  useEffect(() => {
+    const id = Number(saleId);
+    if (!id) return;
+    setLoading(true);
+    setError("");
+    salesService.getDetails(id)
+      .then((data) => setDetails(data))
+      .catch((err: Error) => setError(err.message || "خطأ في تحميل الفاتورة"))
+      .finally(() => setLoading(false));
+  }, [saleId]);
+
+  if (loading) return <div className="px-6 py-12 text-center text-sm text-[var(--text-muted)]">جاري التحميل...</div>;
+  if (error || !details) return <EmptyState icon={<ReceiptText size={32} />} title="خطأ في التحميل" description={error || "تعذر العثور على فاتورة البيع المطلوبة."} />;
+
+  const { invoice, customer, items, payments, financial_summary } = details;
+
+  const cost = items.reduce((sum, item: Record<string, unknown>) => sum + Number(item.cost_price ?? 0) * Number(item.quantity ?? 0), 0);
+  const profit = items.reduce((sum, item: Record<string, unknown>) => sum + Number(item.profit ?? 0), 0);
+
+  const handleCancel = async () => {
+    setCancelling(true);
+    try {
+      const updated = await salesService.cancel(invoice.id, "إلغاء يدوي من صفحة التفاصيل");
+      setDetails(updated);
+      setCancelOpen(false);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || "تعذر إلغاء الفاتورة");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   return <>
-    <PageHeader title={`فاتورة البيع ${sale.invoiceNumber}`} description="تفاصيل الفاتورة والأصناف والدفعات والنتيجة المالية." actions={<div className="flex flex-wrap gap-2"><BackButton to={PATHS.SALES} /><Button variant="secondary" startIcon={<Pencil size={17} />} onClick={() => navigate(`/sales/${sale.id}/edit`)}>تعديل</Button><Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/sales/${sale.id}/print`)}>طباعة / PDF</Button>{sale.status !== "paid" && sale.status !== "cancelled" && <Button startIcon={<Plus size={17} />} onClick={() => navigate(`/sales/${sale.id}/payments/new`)}>تسجيل دفعة</Button>}<Button variant="danger" startIcon={<Trash2 size={17} />} onClick={() => setDeleteOpen(true)}>حذف</Button></div>} />
+    <PageHeader
+      title={`فاتورة البيع ${invoice.invoice_number}`}
+      description="تفاصيل الفاتورة والأصناف والدفعات والنتيجة المالية."
+      actions={
+        <div className="flex flex-wrap gap-2">
+          <BackButton to={PATHS.SALES} />
+          {invoice.status !== "paid" && invoice.status !== "cancelled" && (
+            <Button startIcon={<Plus size={17} />} onClick={() => navigate(`/sales/${invoice.id}/payments/new`)}>تسجيل دفعة</Button>
+          )}
+          <Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/sales/${invoice.id}/print`)}>طباعة / PDF</Button>
+          {invoice.status !== "cancelled" && (
+            <Button variant="danger" startIcon={<XCircle size={17} />} onClick={() => setCancelOpen(true)}>إلغاء الفاتورة</Button>
+          )}
+        </div>
+      }
+    />
+    {error && <div className="mb-4 rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
     <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
       <div className="space-y-5">
-        <Card header="بيانات الفاتورة"><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[["رقم الفاتورة", sale.invoiceNumber], ["التاريخ", sale.invoiceDate], ["العميل", sale.customerName], ["نوع البيع", sale.saleTypeName], ["الصندوق", sale.cashboxName ?? "-"], ["الحالة", <SaleStatusBadge status={sale.status} />]].map(([label, value]) => <div key={String(label)}><p className="text-xs font-bold text-[var(--text-muted)]">{label}</p><div className="mt-2 text-sm font-bold text-[var(--text-primary)]">{value}</div></div>)}</div>{sale.notes && <div className="mt-5 border-t border-[var(--border)] pt-4"><p className="text-xs font-bold text-[var(--text-muted)]">الملاحظات</p><p className="mt-2 text-sm text-[var(--text-secondary)]">{sale.notes}</p></div>}</Card>
-        <Card padding={false} header="أصناف الفاتورة" description="المنتجات والدفعات والكميات والأسعار والأرباح."><DataTable><DataTableHead><DataTableRow>{["المنتج", "الدفعة", "الكمية", "سعر البيع", "التكلفة", "الإجمالي", "الربح"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}</DataTableRow></DataTableHead><DataTableBody>{sale.items.map((item) => <DataTableRow key={item.id}><DataTableCell className="font-bold text-[var(--text-primary)]">{item.productName}</DataTableCell><DataTableCell>{item.batchCode}</DataTableCell><DataTableCell>{item.quantity}</DataTableCell><DataTableCell>{money(item.unitPrice)}</DataTableCell><DataTableCell>{money(item.costPrice)}</DataTableCell><DataTableCell>{money(item.lineTotal)}</DataTableCell><DataTableCell>{money(item.profit)}</DataTableCell></DataTableRow>)}</DataTableBody></DataTable></Card>
-        <Card padding={false} header="سجل الدفعات" description="كل الدفعات المسجلة على الفاتورة.">{sale.payments.length ? <DataTable><DataTableHead><DataTableRow>{["التاريخ", "الصندوق", "الطريقة", "المبلغ", "رقم المرجع", "الملاحظات"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}</DataTableRow></DataTableHead><DataTableBody>{sale.payments.map((payment) => <DataTableRow key={payment.id}><DataTableCell>{payment.date}</DataTableCell><DataTableCell>{payment.cashboxName}</DataTableCell><DataTableCell>{paymentLabels[payment.method]}</DataTableCell><DataTableCell className="font-bold">{money(payment.amount)}</DataTableCell><DataTableCell>{payment.referenceNumber || "-"}</DataTableCell><DataTableCell>{payment.notes || "-"}</DataTableCell></DataTableRow>)}</DataTableBody></DataTable> : <EmptyState icon={<Banknote size={30} />} title="لا توجد دفعات" description="لم يتم تسجيل أي دفعة على هذه الفاتورة." />}</Card>
+        <Card header="بيانات الفاتورة">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ["رقم الفاتورة", invoice.invoice_number],
+              ["التاريخ", invoice.invoice_date],
+              ["العميل", customer?.name ?? "بيع نقدي"],
+              ["الحالة", <SaleStatusBadge status={invoice.status as never} />],
+            ].map(([label, value]) => (
+              <div key={String(label)}>
+                <p className="text-xs font-bold text-[var(--text-muted)]">{label}</p>
+                <div className="mt-2 text-sm font-bold text-[var(--text-primary)]">{value}</div>
+              </div>
+            ))}
+          </div>
+          {invoice.notes && (
+            <div className="mt-5 border-t border-[var(--border)] pt-4">
+              <p className="text-xs font-bold text-[var(--text-muted)]">الملاحظات</p>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">{invoice.notes}</p>
+            </div>
+          )}
+        </Card>
+
+        <Card padding={false} header="أصناف الفاتورة" description="المنتجات والدفعات والكميات والأسعار والأرباح.">
+          <DataTable>
+            <DataTableHead>
+              <DataTableRow>
+                {["المنتج", "الدفعة", "الكمية", "سعر البيع", "التكلفة", "الإجمالي", "الربح"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
+              </DataTableRow>
+            </DataTableHead>
+            <DataTableBody>
+              {items.map((item: Record<string, unknown>, idx) => (
+                <DataTableRow key={idx}>
+                  <DataTableCell className="font-bold text-[var(--text-primary)]">{String(item.product_name ?? "-")}</DataTableCell>
+                  <DataTableCell>{String(item.batch_code ?? "-")}</DataTableCell>
+                  <DataTableCell>{String(item.quantity ?? "-")}</DataTableCell>
+                  <DataTableCell>{money(Number(item.unit_price ?? 0))}</DataTableCell>
+                  <DataTableCell>{money(Number(item.cost_price ?? 0))}</DataTableCell>
+                  <DataTableCell>{money(Number(item.line_total ?? 0))}</DataTableCell>
+                  <DataTableCell>{money(Number(item.profit ?? 0))}</DataTableCell>
+                </DataTableRow>
+              ))}
+            </DataTableBody>
+          </DataTable>
+        </Card>
+
+        <Card padding={false} header="سجل الدفعات" description="كل الدفعات المسجلة على الفاتورة.">
+          {payments.length ? (
+            <DataTable>
+              <DataTableHead>
+                <DataTableRow>
+                  {["التاريخ", "الصندوق", "المبلغ", "الحالة", "الملاحظات"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
+                </DataTableRow>
+              </DataTableHead>
+              <DataTableBody>
+                {payments.map((payment) => (
+                  <DataTableRow key={payment.id}>
+                    <DataTableCell>{payment.payment_date}</DataTableCell>
+                    <DataTableCell>{payment.cashbox_name ?? "-"}</DataTableCell>
+                    <DataTableCell className="font-bold">{money(payment.amount)}</DataTableCell>
+                    <DataTableCell>{payment.status === "reversed" ? "ملغي" : "نشط"}</DataTableCell>
+                    <DataTableCell>{payment.notes ?? "-"}</DataTableCell>
+                  </DataTableRow>
+                ))}
+              </DataTableBody>
+            </DataTable>
+          ) : (
+            <EmptyState icon={<Banknote size={30} />} title="لا توجد دفعات" description="لم يتم تسجيل أي دفعة على هذه الفاتورة." />
+          )}
+        </Card>
       </div>
-      <Card header="الملخص المالي" className="h-fit"><div className="space-y-3 text-sm">{[["المجموع الفرعي", sale.subtotal], ["الخصم", -sale.discount], ["العمولة", sale.commissionAmount], ["الضريبة", sale.tax], ["إجمالي التكلفة", cost], ["صافي الربح", profit], ["المدفوع", sale.paidAmount], ["المتبقي", Math.max(0, sale.total - sale.paidAmount)]].map(([label, value]) => <div key={String(label)} className="flex justify-between"><span className="text-[var(--text-muted)]">{label}</span><strong>{money(Number(value))}</strong></div>)}<div className="border-t border-[var(--border)] pt-3"><div className="flex justify-between text-base"><strong>الإجمالي النهائي</strong><strong className="text-[var(--primary)]">{money(sale.total)}</strong></div></div></div></Card>
+
+      <Card header="الملخص المالي" className="h-fit">
+        <div className="space-y-3 text-sm">
+          {[
+            ["المجموع الفرعي", financial_summary.subtotal],
+            ["الخصم", -financial_summary.discount_amount],
+            ["إجمالي التكلفة", cost],
+            ["صافي الربح", profit],
+            ["المدفوع", financial_summary.paid_amount],
+            ["المتبقي", financial_summary.remaining_amount],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="flex justify-between">
+              <span className="text-[var(--text-muted)]">{label}</span>
+              <strong>{money(Number(value))}</strong>
+            </div>
+          ))}
+          <div className="border-t border-[var(--border)] pt-3">
+            <div className="flex justify-between text-base">
+              <strong>الإجمالي النهائي</strong>
+              <strong className="text-[var(--primary)]">{money(financial_summary.total_amount)}</strong>
+            </div>
+          </div>
+        </div>
+      </Card>
     </div>
-    <ConfirmDialog open={deleteOpen} title="حذف فاتورة البيع" message={`هل تريد حذف الفاتورة ${sale.invoiceNumber}؟`} onCancel={() => setDeleteOpen(false)} onConfirm={() => { salesService.remove(sale.id); navigate(PATHS.SALES); }} />
+
+    <ConfirmDialog
+      open={cancelOpen}
+      title="إلغاء فاتورة البيع"
+      message={`هل تريد إلغاء الفاتورة ${invoice.invoice_number}؟ سيتم عكس جميع الدفعات واستعادة كميات المخزون.`}
+      onCancel={() => setCancelOpen(false)}
+      onConfirm={handleCancel}
+    />
   </>;
 }

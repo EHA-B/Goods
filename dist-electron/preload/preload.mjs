@@ -94,22 +94,24 @@ const stockliteApi = {
     get: (id) => invokeApi("api:cashboxTransaction:getCashboxTransaction", id),
     list: () => invokeApi("api:cashboxTransaction:getAllCashboxTransactions")
   },
-  payments: crudApi("payment", {
-    create: "createPayment",
-    get: "getPayment",
-    list: "getAllPayments",
-    update: "updatePayment",
-    remove: "deletePayment"
-  }),
+  payments: {
+    get: (id) => invokeApi("api:payment:getPayment", id),
+    list: () => invokeApi("api:payment:getAllPayments"),
+    listForSale: (invoiceId) => invokeApi("api:payment:getSalePayments", invoiceId),
+    listForPurchase: (invoiceId) => invokeApi("api:payment:getPurchasePayments", invoiceId),
+    recordSale: (input) => invokeApi("api:payment:recordSalePayment", input),
+    recordPurchase: (input) => invokeApi("api:payment:recordPurchasePayment", input),
+    reverseSale: (paymentId, reason) => invokeApi("api:payment:reverseSalePayment", paymentId, reason),
+    reversePurchase: (paymentId, reason) => invokeApi("api:payment:reversePurchasePayment", paymentId, reason)
+  },
   purchaseInvoices: {
-    ...crudApi("purchaseInvoice", {
-      create: "createPurchaseInvoice",
-      get: "getPurchaseInvoice",
-      list: "getAllPurchaseInvoices",
-      update: "updatePurchaseInvoice",
-      remove: "deletePurchaseInvoice"
-    }),
+    get: (id) => invokeApi("api:purchaseInvoice:getPurchaseInvoice", id),
+    list: () => invokeApi("api:purchaseInvoice:getAllPurchaseInvoices"),
+    listFiltered: (filters, pagination) => invokeApi("api:purchaseInvoice:listPurchaseInvoices", filters, pagination),
+    getDetails: (id) => invokeApi("api:purchaseInvoice:getPurchaseInvoiceDetails", id),
     createFull: (input) => invokeApi("api:purchaseInvoice:createFullPurchaseInvoice", input),
+    cancel: (id, reason) => invokeApi("api:purchaseInvoice:cancelPurchaseInvoice", id, reason),
+    deleteDraft: (id) => invokeApi("api:purchaseInvoice:deleteDraftPurchaseInvoice", id),
     getSalesDetails: (id) => invokeApi("api:purchaseInvoice:getPurchaseInvoiceSalesDetails", id),
     closeCommission: (id, input) => invokeApi("api:purchaseInvoice:closeCommissionInvoice", id, input)
   },
@@ -121,15 +123,15 @@ const stockliteApi = {
     remove: "deletePurchaseInvoiceItem"
   }),
   saleInvoices: {
-    ...crudApi("saleInvoice", {
-      create: "createSaleInvoice",
-      get: "getSaleInvoice",
-      list: "getAllSaleInvoices",
-      update: "updateSaleInvoice",
-      remove: "deleteSaleInvoice"
-    }),
+    get: (id) => invokeApi("api:saleInvoice:getSaleInvoice", id),
+    list: () => invokeApi("api:saleInvoice:getAllSaleInvoices"),
+    listFiltered: (filters, pagination) => invokeApi("api:saleInvoice:listSaleInvoices", filters, pagination),
+    getDetails: (id) => invokeApi("api:saleInvoice:getSaleInvoiceDetails", id),
     getFull: (id) => invokeApi("api:saleInvoice:getFullSaleInvoice", id),
-    createProcess: (input) => invokeApi("api:saleInvoice:createSaleProcess", input)
+    createProcess: (input) => invokeApi("api:saleInvoice:createSaleProcess", input),
+    cancel: (id, reason) => invokeApi("api:saleInvoice:cancelSaleInvoice", id, reason),
+    deleteDraft: (id) => invokeApi("api:saleInvoice:deleteDraftSaleInvoice", id),
+    availableBatches: (productId) => invokeApi("api:saleInvoice:getAvailableBatches", productId)
   },
   saleInvoiceItems: crudApi("saleInvoiceItem", {
     create: "createSaleInvoiceItem",

@@ -7,11 +7,9 @@ import {
 } from "../../components/common";
 import { PATHS } from "../../routes/path";
 import { cashboxesService, translateCashboxError } from "./cashboxesService";
+import { formatMoney } from "./currency";
 
-const money = (v: number | null, c = "SYP") => {
-  if (v == null) return "—";
-  return new Intl.NumberFormat("ar-SY", { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(v) + " " + c;
-};
+const money = (v: number | null, c = "SYP") => formatMoney(v, c);
 
 const MOVEMENT_LABELS: Record<string, string> = {
   opening_balance: "رصيد افتتاحي",

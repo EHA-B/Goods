@@ -201,7 +201,7 @@ CREATE TABLE cashboxes (
     parent_id INT NULL COMMENT 'الصندوق الأب (null للصندوق الرئيسي)',
     balance DECIMAL(15, 2) DEFAULT 0.00 CHECK (balance >= 0),
     initial_balance DECIMAL(15, 2) DEFAULT 0.00 CHECK (initial_balance >= 0) COMMENT 'الرصيد الافتتاحي',
-    currency VARCHAR(10) DEFAULT 'SAR' COMMENT 'عملة الصندوق',
+    currency VARCHAR(10) DEFAULT 'SYP' COMMENT 'عملة الصندوق',
     isActive BOOLEAN DEFAULT TRUE,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -383,7 +383,7 @@ INSERT INTO transaction_categories (name, type, description) VALUES
 
 -- إنشاء صندوق رئيسي افتراضي
 INSERT INTO cashboxes (name, parent_id, initial_balance, balance, currency, notes) VALUES
-('الصندوق الرئيسي', NULL, 0.00, 0.00, 'SAR', 'الصندوق الرئيسي للنظام');
+('الصندوق الرئيسي', NULL, 0.00, 0.00, 'SYP', 'الصندوق الرئيسي للنظام');
 
 -- إضافة إعدادات افتراضية
 INSERT INTO settings (setting_key, setting_value, description, category) VALUES

@@ -14,7 +14,7 @@ export async function seed(knex: Knex): Promise<void> {
       name: 'صندوق العمولة',
       balance: 0,
       initial_balance: 0,
-      currency: 'SAR',
+      currency: 'SYP',
       isActive: true,
       notes: 'Holding account for consignment/commission sales before settlement with suppliers.',
       created_at: knex.fn.now(),

@@ -120,14 +120,6 @@ ipcMain.handle("api:cashbox:getCashboxesSummary", async (_event) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:cashbox:transfer", async (_event, from_id, to_id, amount, date, notes) => {
-  try {
-    const result = await cashboxController.transfer(from_id, to_id, amount, date, notes);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
-  }
-});
 ipcMain.handle("api:cashbox:reverseTransfer", async (_event, transferGroupId, reason) => {
   try {
     const result = await cashboxController.reverseCashboxTransfer(transferGroupId, reason);
@@ -248,14 +240,6 @@ ipcMain.handle("api:customer:deleteCustomer", async (_event, id) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:payment:createPayment", async (_event, input) => {
-  try {
-    const result = await paymentController.createPayment(input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
-  }
-});
 ipcMain.handle("api:payment:getPayment", async (_event, id) => {
   try {
     const result = await paymentController.getPayment(id);
@@ -272,17 +256,49 @@ ipcMain.handle("api:payment:getAllPayments", async (_event) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:payment:updatePayment", async (_event, id, input) => {
+ipcMain.handle("api:payment:getSalePayments", async (_event, invoiceId) => {
   try {
-    const result = await paymentController.updatePayment(id, input);
+    const result = await paymentController.getSalePayments(invoiceId);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:payment:deletePayment", async (_event, id) => {
+ipcMain.handle("api:payment:getPurchasePayments", async (_event, invoiceId) => {
   try {
-    const result = await paymentController.deletePayment(id);
+    const result = await paymentController.getPurchasePayments(invoiceId);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:payment:recordSalePayment", async (_event, input) => {
+  try {
+    const result = await paymentController.recordSalePayment(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:payment:recordPurchasePayment", async (_event, input) => {
+  try {
+    const result = await paymentController.recordPurchasePayment(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:payment:reverseSalePayment", async (_event, paymentId, reason) => {
+  try {
+    const result = await paymentController.reverseSalePayment(paymentId, reason);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:payment:reversePurchasePayment", async (_event, paymentId, reason) => {
+  try {
+    const result = await paymentController.reversePurchasePayment(paymentId, reason);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
@@ -344,17 +360,9 @@ ipcMain.handle("api:product:getProductWithStock", async (_event, id) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoice:createPurchaseInvoice", async (_event, input) => {
+ipcMain.handle("api:purchaseInvoice:createFullPurchaseInvoice", async (_event, input) => {
   try {
-    const result = await purchaseInvoiceController.createPurchaseInvoice(input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
-  }
-});
-ipcMain.handle("api:purchaseInvoice:createFullPurchaseInvoice", async (_event, input, items) => {
-  try {
-    const result = await purchaseInvoiceController.createFullPurchaseInvoice(input, items);
+    const result = await purchaseInvoiceController.createFullPurchaseInvoice(input);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
@@ -368,6 +376,22 @@ ipcMain.handle("api:purchaseInvoice:getPurchaseInvoice", async (_event, id) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
+ipcMain.handle("api:purchaseInvoice:getPurchaseInvoiceDetails", async (_event, id) => {
+  try {
+    const result = await purchaseInvoiceController.getPurchaseInvoiceDetails(id);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:purchaseInvoice:listPurchaseInvoices", async (_event, filters, pagination) => {
+  try {
+    const result = await purchaseInvoiceController.listPurchaseInvoices(filters, pagination);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
 ipcMain.handle("api:purchaseInvoice:getAllPurchaseInvoices", async (_event) => {
   try {
     const result = await purchaseInvoiceController.getAllPurchaseInvoices();
@@ -376,17 +400,17 @@ ipcMain.handle("api:purchaseInvoice:getAllPurchaseInvoices", async (_event) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoice:updatePurchaseInvoice", async (_event, id, input) => {
+ipcMain.handle("api:purchaseInvoice:cancelPurchaseInvoice", async (_event, id, reason) => {
   try {
-    const result = await purchaseInvoiceController.updatePurchaseInvoice(id, input);
+    const result = await purchaseInvoiceController.cancelPurchaseInvoice(id, reason);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoice:deletePurchaseInvoice", async (_event, id) => {
+ipcMain.handle("api:purchaseInvoice:deleteDraftPurchaseInvoice", async (_event, id) => {
   try {
-    const result = await purchaseInvoiceController.deletePurchaseInvoice(id);
+    const result = await purchaseInvoiceController.deleteDraftPurchaseInvoice(id);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
@@ -448,9 +472,9 @@ ipcMain.handle("api:purchaseInvoiceItem:deletePurchaseInvoiceItem", async (_even
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:saleInvoice:createSaleInvoice", async (_event, input) => {
+ipcMain.handle("api:saleInvoice:createSaleProcess", async (_event, input) => {
   try {
-    const result = await saleInvoiceController.createSaleInvoice(input);
+    const result = await saleInvoiceController.createSaleProcess(input);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
@@ -464,25 +488,25 @@ ipcMain.handle("api:saleInvoice:getSaleInvoice", async (_event, id) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
+ipcMain.handle("api:saleInvoice:getSaleInvoiceDetails", async (_event, id) => {
+  try {
+    const result = await saleInvoiceController.getSaleInvoiceDetails(id);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:saleInvoice:listSaleInvoices", async (_event, filters, pagination) => {
+  try {
+    const result = await saleInvoiceController.listSaleInvoices(filters, pagination);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
 ipcMain.handle("api:saleInvoice:getAllSaleInvoices", async (_event) => {
   try {
     const result = await saleInvoiceController.getAllSaleInvoices();
-    return success(result);
-  } catch (e) {
-    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
-  }
-});
-ipcMain.handle("api:saleInvoice:updateSaleInvoice", async (_event, id, input) => {
-  try {
-    const result = await saleInvoiceController.updateSaleInvoice(id, input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
-  }
-});
-ipcMain.handle("api:saleInvoice:deleteSaleInvoice", async (_event, id) => {
-  try {
-    const result = await saleInvoiceController.deleteSaleInvoice(id);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
@@ -496,9 +520,25 @@ ipcMain.handle("api:saleInvoice:getFullSaleInvoice", async (_event, id) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:saleInvoice:createSaleProcess", async (_event, input) => {
+ipcMain.handle("api:saleInvoice:cancelSaleInvoice", async (_event, id, reason) => {
   try {
-    const result = await saleInvoiceController.createSaleProcess(input);
+    const result = await saleInvoiceController.cancelSaleInvoice(id, reason);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:saleInvoice:deleteDraftSaleInvoice", async (_event, id) => {
+  try {
+    const result = await saleInvoiceController.deleteDraftSaleInvoice(id);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:saleInvoice:getAvailableBatches", async (_event, productId) => {
+  try {
+    const result = await saleInvoiceController.getAvailableBatches(productId);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
@@ -933,7 +973,7 @@ app.on("activate", () => {
 });
 app.whenReady().then(async () => {
   try {
-    const { initDatabase } = await import("./dbmanager-BvoTxvEi.js");
+    const { initDatabase } = await import("./dbmanager-D7YpDb5N.js");
     await initDatabase();
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {

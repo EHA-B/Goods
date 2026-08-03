@@ -187,19 +187,6 @@ ipcMain.handle('api:cashbox:getCashboxesSummary', async (_event) => {
 });
 
 /**
- * Endpoint: api:cashbox:transfer (legacy positional-args wrapper)
- * Description: Executes transfer on cashboxController.
- */
-ipcMain.handle('api:cashbox:transfer', async (_event, from_id, to_id, amount, date, notes) => {
-  try {
-    const result = await cashboxController.transfer(from_id, to_id, amount, date, notes);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
  * Endpoint: api:cashbox:reverseTransfer
  * Description: Atomically reverses both sides of a transfer using its transfer_group_id.
  * This is the only safe way to reverse a transfer movement.
@@ -405,23 +392,8 @@ ipcMain.handle('api:customer:deleteCustomer', async (_event, id) => {
 });
 
 /**
- * Endpoint: api:payment:createPayment
- * Description: Executes createPayment on paymentController.
- * Usage: Invoked by frontend to perform createPayment operation.
- */
-ipcMain.handle('api:payment:createPayment', async (_event, input) => {
-  try {
-    const result = await paymentController.createPayment(input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
  * Endpoint: api:payment:getPayment
- * Description: Executes getPayment on paymentController.
- * Usage: Invoked by frontend to perform getPayment operation.
+ * Description: Read-only. Returns a single payment by ID.
  */
 ipcMain.handle('api:payment:getPayment', async (_event, id) => {
   try {
@@ -434,8 +406,7 @@ ipcMain.handle('api:payment:getPayment', async (_event, id) => {
 
 /**
  * Endpoint: api:payment:getAllPayments
- * Description: Executes getAllPayments on paymentController.
- * Usage: Invoked by frontend to perform getAllPayments operation.
+ * Description: Read-only. Returns all payments.
  */
 ipcMain.handle('api:payment:getAllPayments', async (_event) => {
   try {
@@ -447,13 +418,12 @@ ipcMain.handle('api:payment:getAllPayments', async (_event) => {
 });
 
 /**
- * Endpoint: api:payment:updatePayment
- * Description: Executes updatePayment on paymentController.
- * Usage: Invoked by frontend to perform updatePayment operation.
+ * Endpoint: api:payment:getSalePayments
+ * Description: Returns all active payments for a sale invoice.
  */
-ipcMain.handle('api:payment:updatePayment', async (_event, id, input) => {
+ipcMain.handle('api:payment:getSalePayments', async (_event, invoiceId) => {
   try {
-    const result = await paymentController.updatePayment(id, input);
+    const result = await paymentController.getSalePayments(invoiceId);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
@@ -461,13 +431,64 @@ ipcMain.handle('api:payment:updatePayment', async (_event, id, input) => {
 });
 
 /**
- * Endpoint: api:payment:deletePayment
- * Description: Executes deletePayment on paymentController.
- * Usage: Invoked by frontend to perform deletePayment operation.
+ * Endpoint: api:payment:getPurchasePayments
+ * Description: Returns all active payments for a purchase invoice.
  */
-ipcMain.handle('api:payment:deletePayment', async (_event, id) => {
+ipcMain.handle('api:payment:getPurchasePayments', async (_event, invoiceId) => {
   try {
-    const result = await paymentController.deletePayment(id);
+    const result = await paymentController.getPurchasePayments(invoiceId);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:payment:recordSalePayment
+ * Description: Atomically records a sale payment: cashbox balance in, customer balance out, invoice status updated.
+ */
+ipcMain.handle('api:payment:recordSalePayment', async (_event, input) => {
+  try {
+    const result = await paymentController.recordSalePayment(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:payment:recordPurchasePayment
+ * Description: Atomically records a purchase payment: cashbox balance out, supplier balance out, invoice status updated.
+ */
+ipcMain.handle('api:payment:recordPurchasePayment', async (_event, input) => {
+  try {
+    const result = await paymentController.recordPurchasePayment(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:payment:reverseSalePayment
+ * Description: Reverses a sale payment: creates opposite cashbox movement, restores balances.
+ */
+ipcMain.handle('api:payment:reverseSalePayment', async (_event, paymentId, reason) => {
+  try {
+    const result = await paymentController.reverseSalePayment(paymentId, reason);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:payment:reversePurchasePayment
+ * Description: Reverses a purchase payment: creates opposite cashbox movement, restores balances.
+ */
+ipcMain.handle('api:payment:reversePurchasePayment', async (_event, paymentId, reason) => {
+  try {
+    const result = await paymentController.reversePurchasePayment(paymentId, reason);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
@@ -573,27 +594,12 @@ ipcMain.handle('api:product:getProductWithStock', async (_event, id) => {
 });
 
 /**
- * Endpoint: api:purchaseInvoice:createPurchaseInvoice
- * Description: Executes createPurchaseInvoice on purchaseInvoiceController.
- * Usage: Invoked by frontend to perform createPurchaseInvoice operation.
- */
-ipcMain.handle('api:purchaseInvoice:createPurchaseInvoice', async (_event, input) => {
-  try {
-    const result = await purchaseInvoiceController.createPurchaseInvoice(input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
  * Endpoint: api:purchaseInvoice:createFullPurchaseInvoice
- * Description: Executes createFullPurchaseInvoice on purchaseInvoiceController.
- * Usage: Invoked by frontend to perform createFullPurchaseInvoice operation.
+ * Description: Atomically creates a full purchase invoice with items, batches, stock movements, supplier balance, and optional payment.
  */
-ipcMain.handle('api:purchaseInvoice:createFullPurchaseInvoice', async (_event, input, items) => {
+ipcMain.handle('api:purchaseInvoice:createFullPurchaseInvoice', async (_event, input) => {
   try {
-    const result = await purchaseInvoiceController.createFullPurchaseInvoice(input, items);
+    const result = await purchaseInvoiceController.createFullPurchaseInvoice(input);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
@@ -602,8 +608,7 @@ ipcMain.handle('api:purchaseInvoice:createFullPurchaseInvoice', async (_event, i
 
 /**
  * Endpoint: api:purchaseInvoice:getPurchaseInvoice
- * Description: Executes getPurchaseInvoice on purchaseInvoiceController.
- * Usage: Invoked by frontend to perform getPurchaseInvoice operation.
+ * Description: Read-only. Returns a single purchase invoice row.
  */
 ipcMain.handle('api:purchaseInvoice:getPurchaseInvoice', async (_event, id) => {
   try {
@@ -615,9 +620,34 @@ ipcMain.handle('api:purchaseInvoice:getPurchaseInvoice', async (_event, id) => {
 });
 
 /**
+ * Endpoint: api:purchaseInvoice:getPurchaseInvoiceDetails
+ * Description: Returns enriched purchase invoice with supplier, items, payments, financial summary.
+ */
+ipcMain.handle('api:purchaseInvoice:getPurchaseInvoiceDetails', async (_event, id) => {
+  try {
+    const result = await purchaseInvoiceController.getPurchaseInvoiceDetails(id);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:purchaseInvoice:listPurchaseInvoices
+ * Description: Returns paginated, filtered purchase invoices.
+ */
+ipcMain.handle('api:purchaseInvoice:listPurchaseInvoices', async (_event, filters, pagination) => {
+  try {
+    const result = await purchaseInvoiceController.listPurchaseInvoices(filters, pagination);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
  * Endpoint: api:purchaseInvoice:getAllPurchaseInvoices
- * Description: Executes getAllPurchaseInvoices on purchaseInvoiceController.
- * Usage: Invoked by frontend to perform getAllPurchaseInvoices operation.
+ * Description: Read-only. Returns all purchase invoices (legacy).
  */
 ipcMain.handle('api:purchaseInvoice:getAllPurchaseInvoices', async (_event) => {
   try {
@@ -629,13 +659,12 @@ ipcMain.handle('api:purchaseInvoice:getAllPurchaseInvoices', async (_event) => {
 });
 
 /**
- * Endpoint: api:purchaseInvoice:updatePurchaseInvoice
- * Description: Executes updatePurchaseInvoice on purchaseInvoiceController.
- * Usage: Invoked by frontend to perform updatePurchaseInvoice operation.
+ * Endpoint: api:purchaseInvoice:cancelPurchaseInvoice
+ * Description: Atomically cancels a purchase invoice: verifies no stock consumed, reverses payments, restores batches and supplier balance.
  */
-ipcMain.handle('api:purchaseInvoice:updatePurchaseInvoice', async (_event, id, input) => {
+ipcMain.handle('api:purchaseInvoice:cancelPurchaseInvoice', async (_event, id, reason) => {
   try {
-    const result = await purchaseInvoiceController.updatePurchaseInvoice(id, input);
+    const result = await purchaseInvoiceController.cancelPurchaseInvoice(id, reason);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
@@ -643,13 +672,12 @@ ipcMain.handle('api:purchaseInvoice:updatePurchaseInvoice', async (_event, id, i
 });
 
 /**
- * Endpoint: api:purchaseInvoice:deletePurchaseInvoice
- * Description: Executes deletePurchaseInvoice on purchaseInvoiceController.
- * Usage: Invoked by frontend to perform deletePurchaseInvoice operation.
+ * Endpoint: api:purchaseInvoice:deleteDraftPurchaseInvoice
+ * Description: Hard-deletes a draft invoice only if it has no payments or stock batches.
  */
-ipcMain.handle('api:purchaseInvoice:deletePurchaseInvoice', async (_event, id) => {
+ipcMain.handle('api:purchaseInvoice:deleteDraftPurchaseInvoice', async (_event, id) => {
   try {
-    const result = await purchaseInvoiceController.deletePurchaseInvoice(id);
+    const result = await purchaseInvoiceController.deleteDraftPurchaseInvoice(id);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
@@ -658,8 +686,7 @@ ipcMain.handle('api:purchaseInvoice:deletePurchaseInvoice', async (_event, id) =
 
 /**
  * Endpoint: api:purchaseInvoice:getPurchaseInvoiceSalesDetails
- * Description: Executes getPurchaseInvoiceSalesDetails on purchaseInvoiceController.
- * Usage: Invoked by frontend to perform getPurchaseInvoiceSalesDetails operation.
+ * Description: Returns sales activity on batches from a purchase invoice.
  */
 ipcMain.handle('api:purchaseInvoice:getPurchaseInvoiceSalesDetails', async (_event, id) => {
   try {
@@ -672,8 +699,7 @@ ipcMain.handle('api:purchaseInvoice:getPurchaseInvoiceSalesDetails', async (_eve
 
 /**
  * Endpoint: api:purchaseInvoice:closeCommissionInvoice
- * Description: Executes closeCommissionInvoice on purchaseInvoiceController.
- * Usage: Invoked by frontend to perform closeCommissionInvoice operation.
+ * Description: Closes a consignment invoice, settles supplier share, adjusts remaining stock.
  */
 ipcMain.handle('api:purchaseInvoice:closeCommissionInvoice', async (_event, id, input) => {
   try {
@@ -755,13 +781,12 @@ ipcMain.handle('api:purchaseInvoiceItem:deletePurchaseInvoiceItem', async (_even
 });
 
 /**
- * Endpoint: api:saleInvoice:createSaleInvoice
- * Description: Executes createSaleInvoice on saleInvoiceController.
- * Usage: Invoked by frontend to perform createSaleInvoice operation.
+ * Endpoint: api:saleInvoice:createSaleProcess
+ * Description: Atomically creates a sale invoice with items, stock deductions, customer balance, and optional payment.
  */
-ipcMain.handle('api:saleInvoice:createSaleInvoice', async (_event, input) => {
+ipcMain.handle('api:saleInvoice:createSaleProcess', async (_event, input) => {
   try {
-    const result = await saleInvoiceController.createSaleInvoice(input);
+    const result = await saleInvoiceController.createSaleProcess(input);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
@@ -770,8 +795,7 @@ ipcMain.handle('api:saleInvoice:createSaleInvoice', async (_event, input) => {
 
 /**
  * Endpoint: api:saleInvoice:getSaleInvoice
- * Description: Executes getSaleInvoice on saleInvoiceController.
- * Usage: Invoked by frontend to perform getSaleInvoice operation.
+ * Description: Read-only. Returns a single sale invoice row.
  */
 ipcMain.handle('api:saleInvoice:getSaleInvoice', async (_event, id) => {
   try {
@@ -783,9 +807,34 @@ ipcMain.handle('api:saleInvoice:getSaleInvoice', async (_event, id) => {
 });
 
 /**
+ * Endpoint: api:saleInvoice:getSaleInvoiceDetails
+ * Description: Returns enriched sale invoice with customer, items, payments, financial summary.
+ */
+ipcMain.handle('api:saleInvoice:getSaleInvoiceDetails', async (_event, id) => {
+  try {
+    const result = await saleInvoiceController.getSaleInvoiceDetails(id);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:saleInvoice:listSaleInvoices
+ * Description: Returns paginated, filtered sale invoices.
+ */
+ipcMain.handle('api:saleInvoice:listSaleInvoices', async (_event, filters, pagination) => {
+  try {
+    const result = await saleInvoiceController.listSaleInvoices(filters, pagination);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
  * Endpoint: api:saleInvoice:getAllSaleInvoices
- * Description: Executes getAllSaleInvoices on saleInvoiceController.
- * Usage: Invoked by frontend to perform getAllSaleInvoices operation.
+ * Description: Read-only. Returns all sale invoices (legacy).
  */
 ipcMain.handle('api:saleInvoice:getAllSaleInvoices', async (_event) => {
   try {
@@ -797,37 +846,8 @@ ipcMain.handle('api:saleInvoice:getAllSaleInvoices', async (_event) => {
 });
 
 /**
- * Endpoint: api:saleInvoice:updateSaleInvoice
- * Description: Executes updateSaleInvoice on saleInvoiceController.
- * Usage: Invoked by frontend to perform updateSaleInvoice operation.
- */
-ipcMain.handle('api:saleInvoice:updateSaleInvoice', async (_event, id, input) => {
-  try {
-    const result = await saleInvoiceController.updateSaleInvoice(id, input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
- * Endpoint: api:saleInvoice:deleteSaleInvoice
- * Description: Executes deleteSaleInvoice on saleInvoiceController.
- * Usage: Invoked by frontend to perform deleteSaleInvoice operation.
- */
-ipcMain.handle('api:saleInvoice:deleteSaleInvoice', async (_event, id) => {
-  try {
-    const result = await saleInvoiceController.deleteSaleInvoice(id);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
  * Endpoint: api:saleInvoice:getFullSaleInvoice
- * Description: Executes getFullSaleInvoice on saleInvoiceController.
- * Usage: Invoked by frontend to perform getFullSaleInvoice operation.
+ * Description: Returns full enriched sale invoice (alias for getSaleInvoiceDetails).
  */
 ipcMain.handle('api:saleInvoice:getFullSaleInvoice', async (_event, id) => {
   try {
@@ -839,13 +859,38 @@ ipcMain.handle('api:saleInvoice:getFullSaleInvoice', async (_event, id) => {
 });
 
 /**
- * Endpoint: api:saleInvoice:createSaleProcess
- * Description: Executes createSaleProcess on saleInvoiceController.
- * Usage: Invoked by frontend to perform createSaleProcess operation.
+ * Endpoint: api:saleInvoice:cancelSaleInvoice
+ * Description: Atomically cancels a sale invoice: reverses payments, restores stock, reduces customer balance.
  */
-ipcMain.handle('api:saleInvoice:createSaleProcess', async (_event, input) => {
+ipcMain.handle('api:saleInvoice:cancelSaleInvoice', async (_event, id, reason) => {
   try {
-    const result = await saleInvoiceController.createSaleProcess(input);
+    const result = await saleInvoiceController.cancelSaleInvoice(id, reason);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:saleInvoice:deleteDraftSaleInvoice
+ * Description: Hard-deletes a draft sale invoice only if it has no payments.
+ */
+ipcMain.handle('api:saleInvoice:deleteDraftSaleInvoice', async (_event, id) => {
+  try {
+    const result = await saleInvoiceController.deleteDraftSaleInvoice(id);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:saleInvoice:getAvailableBatches
+ * Description: Returns active stock batches with remaining quantity > 0 for a given product.
+ */
+ipcMain.handle('api:saleInvoice:getAvailableBatches', async (_event, productId) => {
+  try {
+    const result = await saleInvoiceController.getAvailableBatches(productId);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);

@@ -20,6 +20,7 @@ import {
   Users,
   Warehouse,
   LogOut,
+  History,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -74,6 +75,11 @@ const navigationItems = [
     label: "المعاملات المالية",
     path: PATHS.TRANSACTIONS,
     icon: ReceiptText,
+  },
+  {
+    label: "سجل النشاط",
+    path: PATHS.ACTIVITY_LOGS,
+    icon: History,
   },
   {
     label: "الإعدادات",

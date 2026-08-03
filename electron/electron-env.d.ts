@@ -187,6 +187,206 @@ type ReverseTransferResult = {
   original: { out: CashboxMovementRecord; in: CashboxMovementRecord };
 };
 
+// ─── Invoice & Payment Types ──────────────────────────────────────────────────
+
+type InvoiceStatus = 'draft' | 'confirmed' | 'partially_paid' | 'paid' | 'cancelled';
+type PaymentStatus = 'active' | 'reversed';
+type PaymentMethod = 'cash' | 'bank' | 'credit_card' | 'cheque' | 'online';
+
+type PaymentRecord = {
+  id: number;
+  party_type: 'customer' | 'supplier' | null;
+  party_id: number | null;
+  payment_type: 'sale' | 'purchase';
+  invoice_id: number;
+  cashbox_id: number;
+  cashbox_name?: string | null;
+  amount: number;
+  payment_date: string;
+  status: PaymentStatus;
+  reversed_payment_id: number | null;
+  cashbox_transaction_id: number | null;
+  balance_before: number | null;
+  balance_after: number | null;
+  reversal_reason: string | null;
+  notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type RecordSalePaymentInput = {
+  sale_invoice_id: number;
+  cashbox_id: number;
+  amount: number;
+  payment_date?: string;
+  notes?: string | null;
+};
+
+type RecordPurchasePaymentInput = {
+  purchase_invoice_id: number;
+  cashbox_id: number;
+  amount: number;
+  payment_date?: string;
+  notes?: string | null;
+};
+
+type InitialPaymentInput = {
+  cashbox_id: number;
+  amount: number;
+  payment_date?: string;
+  notes?: string | null;
+};
+
+type StockBatchRecord = {
+  id: number;
+  product_id: number;
+  product_name?: string | null;
+  unit?: string | null;
+  supplier_id: number | null;
+  supplier_name?: string | null;
+  purchase_invoice_id: number | null;
+  batch_code: string | null;
+  quantity: number;
+  remaining_quantity: number;
+  purchase_price: number;
+  received_date: string | null;
+  expiry_date: string | null;
+  isActive: number | boolean;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type InvoiceFinancialSummary = {
+  subtotal: number;
+  discount_amount: number;
+  total_amount: number;
+  paid_amount: number;
+  remaining_amount: number;
+  status: InvoiceStatus;
+};
+
+type PurchaseInvoiceRecord = {
+  id: number;
+  invoice_number: string;
+  supplier_id: number;
+  supplier_name?: string | null;
+  invoice_type: 'standard' | 'consignment';
+  invoice_date: string;
+  subtotal: number;
+  discount: number;
+  discount_amount: number;
+  tax: number;
+  total: number;
+  paid_amount: number;
+  remaining_amount: number;
+  status: InvoiceStatus;
+  notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type PurchaseInvoiceDetails = {
+  invoice: PurchaseInvoiceRecord;
+  supplier: PartyApiRecord | null;
+  items: Array<Record<string, unknown>>;
+  payments: PaymentRecord[];
+  financial_summary: InvoiceFinancialSummary;
+  activity: Array<Record<string, unknown>>;
+};
+
+type PurchaseInvoiceItem = {
+  product_id: number;
+  quantity: number;
+  purchase_price: number;
+  batch_code?: string | null;
+  received_date?: string;
+  expiry_date?: string | null;
+  notes?: string | null;
+  batch_notes?: string | null;
+};
+
+type CreatePurchaseInvoiceInput = {
+  supplier_id: number;
+  invoice_number?: string;
+  invoice_date?: string;
+  invoice_type?: 'standard' | 'consignment';
+  discount_amount?: number;
+  notes?: string;
+  items: PurchaseInvoiceItem[];
+  initial_payment?: InitialPaymentInput;
+};
+
+type SaleInvoiceRecord = {
+  id: number;
+  invoice_number: string;
+  customer_id: number | null;
+  customer_name?: string | null;
+  sale_type_id: number | null;
+  cashbox_id: number | null;
+  invoice_date: string;
+  subtotal: number;
+  discount: number;
+  discount_amount: number;
+  commission_percentage: number;
+  commission_amount: number;
+  tax: number;
+  total: number;
+  paid_amount: number;
+  remaining_amount: number;
+  status: InvoiceStatus;
+  notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type SaleInvoiceDetails = {
+  invoice: SaleInvoiceRecord;
+  customer: PartyApiRecord | null;
+  items: Array<Record<string, unknown>>;
+  payments: PaymentRecord[];
+  financial_summary: InvoiceFinancialSummary;
+  activity: Array<Record<string, unknown>>;
+};
+
+type SaleInvoiceItem = {
+  product_id: number;
+  stock_batch_id: number;
+  quantity: number;
+  sale_price: number;
+  cost_price?: number;
+  notes?: string | null;
+};
+
+type CreateSaleInvoiceInput = {
+  customer_id?: number | null;
+  invoice_number?: string;
+  invoice_date?: string;
+  discount_amount?: number;
+  notes?: string;
+  items: SaleInvoiceItem[];
+  initial_payment?: InitialPaymentInput;
+};
+
+type InvoiceListFilters = {
+  search?: string;
+  status?: InvoiceStatus | '';
+  date_from?: string;
+  date_to?: string;
+  customer_id?: number;
+  supplier_id?: number;
+  invoice_type?: string;
+};
+
+type PaginationInput = {
+  page?: number;
+  limit?: number;
+};
+
+type PaginatedInvoices<T> = {
+  items: T[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+
 // ─── Window Interface ─────────────────────────────────────────────────────────
 
 interface Window {
@@ -243,16 +443,38 @@ interface Window {
       get(id: number): Promise<CashboxMovementRecord>;
       list(): Promise<CashboxMovementRecord[]>;
     };
-    payments: GenericCrudApi;
-    purchaseInvoices: GenericCrudApi & {
-      createFull(input: unknown): Promise<unknown>;
+    payments: {
+      get(id: number): Promise<PaymentRecord>;
+      list(): Promise<PaymentRecord[]>;
+      listForSale(invoiceId: number): Promise<PaymentRecord[]>;
+      listForPurchase(invoiceId: number): Promise<PaymentRecord[]>;
+      recordSale(input: RecordSalePaymentInput): Promise<{ payment: PaymentRecord; invoice: SaleInvoiceRecord; cashbox: CashboxApiRecord }>;
+      recordPurchase(input: RecordPurchasePaymentInput): Promise<{ payment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
+      reverseSale(paymentId: number, reason: string): Promise<{ reversedPayment: PaymentRecord; invoice: SaleInvoiceRecord; cashbox: CashboxApiRecord }>;
+      reversePurchase(paymentId: number, reason: string): Promise<{ reversedPayment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
+    };
+    purchaseInvoices: {
+      get(id: number): Promise<PurchaseInvoiceRecord>;
+      list(): Promise<PurchaseInvoiceRecord[]>;
+      listFiltered(filters?: InvoiceListFilters, pagination?: PaginationInput): Promise<PaginatedInvoices<PurchaseInvoiceRecord>>;
+      getDetails(id: number): Promise<PurchaseInvoiceDetails>;
+      createFull(input: CreatePurchaseInvoiceInput): Promise<PurchaseInvoiceDetails>;
+      cancel(id: number, reason: string): Promise<PurchaseInvoiceDetails>;
+      deleteDraft(id: number): Promise<{ success: true }>;
       getSalesDetails(id: number): Promise<unknown>;
       closeCommission(id: number, input?: unknown): Promise<unknown>;
     };
     purchaseInvoiceItems: GenericCrudApi;
-    saleInvoices: GenericCrudApi & {
-      getFull(id: number): Promise<unknown>;
-      createProcess(input: unknown): Promise<unknown>;
+    saleInvoices: {
+      get(id: number): Promise<SaleInvoiceRecord>;
+      list(): Promise<SaleInvoiceRecord[]>;
+      listFiltered(filters?: InvoiceListFilters, pagination?: PaginationInput): Promise<PaginatedInvoices<SaleInvoiceRecord>>;
+      getDetails(id: number): Promise<SaleInvoiceDetails>;
+      getFull(id: number): Promise<SaleInvoiceDetails>;
+      createProcess(input: CreateSaleInvoiceInput): Promise<SaleInvoiceDetails>;
+      cancel(id: number, reason: string): Promise<SaleInvoiceDetails>;
+      deleteDraft(id: number): Promise<{ success: true }>;
+      availableBatches(productId: number): Promise<StockBatchRecord[]>;
     };
     saleInvoiceItems: GenericCrudApi;
     saleTypes: GenericCrudApi;

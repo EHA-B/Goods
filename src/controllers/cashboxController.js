@@ -3,7 +3,7 @@ const dbmanager = require(path.join(__dirname, '../database/databaseManager'));
 const crypto = require('crypto');
 
 // ─── Shared Currency Validator ────────────────────────────────────────────────
-const ALLOWED_CURRENCIES = new Set(['SYP', 'USD', 'EUR', 'SAR']);
+const ALLOWED_CURRENCIES = new Set(['SYP', 'USD', 'EUR']);
 
 function validateCurrency(currency) {
     if (!currency || !ALLOWED_CURRENCIES.has(String(currency).trim().toUpperCase())) {

@@ -4,13 +4,7 @@ import { BackButton, Button, Card, FormField, Input, PageHeader, Select, Switch,
 import { PATHS } from "../../routes/path";
 import { cashboxesService, translateCashboxError } from "./cashboxesService";
 import { RefreshCw } from "lucide-react";
-
-const CURRENCIES = [
-  { value: "SYP", label: "SYP - ليرة سورية" },
-  { value: "USD", label: "USD - دولار أمريكي" },
-  { value: "EUR", label: "EUR - يورو" },
-  { value: "SAR", label: "SAR - ريال سعودي" },
-];
+import { CASHBOX_CURRENCIES } from "./currency";
 
 export default function CashboxFormPage() {
   const nav = useNavigate();
@@ -65,9 +59,23 @@ export default function CashboxFormPage() {
     fetchData();
   }, [id, isEditMode]);
 
-  // Filter parent options: exclude self and inactive cashboxes
+  // Filter parent options: exclude self, inactive cashboxes, and descendants.
+  const currentId = Number(id);
+  const descendantIds = new Set<number>();
+  if (isEditMode && Number.isFinite(currentId)) {
+    const queue = [currentId];
+    while (queue.length) {
+      const parent = queue.shift()!;
+      for (const item of allCashboxes) {
+        if (Number(item.parent_id) === parent && !descendantIds.has(item.id)) {
+          descendantIds.add(item.id);
+          queue.push(item.id);
+        }
+      }
+    }
+  }
   const availableParents = allCashboxes.filter(
-    (c) => c.id !== Number(id) && Boolean(c.isActive)
+    (c) => c.id !== currentId && !descendantIds.has(c.id) && Boolean(c.isActive)
   );
 
   const handleSubmit = async () => {
@@ -162,7 +170,7 @@ export default function CashboxFormPage() {
             <Select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-              options={CURRENCIES}
+              options={[...CASHBOX_CURRENCIES]}
               disabled={isEditMode && hasMovements}
             />
           </FormField>

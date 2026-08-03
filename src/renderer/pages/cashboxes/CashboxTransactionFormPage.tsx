@@ -6,6 +6,7 @@ import {
 import { PATHS } from "../../routes/path";
 import { cashboxesService, translateCashboxError } from "./cashboxesService";
 import { RefreshCw } from "lucide-react";
+import { formatMoney } from "./currency";
 
 type MovementKind = "income" | "expense" | "adjustment_in" | "adjustment_out";
 
@@ -126,7 +127,7 @@ export default function CashboxTransactionFormPage() {
               onChange={(e) => setBoxId(e.target.value)}
               options={cashboxes.map((c) => ({
                 value: String(c.id),
-                label: `${c.name} — الرصيد: ${Number(c.balance).toLocaleString("en-US")} ${c.currency}`,
+                label: `${c.name} — الرصيد: ${formatMoney(c.balance, c.currency)}`,
               }))}
             />
           </FormField>
@@ -157,7 +158,7 @@ export default function CashboxTransactionFormPage() {
         {selectedBox && isOutgoing && (
           <p className="mt-3 text-sm text-[var(--text-muted)]">
             الرصيد الحالي للصندوق:{" "}
-            <strong>{Number(selectedBox.balance).toLocaleString("en-US")} {selectedBox.currency}</strong>
+            <strong>{formatMoney(selectedBox.balance, selectedBox.currency)}</strong>
           </p>
         )}
 

@@ -1,32 +1,244 @@
 import { useMemo, useState } from "react";
-import { Calculator, Plus, ReceiptText, Save, Trash2 } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
-import type { PaymentMethod, SaleDraft, SaleItem, SaleStatus } from "../../components/sales/types";
+import { Calculator, Plus, Save, ShoppingCart, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { BackButton, Button, Card, FormField, FormSection, Input, PageHeader, Select, Textarea } from "../../components/ui";
 import { PATHS } from "../../routes/path";
 import { salesService } from "./salesService";
 
-const emptyItem = (): SaleItem => ({ id: 0, productId: 0, stockBatchId: 0, productName: "", batchCode: "", quantity: 1, availableQuantity: 0, unitPrice: 0, costPrice: 0, lineTotal: 0, profit: 0 });
+type SaleItemForm = {
+  product_id: number;
+  productName: string;
+  stock_batch_id: number;
+  batchCode: string;
+  availableBatches: StockBatchRecord[];
+  quantity: number;
+  sale_price: number;
+  cost_price: number;
+};
+
+const emptyItem = (): SaleItemForm => ({
+  product_id: 0,
+  productName: "",
+  stock_batch_id: 0,
+  batchCode: "",
+  availableBatches: [],
+  quantity: 1,
+  sale_price: 0,
+  cost_price: 0,
+});
+
+const money = (value: number) => value.toLocaleString("en-US");
+
 export default function SaleFormPage() {
   const navigate = useNavigate();
-  const { saleId } = useParams();
-  const existing = saleId ? salesService.getById(Number(saleId)) : undefined;
-  const lookups = salesService.getLookups();
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState<SaleDraft>({ invoiceNumber: existing?.invoiceNumber ?? "", customerId: existing?.customerId ?? 0, customerName: existing?.customerName ?? "", saleTypeId: existing?.saleTypeId ?? 1, saleTypeName: existing?.saleTypeName ?? "", commissionPercentage: existing?.commissionPercentage ?? 0, cashboxId: existing?.cashboxId ?? 1, cashboxName: existing?.cashboxName, invoiceDate: existing?.invoiceDate ?? new Date().toISOString().slice(0, 10), discount: existing?.discount ?? 0, tax: existing?.tax ?? 0, status: existing?.status ?? "draft", notes: existing?.notes ?? "", items: existing?.items ?? [emptyItem()], initialPayment: 0, paymentMethod: "cash", paymentReference: "" });
-  const totals = useMemo(() => { const subtotal = form.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0); const commission = subtotal * form.commissionPercentage / 100; return { subtotal, commission, total: Math.max(0, subtotal - form.discount + commission + form.tax), profit: form.items.reduce((sum, item) => sum + item.quantity * (item.unitPrice - item.costPrice), 0) }; }, [form]);
-  const updateItem = (index: number, patch: Partial<SaleItem>) => setForm((current) => ({ ...current, items: current.items.map((item, i) => i === index ? { ...item, ...patch } : item) }));
-  const chooseProduct = (index: number, productId: number) => { const product = lookups.products.find((item) => item.id === productId); updateItem(index, { ...emptyItem(), productId, productName: product?.name ?? "" }); setError(""); };
-  const chooseBatch = (index: number, id: number) => { const batch = lookups.batches.find((item) => item.id === id); if (!batch) return updateItem(index, { stockBatchId: 0, batchCode: "", availableQuantity: 0, costPrice: 0, unitPrice: 0 }); const duplicate = form.items.some((item, itemIndex) => itemIndex !== index && item.stockBatchId === id); if (duplicate) { setError("هذه الدفعة مضافة مسبقًا إلى الفاتورة. اختر دفعة أخرى أو عدّل السطر الموجود."); return; } updateItem(index, { productId: batch.productId, stockBatchId: batch.id, productName: batch.productName, batchCode: batch.batchCode, availableQuantity: batch.availableQuantity, costPrice: batch.costPrice, unitPrice: batch.suggestedPrice }); setError(""); };
-  const save = (status: SaleStatus) => { const invalid = !form.customerId || !form.items.length || form.items.some((item) => !item.productId || !item.stockBatchId || item.quantity <= 0 || item.quantity > item.availableQuantity || item.unitPrice < 0) || form.initialPayment > totals.total; if (invalid) { setError("راجع العميل والأصناف والدفعات والكميات والمبلغ المدفوع قبل الحفظ."); return; } const saved = salesService.save({ ...form, status }, existing?.id); navigate(`/sales/${saved.id}`); };
+  const [customerId, setCustomerId] = useState(0);
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [discount, setDiscount] = useState(0);
+  const [notes, setNotes] = useState("");
+  const [items, setItems] = useState<SaleItemForm[]>([emptyItem()]);
+  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [paymentCashboxId, setPaymentCashboxId] = useState(0);
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [lookups, setLookups] = useState<{ customers: PartyApiRecord[]; cashboxes: CashboxApiRecord[]; products: ProductApiRecord[] } | null>(null);
+
+  const loadLookups = () => {
+    if (lookups) return;
+    Promise.all([salesService.getLookups(), salesService.getProducts()])
+      .then(([data, products]) => setLookups({ ...data, products }))
+      .catch(() => {});
+  };
+
+  const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.quantity * item.sale_price, 0), [items]);
+  const total = Math.max(0, subtotal - discount);
+  const remaining = Math.max(0, total - paymentAmount);
+
+  const updateItem = (index: number, patch: Partial<SaleItemForm>) =>
+    setItems((curr) => curr.map((item, i) => i === index ? { ...item, ...patch } : item));
+
+  const selectProduct = async (index: number, productId: number) => {
+    const product = lookups?.products.find((p) => p.id === productId);
+    updateItem(index, { product_id: productId, productName: product?.name ?? "", stock_batch_id: 0, batchCode: "", availableBatches: [], sale_price: 0 });
+    if (!productId) return;
+    try {
+      const batches = await salesService.getAvailableBatches(productId);
+      updateItem(index, { availableBatches: batches });
+    } catch (err) {
+      // Ignore lookup errors
+    }
+  };
+
+  const selectBatch = (index: number, batchId: number) => {
+    const item = items[index];
+    const batch = item.availableBatches.find((b) => b.id === batchId);
+    if (!batch) return;
+    updateItem(index, {
+      stock_batch_id: batchId,
+      batchCode: batch.batch_code ?? "",
+      cost_price: batch.purchase_price,
+    });
+  };
+
+  const submit = async () => {
+    setError("");
+    if (items.some((item) => !item.product_id || !item.stock_batch_id || item.quantity <= 0)) {
+      setError("راجع الأصناف — المنتج والدفعة والكمية مطلوبة");
+      return;
+    }
+    if (!customerId && paymentAmount < total - 0.001) {
+      setError("يجب تحديد عميل للبيع الآجل. البيع النقدي يتطلب دفع المبلغ كاملًا.");
+      return;
+    }
+
+    const input: CreateSaleInvoiceInput = {
+      customer_id: customerId || null,
+      invoice_number: invoiceNumber.trim() || undefined,
+      invoice_date: invoiceDate,
+      discount_amount: discount,
+      notes: notes || undefined,
+      items: items.map((item) => ({
+        product_id: item.product_id,
+        stock_batch_id: item.stock_batch_id,
+        quantity: item.quantity,
+        sale_price: item.sale_price,
+        cost_price: item.cost_price || undefined,
+      })),
+      initial_payment: paymentAmount > 0 && paymentCashboxId
+        ? { cashbox_id: paymentCashboxId, amount: paymentAmount, payment_date: paymentDate }
+        : undefined,
+    };
+
+    setLoading(true);
+    try {
+      const result = await salesService.createProcess(input);
+      navigate(`/sales/${result.invoice.id}`);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || "حدث خطأ أثناء الحفظ");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return <>
-    <PageHeader title={existing ? "تعديل فاتورة البيع" : "فاتورة بيع جديدة"} description="اختيار المادة ثم الدفعة المطلوبة يدويًا، دون توزيع تلقائي للكميات." actions={<BackButton to={PATHS.SALES} />} />
-    <div className="space-y-5 pb-24">
+    <PageHeader
+      title="فاتورة بيع جديدة"
+      description="أدخل بيانات العميل والأصناف ودفعات المخزون والمبالغ."
+      actions={<BackButton to={PATHS.SALES} />}
+    />
+    <div className="space-y-5 pb-24" onClick={loadLookups}>
       {error && <div className="rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
-      <FormSection title="معلومات الفاتورة" description="بيانات العميل ونوع البيع والتاريخ والصندوق." icon={<ReceiptText size={18} />}><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><FormField label="رقم الفاتورة"><Input value={form.invoiceNumber} placeholder="يُولّد تلقائيًا" onChange={(e) => setForm({ ...form, invoiceNumber: e.target.value })} /></FormField><FormField label="تاريخ الفاتورة" required><Input type="date" value={form.invoiceDate} onChange={(e) => setForm({ ...form, invoiceDate: e.target.value })} /></FormField><FormField label="العميل" required><Select value={String(form.customerId || "")} placeholder="اختر العميل" options={lookups.customers.map((item) => ({ value: String(item.id), label: item.name }))} onChange={(e) => setForm({ ...form, customerId: Number(e.target.value) })} /></FormField><FormField label="نوع البيع" required><Select value={String(form.saleTypeId)} options={lookups.saleTypes.map((item) => ({ value: String(item.id), label: item.name }))} onChange={(e) => { const type = lookups.saleTypes.find((item) => item.id === Number(e.target.value))!; setForm({ ...form, saleTypeId: type.id, commissionPercentage: type.commissionPercentage }); }} /></FormField><FormField label="الصندوق"><Select value={String(form.cashboxId ?? "")} options={lookups.cashboxes.map((item) => ({ value: String(item.id), label: item.name }))} onChange={(e) => setForm({ ...form, cashboxId: Number(e.target.value) })} /></FormField><FormField label="نسبة العمولة"><Input type="number" min="0" value={form.commissionPercentage} onChange={(e) => setForm({ ...form, commissionPercentage: Number(e.target.value) })} /></FormField></div></FormSection>
-      <Card header="أصناف الفاتورة" description="اختر المادة أولًا، ثم اختر الدفعة المحددة التي سيُخصم منها السطر." actions={<Button size="sm" variant="secondary" startIcon={<Plus size={15} />} onClick={() => setForm({ ...form, items: [...form.items, emptyItem()] })}>إضافة صنف</Button>} padding={false}><div className="overflow-x-auto"><table className="w-full text-right"><thead className="bg-[var(--surface-subtle)]"><tr>{["المادة", "الدفعة المختارة", "المتاح", "الكمية", "سعر البيع", "التكلفة", "الإجمالي", ""].map((h) => <th key={h} className="px-4 py-3 text-xs font-bold text-[var(--text-secondary)]">{h}</th>)}</tr></thead><tbody>{form.items.map((item, index) => { const availableBatches = lookups.batches.filter((batch) => batch.productId === item.productId); return <tr key={index} className="border-t border-[var(--border)]"><td className="min-w-56 px-4 py-3"><Select value={String(item.productId || "")} placeholder="اختر المادة" options={lookups.products.map((product) => ({ value: String(product.id), label: `${product.name} — ${product.code}` }))} onChange={(e) => chooseProduct(index, Number(e.target.value))} /></td><td className="min-w-72 px-4 py-3"><Select disabled={!item.productId} value={String(item.stockBatchId || "")} placeholder={item.productId ? "اختر الدفعة" : "اختر المادة أولًا"} options={availableBatches.map((batch) => ({ value: String(batch.id), label: `${batch.batchCode} — ${batch.supplierName} — متاح ${batch.availableQuantity} ${batch.unit}` }))} onChange={(e) => chooseBatch(index, Number(e.target.value))} /></td><td className="px-4 py-3">{item.availableQuantity.toLocaleString("en-US")}</td><td className="w-32 px-4 py-3"><Input type="number" min="0.001" step="0.001" max={item.availableQuantity} placeholder="الكمية" value={item.quantity} error={item.quantity > item.availableQuantity} onChange={(e) => updateItem(index, { quantity: Number(e.target.value) })} /></td><td className="w-36 px-4 py-3"><Input type="number" min="0" placeholder="سعر البيع" value={item.unitPrice} onChange={(e) => updateItem(index, { unitPrice: Number(e.target.value) })} /></td><td className="px-4 py-3">{item.costPrice.toLocaleString("en-US")}</td><td className="px-4 py-3 font-bold">{(item.quantity * item.unitPrice).toLocaleString("en-US")}</td><td className="px-4 py-3"><Button size="sm" variant="danger" startIcon={<Trash2 size={14} />} disabled={form.items.length === 1} onClick={() => setForm({ ...form, items: form.items.filter((_, i) => i !== index) })}>حذف</Button></td></tr>; })}</tbody></table></div></Card>
-      <div className="grid gap-5 xl:grid-cols-[1fr_380px]"><FormSection title="الدفع والملاحظات" description="يمكن تسجيل دفعة أولية عند حفظ الفاتورة."><div className="grid gap-4 md:grid-cols-2"><FormField label="المبلغ المدفوع الآن"><Input type="number" min="0" max={totals.total} value={form.initialPayment} onChange={(e) => setForm({ ...form, initialPayment: Number(e.target.value) })} /></FormField><FormField label="طريقة الدفع"><Select value={form.paymentMethod} options={[{ value: "cash", label: "نقدي" }, { value: "bank", label: "تحويل بنكي" }, { value: "credit_card", label: "بطاقة" }, { value: "cheque", label: "شيك" }, { value: "online", label: "دفع إلكتروني" }]} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value as PaymentMethod })} /></FormField><FormField label="رقم المرجع"><Input value={form.paymentReference} placeholder="رقم الحوالة أو الشيك إن وجد" onChange={(e) => setForm({ ...form, paymentReference: e.target.value })} /></FormField><FormField label="ملاحظات" className="md:col-span-2"><Textarea value={form.notes} placeholder="ملاحظات تظهر ضمن بيانات الفاتورة..." onChange={(e) => setForm({ ...form, notes: e.target.value })} /></FormField></div></FormSection><Card header={<span className="flex items-center gap-2"><Calculator size={18} />ملخص الفاتورة</span>}><div className="space-y-3 text-sm">{[["المجموع الفرعي", totals.subtotal], ["الخصم", -form.discount], ["العمولة", totals.commission], ["الضريبة", form.tax], ["إجمالي الربح", totals.profit]].map(([label, value]) => <div key={String(label)} className="flex justify-between"><span>{label}</span><strong>{Number(value).toLocaleString("en-US")} ل.س</strong></div>)}<div className="border-t pt-3 flex justify-between"><strong>الإجمالي النهائي</strong><strong>{totals.total.toLocaleString("en-US")} ل.س</strong></div></div></Card></div>
+      <FormSection title="بيانات الفاتورة" description="العميل والتاريخ ورقم الفاتورة." icon={<ShoppingCart size={18} />}>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <FormField label="رقم الفاتورة" htmlFor="invoiceNumber">
+            <Input id="invoiceNumber" value={invoiceNumber} placeholder="يُنشأ تلقائيًا عند تركه فارغًا" onChange={(e) => setInvoiceNumber(e.target.value)} />
+          </FormField>
+          <FormField label="تاريخ الفاتورة" htmlFor="invoiceDate" required>
+            <Input id="invoiceDate" type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
+          </FormField>
+          <FormField label="العميل" htmlFor="customer">
+            <Select id="customer" value={String(customerId)} options={[{ value: "0", label: "بيع نقدي (بدون عميل)" }, ...(lookups?.customers ?? []).map((c) => ({ value: String(c.id), label: c.name }))]} onChange={(e) => setCustomerId(Number(e.target.value))} />
+          </FormField>
+          <FormField label="ملاحظات" htmlFor="notes" className="md:col-span-2 xl:col-span-4">
+            <Textarea id="notes" value={notes} placeholder="ملاحظات عامة..." onChange={(e) => setNotes(e.target.value)} />
+          </FormField>
+        </div>
+      </FormSection>
+
+      <Card padding={false} header="أصناف الفاتورة" description="أضف المنتجات وحدد الدفعة والكمية وسعر البيع.">
+        <div className="space-y-4 p-4">
+          {items.map((item, index) => (
+            <div key={index} className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <FormField label="المنتج" required>
+                  <Select value={String(item.product_id)} options={[{ value: "0", label: "اختر المنتج" }, ...(lookups?.products ?? []).map((p) => ({ value: String(p.id), label: p.name }))]} onChange={(e) => selectProduct(index, Number(e.target.value))} />
+                </FormField>
+                <FormField label="الدفعة (المخزن)" required>
+                  <Select
+                    value={String(item.stock_batch_id)}
+                    options={[
+                      { value: "0", label: item.availableBatches.length === 0 ? "اختر المنتج أولًا" : "اختر الدفعة" },
+                      ...item.availableBatches.map((b) => ({
+                        value: String(b.id),
+                        label: `${b.batch_code ?? "—"} — كمية متاحة: ${b.remaining_quantity}`
+                      })),
+                    ]}
+                    disabled={item.availableBatches.length === 0}
+                    onChange={(e) => selectBatch(index, Number(e.target.value))}
+                  />
+                </FormField>
+                <FormField label="الكمية" required>
+                  <Input type="number" min="0.001" step="0.001" value={item.quantity} onChange={(e) => updateItem(index, { quantity: Number(e.target.value) })} />
+                </FormField>
+                <FormField label="سعر البيع" required>
+                  <Input type="number" min="0" value={item.sale_price} onChange={(e) => updateItem(index, { sale_price: Number(e.target.value) })} />
+                </FormField>
+                <FormField label="إجمالي السطر">
+                  <Input readOnly value={money(item.quantity * item.sale_price)} />
+                </FormField>
+                <FormField label="تكلفة الوحدة">
+                  <Input readOnly value={money(item.cost_price)} />
+                </FormField>
+                <div className="flex items-end">
+                  <Button variant="danger" startIcon={<Trash2 size={16} />} disabled={items.length === 1} onClick={() => setItems((curr) => curr.filter((_, i) => i !== index))}>حذف</Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-[var(--border)] p-4">
+          <Button variant="secondary" startIcon={<Plus size={17} />} onClick={() => setItems((curr) => [...curr, emptyItem()])}>إضافة صنف</Button>
+        </div>
+      </Card>
+
+      <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
+        <FormSection title="الدفع الأولي" description="يمكن تسجيل دفعة مع إنشاء الفاتورة." icon={<Calculator size={18} />}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <FormField label="المبلغ المدفوع">
+              <Input type="number" min="0" max={total} value={paymentAmount} onChange={(e) => setPaymentAmount(Number(e.target.value))} />
+            </FormField>
+            <FormField label="الصندوق">
+              <Select value={String(paymentCashboxId)} options={[{ value: "0", label: "اختر الصندوق" }, ...(lookups?.cashboxes ?? []).map((c) => ({ value: String(c.id), label: c.name }))]} onChange={(e) => setPaymentCashboxId(Number(e.target.value))} />
+            </FormField>
+            <FormField label="تاريخ الدفع">
+              <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+            </FormField>
+          </div>
+        </FormSection>
+
+        <Card header="ملخص الفاتورة" className="h-fit">
+          <div className="space-y-3 text-sm">
+            {[["المجموع الفرعي", subtotal], ["الخصم", -discount], ["المدفوع", paymentAmount], ["المتبقي", remaining]].map(([label, value]) => (
+              <div key={String(label)} className="flex justify-between">
+                <span className="text-[var(--text-muted)]">{label}</span>
+                <strong>{money(Number(value))}</strong>
+              </div>
+            ))}
+            <div className="border-t border-[var(--border)] pt-3">
+              <div className="flex justify-between text-base">
+                <strong>الإجمالي النهائي</strong>
+                <strong className="text-[var(--primary)]">{money(total)}</strong>
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-3">
+            <FormField label="الخصم">
+              <Input type="number" min="0" value={discount} onChange={(e) => setDiscount(Number(e.target.value))} />
+            </FormField>
+          </div>
+        </Card>
+      </div>
     </div>
-    <div className="fixed bottom-0 left-0 right-[260px] z-20 border-t border-[var(--border)] bg-[var(--surface)]/95 px-6 py-3 backdrop-blur"><div className="flex justify-end gap-3"><Button variant="secondary" onClick={() => navigate(PATHS.SALES)}>إلغاء</Button>{existing ? <Button startIcon={<Save size={17} />} onClick={() => save(existing.status)}>حفظ التعديلات</Button> : <><Button variant="secondary" startIcon={<Save size={17} />} onClick={() => save("draft")}>حفظ كمسودة</Button><Button startIcon={<Save size={17} />} onClick={() => save("confirmed")}>حفظ وتأكيد</Button></>}</div></div>
+
+    <div className="fixed bottom-0 left-0 right-[260px] z-20 border-t border-[var(--border)] bg-[var(--surface)]/95 px-6 py-3 backdrop-blur">
+      <div className="flex justify-end gap-3">
+        <Button variant="secondary" onClick={() => navigate(PATHS.SALES)}>إلغاء</Button>
+        <Button startIcon={<Save size={17} />} disabled={loading} onClick={submit}>
+          {loading ? "جاري الحفظ..." : "حفظ الفاتورة"}
+        </Button>
+      </div>
+    </div>
   </>;
 }

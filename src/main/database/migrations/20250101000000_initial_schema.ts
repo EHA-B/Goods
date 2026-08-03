@@ -210,7 +210,7 @@ export async function up(knex: Knex): Promise<void> {
     table.integer('parent_id').unsigned().nullable();
     table.decimal('balance', 15, 2).defaultTo(0);
     table.decimal('initial_balance', 15, 2).defaultTo(0);
-    table.string('currency', 10).defaultTo('SAR');
+    table.string('currency', 10).defaultTo('SYP');
     table.boolean('isActive').defaultTo(true);
     table.text('notes');
     table.timestamp('created_at').nullable();

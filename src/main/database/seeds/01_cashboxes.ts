@@ -9,8 +9,18 @@ export async function seed(knex: Knex): Promise<void> {
       parent_id: null,
       initial_balance: 0,
       balance: 0,
-      currency: 'SAR',
+      currency: 'SYP',
       notes: 'الصندوق الرئيسي للنظام',
+    },
+  ]);
+  await knex('cashboxes').insert([
+    {
+      name: 'صندوق العمولة',
+      parent_id: 1,
+      initial_balance: 0,
+      balance: 0,
+      currency: 'SYP',
+      notes: 'خاص ببيانات البيع بالعمولة ',
     },
   ]);
 }

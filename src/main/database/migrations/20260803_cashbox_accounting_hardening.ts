@@ -11,7 +11,6 @@ import { Knex } from 'knex';
  * 5. Adds `reversal_reason` text column
  * 6. Makes `balance_before` / `balance_after` nullable (historical rows may lack them)
  * 7. Recreates all required indexes
- * 8. Updates `cashboxes.currency` default from SAR to SYP
  *
  * SQLite does not support ALTER COLUMN or DROP CONSTRAINT, so we rebuild the table.
  */
@@ -95,13 +94,6 @@ export async function up(knex: Knex): Promise<void> {
     table.index(['cashbox_id', 'transaction_date'], 'idx_cbt_cashbox_date');
   });
 
-  // ── Step 6: Update default currency on cashboxes table ───────────────────
-  // SQLite cannot alter column DEFAULT, so we add a new column, copy, drop old, rename.
-  // However, the default only affects new inserts — existing rows are unaffected.
-  // We set a session-level default by noting this in the application code instead.
-  // The column default was 'SAR'; we cannot rename it in SQLite, but we can update
-  // any existing rows that still have the old default if needed.
-  // For safety, we leave existing rows unchanged and rely on the app-layer default (SYP).
 }
 
 export async function down(knex: Knex): Promise<void> {

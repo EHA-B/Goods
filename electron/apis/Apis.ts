@@ -187,19 +187,6 @@ ipcMain.handle('api:cashbox:getCashboxesSummary', async (_event) => {
 });
 
 /**
- * Endpoint: api:cashbox:transfer (legacy positional-args wrapper)
- * Description: Executes transfer on cashboxController.
- */
-ipcMain.handle('api:cashbox:transfer', async (_event, from_id, to_id, amount, date, notes) => {
-  try {
-    const result = await cashboxController.transfer(from_id, to_id, amount, date, notes);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
  * Endpoint: api:cashbox:reverseTransfer
  * Description: Atomically reverses both sides of a transfer using its transfer_group_id.
  * This is the only safe way to reverse a transfer movement.

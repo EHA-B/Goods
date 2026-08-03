@@ -120,14 +120,6 @@ ipcMain.handle("api:cashbox:getCashboxesSummary", async (_event) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:cashbox:transfer", async (_event, from_id, to_id, amount, date, notes) => {
-  try {
-    const result = await cashboxController.transfer(from_id, to_id, amount, date, notes);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
-  }
-});
 ipcMain.handle("api:cashbox:reverseTransfer", async (_event, transferGroupId, reason) => {
   try {
     const result = await cashboxController.reverseCashboxTransfer(transferGroupId, reason);
@@ -933,7 +925,7 @@ app.on("activate", () => {
 });
 app.whenReady().then(async () => {
   try {
-    const { initDatabase } = await import("./dbmanager-BvoTxvEi.js");
+    const { initDatabase } = await import("./dbmanager-DDPWnYkJ.js");
     await initDatabase();
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {

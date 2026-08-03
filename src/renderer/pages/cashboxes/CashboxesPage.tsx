@@ -4,6 +4,7 @@ import {
   Eye,
   Pencil,
   Plus,
+  Trash2,
   RefreshCw,
   WalletCards,
 } from "lucide-react";
@@ -29,10 +30,7 @@ import {
 } from "../../components/ui";
 import { PATHS } from "../../routes/path";
 import { cashboxesService, translateCashboxError } from "./cashboxesService";
-
-const money = (value: number, currency = "SYP") =>
-  new Intl.NumberFormat("ar-SY", { style: "decimal", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(value) +
-  " " + currency;
+import { currencyName, currencySymbol, formatMoney, formatNumber } from "./currency";
 
 export default function CashboxesPage() {
   const navigate = useNavigate();
@@ -165,17 +163,17 @@ export default function CashboxesPage() {
         ) : (
           (summary?.balancesByCurrency ?? []).map((entry) => (
             <Card key={entry.currency}>
-              <p className="text-xs font-semibold text-[var(--text-muted)]">{entry.currency}</p>
+              <p className="text-xs font-semibold text-[var(--text-muted)]">{currencyName(entry.currency)} · {currencySymbol(entry.currency)}</p>
               <p className="mt-2 text-2xl font-bold">
-                {new Intl.NumberFormat("ar-SY", { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(entry.balance)}
+                {formatMoney(entry.balance, entry.currency)}
               </p>
               <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                <span className="text-[var(--success)]">↓ دخول: {new Intl.NumberFormat("ar-SY").format(entry.totalIn)}</span>
-                <span className="text-[var(--danger)]">↑ خروج: {new Intl.NumberFormat("ar-SY").format(entry.totalOut)}</span>
+                <span className="text-[var(--success)]">↓ دخول: {formatNumber(entry.totalIn)} {currencySymbol(entry.currency)}</span>
+                <span className="text-[var(--danger)]">↑ خروج: {formatNumber(entry.totalOut)} {currencySymbol(entry.currency)}</span>
               </div>
               {entry.openingBalance > 0 && (
                 <p className="mt-1 text-xs text-[var(--text-muted)]">
-                  رصيد افتتاحي: {new Intl.NumberFormat("ar-SY").format(entry.openingBalance)}
+                  رصيد افتتاحي: {formatNumber(entry.openingBalance)} {currencySymbol(entry.currency)}
                 </p>
               )}
             </Card>
@@ -236,12 +234,12 @@ export default function CashboxesPage() {
                     </DataTableCell>
                     <DataTableCell>{cashbox.parent_name || "—"}</DataTableCell>
                     <DataTableCell>
-                      {money(Number(cashbox.initial_balance), cashbox.currency)}
+                      {formatMoney(cashbox.initial_balance, cashbox.currency)}
                     </DataTableCell>
                     <DataTableCell className="font-bold text-[var(--text-primary)]">
-                      {money(Number(cashbox.balance), cashbox.currency)}
+                      {formatMoney(cashbox.balance, cashbox.currency)}
                     </DataTableCell>
-                    <DataTableCell>{cashbox.currency}</DataTableCell>
+                    <DataTableCell>{currencyName(cashbox.currency)} ({currencySymbol(cashbox.currency)})</DataTableCell>
                     <DataTableCell>
                       <StatusBadge variant={cashbox.isActive ? "success" : "warning"}>
                         {cashbox.isActive ? "نشط" : "غير نشط"}
@@ -264,6 +262,17 @@ export default function CashboxesPage() {
                           onClick={() => navigate(`/cashboxes/${cashbox.id}/edit`)}
                         >
                           تعديل
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          startIcon={<Trash2 size={15} />}
+                          onClick={() => {
+                            setDeleteError(null);
+                            setPendingDelete(cashbox);
+                          }}
+                        >
+                          حذف
                         </Button>
                       </div>
                     </DataTableCell>

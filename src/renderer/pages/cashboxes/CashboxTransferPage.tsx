@@ -6,6 +6,7 @@ import {
 import { PATHS } from "../../routes/path";
 import { cashboxesService, translateCashboxError } from "./cashboxesService";
 import { RefreshCw } from "lucide-react";
+import { currencyName, currencySymbol, formatMoney } from "./currency";
 
 export default function CashboxTransferPage() {
   const nav = useNavigate();
@@ -86,7 +87,7 @@ export default function CashboxTransferPage() {
                 { value: "", label: "اختر الصندوق المصدر" },
                 ...cashboxes.map((c) => ({
                   value: String(c.id),
-                  label: `${c.name} — الرصيد: ${Number(c.balance).toLocaleString("en-US")} ${c.currency}`,
+                  label: `${c.name} — الرصيد: ${formatMoney(c.balance, c.currency)}`,
                 })),
               ]}
             />
@@ -100,7 +101,7 @@ export default function CashboxTransferPage() {
                 { value: "", label: "اختر الصندوق الوجهة" },
                 ...cashboxes.map((c) => ({
                   value: String(c.id),
-                  label: `${c.name} (${c.currency})`,
+                  label: `${c.name} (${currencyName(c.currency)} · ${currencySymbol(c.currency)})`,
                 })),
               ]}
             />
@@ -135,12 +136,12 @@ export default function CashboxTransferPage() {
         )}
         {currencyMismatch && (
           <p className="mt-3 text-sm text-[var(--warning)]">
-            عملة الصندوقين مختلفة ({fromBox?.currency} ≠ {toBox?.currency}).
+            عملة الصندوقين مختلفة ({currencyName(fromBox?.currency)} ≠ {currencyName(toBox?.currency)}).
           </p>
         )}
         {insufficientBalance && !sameBox && (
           <p className="mt-3 text-sm text-[var(--warning)]">
-            الرصيد الحالي ({Number(fromBox?.balance).toLocaleString("en-US")} {fromBox?.currency}) أقل من المبلغ المطلوب.
+            الرصيد الحالي ({formatMoney(fromBox?.balance, fromBox?.currency)}) أقل من المبلغ المطلوب.
           </p>
         )}
 

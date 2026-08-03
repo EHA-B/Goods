@@ -41,6 +41,8 @@ import BackupSettingsPage from "../pages/settings/BackupSettingsPage";
 import AboutSettingsPage from "../pages/settings/AboutSettingsPage";
 import AppearanceSettingsPage from "../pages/settings/AppearanceSettingsPage";
 import InvoicePrintPage from "../pages/invoices/InvoicePrintPage";
+import ActivityLogsPage from "../pages/activity-logs/ActivityLogsPage";
+import ActivityLogDetailsPage from "../pages/activity-logs/ActivityLogDetailsPage";
 import { PATHS } from "./path";
 
 function AppRouter() {
@@ -93,6 +95,8 @@ function AppRouter() {
                     <Route path={PATHS.TRANSACTION_CATEGORIES} element={<TransactionCategoriesPage />} />
                     <Route path={PATHS.TRANSACTION_CATEGORY_NEW} element={<TransactionCategoryFormPage />} />
                     <Route path={PATHS.TRANSACTION_CATEGORY_EDIT} element={<TransactionCategoryFormPage />} />
+                    <Route path={PATHS.ACTIVITY_LOGS} element={<ActivityLogsPage />} />
+                    <Route path={PATHS.ACTIVITY_LOG_DETAILS} element={<ActivityLogDetailsPage />} />
                     <Route path={PATHS.SETTINGS} element={<SettingsPage />} />
                     <Route path={PATHS.SETTINGS_COMPANY} element={<CompanySettingsPage />} />
                     <Route path={PATHS.SETTINGS_BACKUP} element={<BackupSettingsPage />} />

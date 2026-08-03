@@ -9,7 +9,7 @@ export async function seed(knex: Knex): Promise<void> {
       parent_id: null,
       initial_balance: 0,
       balance: 0,
-      currency: 'SAR',
+      currency: 'SYP',
       notes: 'الصندوق الرئيسي للنظام',
     },
   ]);

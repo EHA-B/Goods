@@ -159,7 +159,7 @@ async function up$5(knex2) {
     table.integer("parent_id").unsigned().nullable();
     table.decimal("balance", 15, 2).defaultTo(0);
     table.decimal("initial_balance", 15, 2).defaultTo(0);
-    table.string("currency", 10).defaultTo("SAR");
+    table.string("currency", 10).defaultTo("SYP");
     table.boolean("isActive").defaultTo(true);
     table.text("notes");
     table.timestamp("created_at").nullable();
@@ -349,7 +349,7 @@ async function up$4(knex2) {
       name: "Commission Holding Cashbox",
       balance: 0,
       initial_balance: 0,
-      currency: "SAR",
+      currency: "SYP",
       isActive: true,
       notes: "Holding account for consignment/commission sales before settlement with suppliers.",
       created_at: knex2.fn.now(),
@@ -556,7 +556,7 @@ async function seed$2(knex2) {
       parent_id: null,
       initial_balance: 0,
       balance: 0,
-      currency: "SAR",
+      currency: "SYP",
       notes: "الصندوق الرئيسي للنظام"
     }
   ]);
@@ -587,10 +587,10 @@ async function seed(knex2) {
   const existingCashbox = await knex2("cashboxes").where("name", "Commission Holding Cashbox").first();
   if (!existingCashbox) {
     await knex2("cashboxes").insert({
-      name: "صندوق الا",
+      name: "صندوق العمولة",
       balance: 0,
       initial_balance: 0,
-      currency: "SAR",
+      currency: "SYP",
       isActive: true,
       notes: "Holding account for consignment/commission sales before settlement with suppliers.",
       created_at: knex2.fn.now(),

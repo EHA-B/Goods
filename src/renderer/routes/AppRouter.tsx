@@ -24,6 +24,9 @@ import PurchasesPage from "../pages/purchases/PurchasesPage";
 import PurchaseFormPage from "../pages/purchases/PurchaseFormPage";
 import PurchaseDetailsPage from "../pages/purchases/PurchaseDetailsPage";
 import PurchasePaymentPage from "../pages/purchases/PurchasePaymentPage";
+import ConsignmentOverviewPage from "../pages/purchases/consignment/ConsignmentOverviewPage";
+import CloseConsignmentPage from "../pages/purchases/consignment/CloseConsignmentPage";
+import ConsignmentSettlementDetailsPage from "../pages/purchases/consignment/ConsignmentSettlementDetailsPage";
 import CashboxesPage from "../pages/cashboxes/CashboxesPage";
 import CashboxFormPage from "../pages/cashboxes/CashboxFormPage";
 import CashboxDetailsPage from "../pages/cashboxes/CashboxDetailsPage";
@@ -82,6 +85,9 @@ function AppRouter() {
                     <Route path={PATHS.PURCHASE_EDIT} element={<PurchaseFormPage />} />
                     <Route path={PATHS.PURCHASE_PAYMENT_NEW} element={<PurchasePaymentPage />} />
                     <Route path={PATHS.PURCHASE_PRINT} element={<InvoicePrintPage type="purchase" />} />
+                    <Route path={PATHS.PURCHASE_CONSIGNMENT} element={<ConsignmentOverviewPage />} />
+                    <Route path={PATHS.PURCHASE_CLOSE_CONSIGNMENT} element={<CloseConsignmentPage />} />
+                    <Route path={PATHS.PURCHASE_CONSIGNMENT_SETTLEMENT} element={<ConsignmentSettlementDetailsPage />} />
                     <Route path={PATHS.CASHBOXES} element={<CashboxesPage />} />
                     <Route path={PATHS.CASHBOX_NEW} element={<CashboxFormPage />} />
                     <Route path={PATHS.CASHBOX_DETAILS} element={<CashboxDetailsPage />} />

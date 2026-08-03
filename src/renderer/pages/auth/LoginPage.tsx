@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import StockLiteLogo from "../../components/brand/StockLiteLogo";
 import Button from "../../components/ui/Button";
-import Checkbox from "../../components/ui/Checkbox";
 import Input from "../../components/ui/Input";
 import { useAuth } from "../../auth/AuthContext";
 import { PATHS } from "../../routes/path";
@@ -15,7 +14,6 @@ export default function LoginPage() {
   const location = useLocation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
@@ -42,7 +40,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      await auth.login({ username, password, remember });
+      await auth.login({ username, password });
       const from =
         (location.state as { from?: string } | null)?.from ?? PATHS.DASHBOARD;
       navigate(from, { replace: true });
@@ -140,14 +138,6 @@ export default function LoginPage() {
               )}
             </label>
 
-            <Checkbox
-              checked={remember}
-              onChange={(event) => setRemember(event.target.checked)}
-              className="text-sm font-medium text-[var(--text-secondary)]"
-            >
-              تذكرني
-            </Checkbox>
-
             <Button
               type="submit"
               size="lg"
@@ -161,9 +151,6 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <p className="mt-5 text-center text-[11px] text-[var(--text-muted)]">
-            النسخة التجريبية: <b dir="ltr">admin</b> / <b dir="ltr">admin123</b>
-          </p>
         </div>
       </section>
     </main>

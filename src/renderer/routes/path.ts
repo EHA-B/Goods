@@ -55,4 +55,5 @@ export const PATHS = {
     SETTINGS_BACKUP: "/settings/backup",
     SETTINGS_ABOUT: "/settings/about",
     SETTINGS_APPEARANCE: "/settings/appearance",
+    SETTINGS_SECURITY: "/settings/security",
 } as const;

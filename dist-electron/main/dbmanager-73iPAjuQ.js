@@ -566,18 +566,18 @@ const cashboxesSeed = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defin
   seed: seed$2
 }, Symbol.toStringTag, { value: "Module" }));
 async function seed$1(knex2) {
-  await knex2("users").del();
-  const hashedPassword = await bcrypt.hash("password", 10);
-  await knex2("users").insert([
-    {
-      username: "admin",
-      password_hash: hashedPassword,
-      full_name: "مدير النظام",
-      email: "admin@farmersmarket.com",
-      role: "admin",
-      isActive: true
-    }
-  ]);
+  const existingUser = await knex2("users").orderBy("id", "asc").first();
+  if (existingUser) return;
+  const hashedPassword = await bcrypt.hash("password", 12);
+  await knex2("users").insert({
+    username: "admin",
+    password_hash: hashedPassword,
+    full_name: "مدير النظام",
+    role: "admin",
+    isActive: true,
+    created_at: knex2.fn.now(),
+    updated_at: knex2.fn.now()
+  });
 }
 const usersSeed = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,

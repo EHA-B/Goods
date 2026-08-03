@@ -40,6 +40,7 @@ import CompanySettingsPage from "../pages/settings/CompanySettingsPage";
 import BackupSettingsPage from "../pages/settings/BackupSettingsPage";
 import AboutSettingsPage from "../pages/settings/AboutSettingsPage";
 import AppearanceSettingsPage from "../pages/settings/AppearanceSettingsPage";
+import SecuritySettingsPage from "../pages/settings/SecuritySettingsPage";
 import InvoicePrintPage from "../pages/invoices/InvoicePrintPage";
 import ActivityLogsPage from "../pages/activity-logs/ActivityLogsPage";
 import ActivityLogDetailsPage from "../pages/activity-logs/ActivityLogDetailsPage";
@@ -102,6 +103,7 @@ function AppRouter() {
                     <Route path={PATHS.SETTINGS_BACKUP} element={<BackupSettingsPage />} />
                     <Route path={PATHS.SETTINGS_ABOUT} element={<AboutSettingsPage />} />
                     <Route path={PATHS.SETTINGS_APPEARANCE} element={<AppearanceSettingsPage />} />
+                    <Route path={PATHS.SETTINGS_SECURITY} element={<SecuritySettingsPage />} />
                     <Route path="*" element={<Navigate to={PATHS.DASHBOARD} replace />} />
                   </Route>
                 </Route>

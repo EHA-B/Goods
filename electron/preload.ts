@@ -56,6 +56,14 @@ const crudApi = (entity: string, methodNames: {
 });
 
 const stockliteApi = {
+  auth: {
+    login: (input: { username: string; password: string }) =>
+      invokeApi("api:auth:login", input),
+    logout: () => invokeApi("api:auth:logout"),
+    getCurrentUser: () => invokeApi("api:auth:getCurrentUser"),
+    changePassword: (input: { currentPassword: string; newPassword: string }) =>
+      invokeApi("api:auth:changePassword", input),
+  },
   system: {
     getAppInfo: () =>
       invokeApi("api:system:getAppInfo"),
@@ -239,14 +247,6 @@ const stockliteApi = {
     remove: "deleteTransaction",
   }),
 
-  users: crudApi("user", {
-    create: "createUser",
-    get: "getUser",
-    list: "getAllUsers",
-    update: "updateUser",
-    remove: "deleteUser",
-  }),
-
   activityLogs: crudApi("activityLog", {
     create: "createActivityLog",
     get: "getActivityLog",
@@ -257,24 +257,3 @@ const stockliteApi = {
 };
 
 contextBridge.exposeInMainWorld("stockliteApi", stockliteApi);
-
-contextBridge.exposeInMainWorld("ipcRenderer", {
-  on(...args: Parameters<typeof ipcRenderer.on>) {
-    const [channel, listener] = args;
-    return ipcRenderer.on(channel, (event, ...values) =>
-      listener(event, ...values),
-    );
-  },
-  off(...args: Parameters<typeof ipcRenderer.off>) {
-    const [channel, ...rest] = args;
-    return ipcRenderer.off(channel, ...rest);
-  },
-  send(...args: Parameters<typeof ipcRenderer.send>) {
-    const [channel, ...rest] = args;
-    return ipcRenderer.send(channel, ...rest);
-  },
-  invoke(...args: Parameters<typeof ipcRenderer.invoke>) {
-    const [channel, ...rest] = args;
-    return ipcRenderer.invoke(channel, ...rest);
-  },
-});

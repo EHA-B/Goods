@@ -24,6 +24,12 @@ const crudApi = (entity, methodNames) => ({
   remove: (id) => invokeApi(`api:${entity}:${methodNames.remove}`, id)
 });
 const stockliteApi = {
+  auth: {
+    login: (input) => invokeApi("api:auth:login", input),
+    logout: () => invokeApi("api:auth:logout"),
+    getCurrentUser: () => invokeApi("api:auth:getCurrentUser"),
+    changePassword: (input) => invokeApi("api:auth:changePassword", input)
+  },
   system: {
     getAppInfo: () => invokeApi("api:system:getAppInfo")
   },
@@ -166,13 +172,6 @@ const stockliteApi = {
     update: "updateTransaction",
     remove: "deleteTransaction"
   }),
-  users: crudApi("user", {
-    create: "createUser",
-    get: "getUser",
-    list: "getAllUsers",
-    update: "updateUser",
-    remove: "deleteUser"
-  }),
   activityLogs: crudApi("activityLog", {
     create: "createActivityLog",
     get: "getActivityLog",
@@ -182,24 +181,3 @@ const stockliteApi = {
   })
 };
 electron.contextBridge.exposeInMainWorld("stockliteApi", stockliteApi);
-electron.contextBridge.exposeInMainWorld("ipcRenderer", {
-  on(...args) {
-    const [channel, listener] = args;
-    return electron.ipcRenderer.on(
-      channel,
-      (event, ...values) => listener(event, ...values)
-    );
-  },
-  off(...args) {
-    const [channel, ...rest] = args;
-    return electron.ipcRenderer.off(channel, ...rest);
-  },
-  send(...args) {
-    const [channel, ...rest] = args;
-    return electron.ipcRenderer.send(channel, ...rest);
-  },
-  invoke(...args) {
-    const [channel, ...rest] = args;
-    return electron.ipcRenderer.invoke(channel, ...rest);
-  }
-});

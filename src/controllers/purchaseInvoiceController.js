@@ -496,74 +496,249 @@ class PurchaseInvoiceController {
         return { sales, remainingStock };
     }
 
-    async closeCommissionInvoice(id, input) {
-        if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID مطلوب' };
-        if (!input || input.commission_percentage === undefined || !input.cashbox_id) {
-            throw { code: 'VALIDATION_ERROR', message: 'commission_percentage و cashbox_id مطلوبان' };
+
+    // ─── Consignment Settlement ────────────────────────────────────────────────
+
+    async getConsignmentSummary(invoiceId) {
+        if (!invoiceId) throw { code: 'VALIDATION_ERROR', message: 'ID مطلوب' };
+        const db = await dbmanager.init();
+
+        const invoice = await dbGet(db, 'SELECT * FROM purchase_invoices WHERE id = ?', [invoiceId]);
+        if (!invoice) throw { code: 'PURCHASE_NOT_FOUND', message: 'الفاتورة غير موجودة' };
+        if (invoice.invoice_type !== 'consignment') throw { code: 'NOT_CONSIGNMENT_INVOICE', message: 'ليست فاتورة أمانة' };
+
+        const supplier = invoice.supplier_id ? await dbGet(db, 'SELECT * FROM suppliers WHERE id = ?', [invoice.supplier_id]) : null;
+
+        const salesTotalRow = await dbGet(db, `
+            SELECT SUM(sii.quantity) as sold_quantity, SUM(sii.line_total) as total_sales
+            FROM sale_invoice_items sii
+            JOIN sale_invoices si ON sii.sale_invoice_id = si.id
+            JOIN stock_batches sb ON sii.stock_batch_id = sb.id
+            WHERE sb.purchase_invoice_id = ? AND si.status != 'cancelled'
+        `, [invoiceId]);
+
+        const totalSalesAmount = normalizeAmount(salesTotalRow?.total_sales ?? 0);
+        const totalSoldQuantity = Number(salesTotalRow?.sold_quantity ?? 0);
+
+        const stockSummary = await dbGet(db, `
+            SELECT SUM(quantity) as received_quantity, SUM(remaining_quantity) as remaining_quantity
+            FROM stock_batches
+            WHERE purchase_invoice_id = ?
+        `, [invoiceId]);
+
+        const receivedQuantity = Number(stockSummary?.received_quantity ?? 0);
+        const remainingQuantity = Number(stockSummary?.remaining_quantity ?? 0);
+
+        let settlement = null;
+        if (invoice.consignment_settlement_id) {
+            settlement = await dbGet(db, 'SELECT * FROM consignment_settlements WHERE id = ?', [invoice.consignment_settlement_id]);
         }
 
-        const commissionPercentage = Number(input.commission_percentage) || 0;
-        const targetCashboxId = input.cashbox_id;
+        return {
+            success: true,
+            data: {
+                invoice,
+                supplier,
+                received_quantity: receivedQuantity,
+                sold_quantity: totalSoldQuantity,
+                remaining_quantity: remainingQuantity,
+                total_sales_amount: totalSalesAmount,
+                settlement
+            }
+        };
+    }
+
+    async previewConsignmentClosing(invoiceId, input) {
+        if (!invoiceId) throw { code: 'VALIDATION_ERROR', message: 'ID مطلوب' };
+        const { commission_percentage, cashbox_id, remaining_stock_policy } = input || {};
+
+        if (commission_percentage === undefined) throw { code: 'INVALID_COMMISSION_PERCENTAGE', message: 'نسبة العمولة مطلوبة' };
+        const commPct = Number(commission_percentage);
+        if (isNaN(commPct) || commPct < 0 || commPct > 100) {
+            throw { code: 'INVALID_COMMISSION_PERCENTAGE', message: 'نسبة العمولة غير صالحة' };
+        }
+
+        if (!cashbox_id) throw { code: 'VALIDATION_ERROR', message: 'الصندوق مطلوب' };
+        if (!remaining_stock_policy || !['return_to_supplier', 'spoilage'].includes(remaining_stock_policy)) {
+             throw { code: 'INVALID_REMAINING_STOCK_POLICY', message: 'سياسة المخزون المتبقي غير صالحة' };
+        }
+
+        const db = await dbmanager.init();
+
+        const invoice = await dbGet(db, 'SELECT * FROM purchase_invoices WHERE id = ?', [invoiceId]);
+        if (!invoice) throw { code: 'PURCHASE_NOT_FOUND', message: 'الفاتورة غير موجودة' };
+        if (invoice.invoice_type !== 'consignment') throw { code: 'NOT_CONSIGNMENT_INVOICE', message: 'ليست فاتورة أمانة' };
+        if (invoice.settlement_status === 'settled') throw { code: 'CONSIGNMENT_ALREADY_CLOSED', message: 'تم إغلاق هذه الفاتورة مسبقاً' };
+        if (invoice.status === 'cancelled') throw { code: 'PURCHASE_ALREADY_CANCELLED', message: 'الفاتورة ملغاة' };
+
+        const cashbox = await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [cashbox_id]);
+        if (!cashbox) throw { code: 'CASHBOX_NOT_FOUND', message: 'الصندوق غير موجود' };
+        if (!cashbox.isActive) throw { code: 'INACTIVE_CASHBOX', message: 'الصندوق غير نشط' };
+
+        const salesTotalRow = await dbGet(db, `
+            SELECT SUM(sii.line_total) as total_sales
+            FROM sale_invoice_items sii
+            JOIN sale_invoices si ON sii.sale_invoice_id = si.id
+            JOIN stock_batches sb ON sii.stock_batch_id = sb.id
+            WHERE sb.purchase_invoice_id = ? AND si.status != 'cancelled'
+        `, [invoiceId]);
+        const totalSalesAmount = normalizeAmount(salesTotalRow?.total_sales ?? 0);
+
+        const commissionAmount = normalizeAmount((totalSalesAmount * commPct) / 100);
+        const supplierShare = normalizeAmount(totalSalesAmount - commissionAmount);
+
+        if (supplierShare > 0 && cashbox.balance < supplierShare) {
+            throw { code: 'INSUFFICIENT_BALANCE', message: 'الرصيد في الصندوق لا يكفي للدفع للمورد' };
+        }
+
+        const remainingStockQuery = await dbGet(db, 'SELECT SUM(remaining_quantity) as rem FROM stock_batches WHERE purchase_invoice_id = ?', [invoiceId]);
+        const remainingQuantity = Number(remainingStockQuery?.rem ?? 0);
+
+        const calculationHash = require('crypto').createHash('sha256').update(
+            `${invoiceId}_${totalSalesAmount}_${remainingQuantity}_${remaining_stock_policy}`
+        ).digest('hex');
+
+        return {
+            success: true,
+            data: {
+                total_sales_amount: totalSalesAmount,
+                commission_percentage: commPct,
+                commission_amount: commissionAmount,
+                supplier_share: supplierShare,
+                remaining_quantity: remainingQuantity,
+                stock_resolution_preview: remaining_stock_policy,
+                cashbox_balance: cashbox.balance,
+                cashbox_balance_after: normalizeAmount(cashbox.balance - supplierShare),
+                currency: cashbox.currency,
+                calculation_hash: calculationHash
+            }
+        };
+    }
+
+    async closeCommission(invoiceId, input) {
+        if (!invoiceId) throw { code: 'VALIDATION_ERROR', message: 'ID مطلوب' };
+        const { commission_percentage, cashbox_id, remaining_stock_policy, calculation_hash, notes, settlement_date } = input || {};
+
+        if (!calculation_hash) throw { code: 'VALIDATION_ERROR', message: 'Calculation hash مطلوب' };
+        
+        const commPct = Number(commission_percentage);
+        if (isNaN(commPct) || commPct < 0 || commPct > 100) throw { code: 'INVALID_COMMISSION_PERCENTAGE', message: 'نسبة العمولة غير صالحة' };
+        if (!cashbox_id) throw { code: 'VALIDATION_ERROR', message: 'الصندوق مطلوب' };
+        if (!['return_to_supplier', 'spoilage'].includes(remaining_stock_policy)) throw { code: 'INVALID_REMAINING_STOCK_POLICY', message: 'سياسة المخزون المتبقي غير صالحة' };
 
         const db = await dbmanager.init();
 
         try {
             await dbRun(db, 'BEGIN TRANSACTION');
 
-            const invoice = await dbGet(db, 'SELECT * FROM purchase_invoices WHERE id = ?', [id]);
-            if (!invoice) throw { code: 'NOT_FOUND', message: 'الفاتورة غير موجودة' };
-            if (invoice.invoice_type !== 'consignment') throw { code: 'VALIDATION_ERROR', message: 'هذه العملية متاحة للفواتير الأمانة فقط' };
+            const invoice = await dbGet(db, 'SELECT * FROM purchase_invoices WHERE id = ?', [invoiceId]);
+            if (!invoice) throw { code: 'PURCHASE_NOT_FOUND', message: 'الفاتورة غير موجودة' };
+            if (invoice.invoice_type !== 'consignment') throw { code: 'NOT_CONSIGNMENT_INVOICE', message: 'ليست فاتورة أمانة' };
+            if (invoice.settlement_status === 'settled') throw { code: 'CONSIGNMENT_ALREADY_CLOSED', message: 'تم إغلاق هذه الفاتورة مسبقاً' };
+            if (invoice.status === 'cancelled') throw { code: 'PURCHASE_ALREADY_CANCELLED', message: 'الفاتورة ملغاة' };
+
+            const existingSettlement = await dbGet(db, 'SELECT id FROM consignment_settlements WHERE purchase_invoice_id = ? AND status = "completed"', [invoiceId]);
+            if (existingSettlement) throw { code: 'CONSIGNMENT_ALREADY_CLOSED', message: 'يوجد تسوية مكتملة لهذه الفاتورة' };
+
+            const cashbox = await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [cashbox_id]);
+            if (!cashbox) throw { code: 'CASHBOX_NOT_FOUND', message: 'الصندوق غير موجود' };
+            if (!cashbox.isActive) throw { code: 'INACTIVE_CASHBOX', message: 'الصندوق غير نشط' };
 
             const salesTotalRow = await dbGet(db, `
                 SELECT SUM(sii.line_total) as total_sales
                 FROM sale_invoice_items sii
+                JOIN sale_invoices si ON sii.sale_invoice_id = si.id
                 JOIN stock_batches sb ON sii.stock_batch_id = sb.id
-                WHERE sb.purchase_invoice_id = ?
-            `, [id]);
-            const totalSalesRevenue = Number(salesTotalRow?.total_sales ?? 0);
+                WHERE sb.purchase_invoice_id = ? AND si.status != 'cancelled'
+            `, [invoiceId]);
+            const totalSalesAmount = normalizeAmount(salesTotalRow?.total_sales ?? 0);
 
-            const remainingStock = await dbAll(db,
-                'SELECT id, remaining_quantity FROM stock_batches WHERE purchase_invoice_id = ? AND remaining_quantity > 0',
-                [id]
-            );
+            const remainingStockQuery = await dbGet(db, 'SELECT SUM(remaining_quantity) as rem FROM stock_batches WHERE purchase_invoice_id = ?', [invoiceId]);
+            const remainingQuantity = Number(remainingStockQuery?.rem ?? 0);
 
-            for (const batch of remainingStock) {
-                await dbRun(db,
-                    `INSERT INTO stock_adjustments (stock_batch_id, quantity, reason, notes, created_at, updated_at)
-                     VALUES (?, ?, 'إغلاق فاتورة أمانة', 'تم الإغلاق التلقائي عند إقفال الفاتورة', datetime('now'), datetime('now'))`,
-                    [batch.id, batch.remaining_quantity]
-                );
-                await dbRun(db, `UPDATE stock_batches SET remaining_quantity = 0, updated_at = datetime('now') WHERE id = ?`, [batch.id]);
+            const expectedHash = require('crypto').createHash('sha256').update(
+                `${invoiceId}_${totalSalesAmount}_${remainingQuantity}_${remaining_stock_policy}`
+            ).digest('hex');
+
+            if (calculation_hash !== expectedHash) {
+                throw { code: 'CONSIGNMENT_SALES_CHANGED', message: 'المبيعات أو المخزون تغير منذ آخر معاينة. يرجى التحديث والمحاولة مرة أخرى.' };
             }
 
-            const commissionAmount = (totalSalesRevenue * commissionPercentage) / 100;
-            const supplierShare    = totalSalesRevenue - commissionAmount;
+            const commissionAmount = normalizeAmount((totalSalesAmount * commPct) / 100);
+            const supplierShare = normalizeAmount(totalSalesAmount - commissionAmount);
 
-            if (invoice.supplier_id && supplierShare > 0) {
-                await dbRun(db, `UPDATE suppliers SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`, [supplierShare, invoice.supplier_id]);
+            if (supplierShare > 0 && cashbox.balance < supplierShare) {
+                throw { code: 'INSUFFICIENT_BALANCE', message: 'الرصيد في الصندوق لا يكفي للدفع للمورد' };
             }
 
+            const countRow = await dbGet(db, "SELECT count(*) as c FROM consignment_settlements");
+            const settlement_number = 'SET-' + String((countRow?.c || 0) + 1).padStart(6, '0');
+
+            // Insert settlement header
+            const { lastID: settlementId } = await dbRun(db, `
+                INSERT INTO consignment_settlements 
+                (purchase_invoice_id, settlement_number, settlement_date, total_sales_amount, commission_percentage, commission_amount, supplier_share, cashbox_id, currency, remaining_stock_policy, returned_quantity, spoilage_quantity, status, notes, created_at, updated_at)
+                VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, datetime('now'), datetime('now'))
+            `, [invoiceId, settlement_number, totalSalesAmount, commPct, commissionAmount, supplierShare, cashbox_id, cashbox.currency, remaining_stock_policy, remaining_stock_policy === 'return_to_supplier' ? remainingQuantity : 0, remaining_stock_policy === 'spoilage' ? remainingQuantity : 0, notes]);
+
+            const batches = await dbAll(db, 'SELECT * FROM stock_batches WHERE purchase_invoice_id = ?', [invoiceId]);
+            for (const batch of batches) {
+                const soldQuery = await dbGet(db, `
+                    SELECT SUM(sii.quantity) as sold, SUM(sii.line_total) as sales
+                    FROM sale_invoice_items sii
+                    JOIN sale_invoices si ON sii.sale_invoice_id = si.id
+                    WHERE sii.stock_batch_id = ? AND si.status != 'cancelled'
+                `, [batch.id]);
+                const soldQty = Number(soldQuery?.sold ?? 0);
+                const salesAmt = normalizeAmount(soldQuery?.sales ?? 0);
+
+                let movementId = null;
+                if (batch.remaining_quantity > 0) {
+                    const adjustReason = remaining_stock_policy === 'return_to_supplier' ? 'consignment_return_out' : 'consignment_spoilage_out';
+                    const { lastID: moveId } = await dbRun(db, `
+                        INSERT INTO stock_adjustments (stock_batch_id, quantity, reason, notes, quantity_before, quantity_after, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, 0, datetime('now'), datetime('now'))
+                    `, [batch.id, -batch.remaining_quantity, adjustReason, 'إغلاق فاتورة أمانة', batch.remaining_quantity]);
+                    movementId = moveId;
+                    await dbRun(db, 'UPDATE stock_batches SET remaining_quantity = 0, updated_at = datetime("now") WHERE id = ?', [batch.id]);
+                }
+
+                await dbRun(db, `
+                    INSERT INTO consignment_settlement_items 
+                    (settlement_id, product_id, stock_batch_id, received_quantity, sold_quantity, remaining_quantity, sales_amount, resolution_policy, resolved_quantity, stock_movement_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                `, [settlementId, batch.product_id, batch.id, batch.quantity, soldQty, batch.remaining_quantity, salesAmt, remaining_stock_policy, batch.remaining_quantity, movementId]);
+            }
+
+            let paymentId = null;
+            let cashboxTransactionId = null;
             if (supplierShare > 0) {
-                const cashboxRow = await dbGet(db, `SELECT balance FROM cashboxes WHERE id = ?`, [targetCashboxId]);
-                if (!cashboxRow) throw { code: 'NOT_FOUND', message: 'الصندوق المستهدف غير موجود' };
-                const balBefore = normalizeAmount(cashboxRow.balance);
-                const balAfter  = Math.round((balBefore - supplierShare) * 100) / 100;
-                await dbRun(db, `UPDATE cashboxes SET balance = ?, updated_at = datetime('now') WHERE id = ?`, [balAfter, targetCashboxId]);
-                await dbRun(db,
-                    `INSERT INTO cashbox_transactions (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
-                     VALUES (?, 'purchase', ?, ?, 'out', ?, ?, datetime('now'), ?, datetime('now'), datetime('now'))`,
-                    [targetCashboxId, id, supplierShare, balBefore, balAfter, `تسوية فاتورة أمانة ${invoice.invoice_number}`]
-                );
+                const { lastID: payId } = await dbRun(db, `
+                    INSERT INTO payments (payment_number, payment_type, reference_type, reference_id, supplier_id, cashbox_id, amount, payment_date, notes, created_at, updated_at)
+                    VALUES (?, 'purchase', 'consignment_settlement', ?, ?, ?, ?, datetime('now'), ?, datetime('now'), datetime('now'))
+                `, [`PAY-${Date.now()}`, settlementId, invoice.supplier_id, cashbox_id, supplierShare, `دفع مستحقات فاتورة أمانة ${invoice.invoice_number}`]);
+                paymentId = payId;
+
+                const balBefore = normalizeAmount(cashbox.balance);
+                const balAfter = normalizeAmount(balBefore - supplierShare);
+                await dbRun(db, 'UPDATE cashboxes SET balance = ?, updated_at = datetime("now") WHERE id = ?', [balAfter, cashbox_id]);
+                
+                const { lastID: ctxId } = await dbRun(db, `
+                    INSERT INTO cashbox_transactions (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
+                    VALUES (?, 'purchase', ?, ?, 'out', ?, ?, datetime('now'), ?, datetime('now'), datetime('now'))
+                `, [cashbox_id, invoiceId, supplierShare, balBefore, balAfter, `تسوية فاتورة أمانة ${invoice.invoice_number}`]);
+                cashboxTransactionId = ctxId;
             }
 
-            await dbRun(db, `UPDATE purchase_invoices SET status = 'paid', updated_at = datetime('now') WHERE id = ?`, [id]);
-            await logActivity(db, 'purchase_commission_closed', 'purchase_invoices', id, { commission_percentage: commissionPercentage, supplier_share: supplierShare });
+            await dbRun(db, 'UPDATE consignment_settlements SET payment_id = ?, cashbox_transaction_id = ? WHERE id = ?', [paymentId, cashboxTransactionId, settlementId]);
+            await dbRun(db, 'UPDATE purchase_invoices SET settlement_status = "settled", settled_at = datetime("now"), consignment_settlement_id = ?, updated_at = datetime("now") WHERE id = ?', [settlementId, invoiceId]);
+            
+            await logActivity(db, 'purchase_commission_closed', 'purchase_invoices', invoiceId, { settlement_id: settlementId });
             await dbRun(db, 'COMMIT');
 
             return {
                 success: true,
-                message: 'تم إغلاق الفاتورة بنجاح',
-                details: { total_sales: totalSalesRevenue, commission_percentage: commissionPercentage, commission_amount: commissionAmount, supplier_share: supplierShare, spoilage_items_count: remainingStock.length }
+                data: { settlement_id: settlementId }
             };
 
         } catch (err) {
@@ -571,6 +746,84 @@ class PurchaseInvoiceController {
             throw err;
         }
     }
+
+    async getConsignmentSettlement(settlementId) {
+        if (!settlementId) throw { code: 'VALIDATION_ERROR', message: 'ID مطلوب' };
+        const db = await dbmanager.init();
+
+        const settlement = await dbGet(db, 'SELECT * FROM consignment_settlements WHERE id = ?', [settlementId]);
+        if (!settlement) throw { code: 'CONSIGNMENT_SETTLEMENT_NOT_FOUND', message: 'التسوية غير موجودة' };
+
+        const items = await dbAll(db, 'SELECT * FROM consignment_settlement_items WHERE settlement_id = ?', [settlementId]);
+
+        return {
+            success: true,
+            data: { settlement, items }
+        };
+    }
+
+    async reverseCommissionSettlement(settlementId, reason) {
+        if (!settlementId) throw { code: 'VALIDATION_ERROR', message: 'ID مطلوب' };
+        const db = await dbmanager.init();
+
+        try {
+            await dbRun(db, 'BEGIN TRANSACTION');
+
+            const settlement = await dbGet(db, 'SELECT * FROM consignment_settlements WHERE id = ?', [settlementId]);
+            if (!settlement) throw { code: 'CONSIGNMENT_SETTLEMENT_NOT_FOUND', message: 'التسوية غير موجودة' };
+            if (settlement.status === 'reversed') throw { code: 'CONSIGNMENT_SETTLEMENT_ALREADY_REVERSED', message: 'التسوية ملغاة مسبقاً' };
+
+            const items = await dbAll(db, 'SELECT * FROM consignment_settlement_items WHERE settlement_id = ?', [settlementId]);
+            for (const item of items) {
+                if (item.resolved_quantity > 0) {
+                    const batch = await dbGet(db, 'SELECT * FROM stock_batches WHERE id = ?', [item.stock_batch_id]);
+                    if (batch) {
+                        const newQty = normalizeAmount(batch.remaining_quantity + item.resolved_quantity);
+                        await dbRun(db, 'UPDATE stock_batches SET remaining_quantity = ?, updated_at = datetime("now") WHERE id = ?', [newQty, batch.id]);
+                        
+                        await dbRun(db, `
+                            INSERT INTO stock_adjustments (stock_batch_id, quantity, reason, notes, quantity_before, quantity_after, created_at, updated_at)
+                            VALUES (?, ?, 'consignment_settlement_reverse_in', ?, ?, ?, datetime('now'), datetime('now'))
+                        `, [batch.id, item.resolved_quantity, reason || 'إلغاء تسوية أمانة', batch.remaining_quantity, newQty]);
+                    }
+                }
+            }
+
+            if (settlement.supplier_share > 0) {
+                const cashbox = await dbGet(db, 'SELECT balance FROM cashboxes WHERE id = ?', [settlement.cashbox_id]);
+                if (cashbox) {
+                    const balBefore = normalizeAmount(cashbox.balance);
+                    const balAfter = normalizeAmount(balBefore + settlement.supplier_share);
+                    await dbRun(db, 'UPDATE cashboxes SET balance = ?, updated_at = datetime("now") WHERE id = ?', [balAfter, settlement.cashbox_id]);
+
+                    await dbRun(db, `
+                        INSERT INTO cashbox_transactions (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
+                        VALUES (?, 'purchase', ?, ?, 'in', ?, ?, datetime('now'), ?, datetime('now'), datetime('now'))
+                    `, [settlement.cashbox_id, settlement.purchase_invoice_id, settlement.supplier_share, balBefore, balAfter, `إلغاء تسوية أمانة ${settlement.settlement_number}`]);
+                }
+            }
+
+            if (settlement.payment_id) {
+                await dbRun(db, 'DELETE FROM payments WHERE id = ?', [settlement.payment_id]);
+            }
+            if (settlement.cashbox_transaction_id) {
+                await dbRun(db, 'UPDATE cashbox_transactions SET reversed_transaction_id = 1 WHERE id = ?', [settlement.cashbox_transaction_id]);
+            }
+
+            await dbRun(db, 'UPDATE consignment_settlements SET status = "reversed", reversal_reason = ?, updated_at = datetime("now") WHERE id = ?', [reason, settlementId]);
+            await dbRun(db, 'UPDATE purchase_invoices SET settlement_status = "reversed", updated_at = datetime("now") WHERE id = ?', [settlement.purchase_invoice_id]);
+
+            await logActivity(db, 'purchase_commission_reversed', 'purchase_invoices', settlement.purchase_invoice_id, { settlement_id: settlementId });
+            await dbRun(db, 'COMMIT');
+
+            return { success: true };
+
+        } catch (err) {
+            await new Promise((res) => db.run('ROLLBACK', () => res()));
+            throw err;
+        }
+    }
+
 }
 
 module.exports = new PurchaseInvoiceController();

@@ -7,7 +7,6 @@ import DataTableHeaderCell from "../common/DataTableHeaderCell";
 import DataTableRow from "../common/DataTableRow";
 import { Button } from "../ui";
 import SaleStatusBadge from "./SaleStatusBadge";
-import type { SaleInvoice } from "./types";
 
 const money = (value: number) => value.toLocaleString("en-US");
 
@@ -15,48 +14,46 @@ export default function SalesTable({
   sales,
   onView,
   onEdit,
-  onDelete,
+  onDelete
 }: {
-  sales: SaleInvoice[];
-  onView: (sale: SaleInvoice) => void;
-  onEdit: (sale: SaleInvoice) => void;
-  onDelete: (sale: SaleInvoice) => void;
+  sales: SaleInvoiceRecord[];
+  onView: (sale: SaleInvoiceRecord) => void;
+  onEdit: (sale: SaleInvoiceRecord) => void;
+  onDelete: (sale: SaleInvoiceRecord) => void;
 }) {
   return (
     <DataTable>
       <DataTableHead>
         <DataTableRow>
-          <DataTableHeaderCell>رقم الفاتورة</DataTableHeaderCell>
-          <DataTableHeaderCell>التاريخ</DataTableHeaderCell>
-          <DataTableHeaderCell>العميل</DataTableHeaderCell>
-          <DataTableHeaderCell>نوع البيع</DataTableHeaderCell>
-          <DataTableHeaderCell>الإجمالي</DataTableHeaderCell>
-          <DataTableHeaderCell>المدفوع</DataTableHeaderCell>
-          <DataTableHeaderCell>المتبقي</DataTableHeaderCell>
-          <DataTableHeaderCell>الحالة</DataTableHeaderCell>
-          <DataTableHeaderCell>الإجراءات</DataTableHeaderCell>
+          {["رقم الفاتورة", "التاريخ", "العميل", "الإجمالي", "المدفوع", "المتبقي", "الحالة", "الإجراءات"].map((header) => (
+            <DataTableHeaderCell key={header}>{header}</DataTableHeaderCell>
+          ))}
         </DataTableRow>
       </DataTableHead>
       <DataTableBody>
-        {sales.map((sale) => (
-          <DataTableRow key={sale.id}>
-            <DataTableCell className="font-bold text-[var(--text-primary)]">{sale.invoiceNumber}</DataTableCell>
-            <DataTableCell>{sale.invoiceDate}</DataTableCell>
-            <DataTableCell>{sale.customerName}</DataTableCell>
-            <DataTableCell>{sale.saleTypeName}</DataTableCell>
-            <DataTableCell>{money(sale.total)}</DataTableCell>
-            <DataTableCell>{money(sale.paidAmount)}</DataTableCell>
-            <DataTableCell>{money(Math.max(0, sale.total - sale.paidAmount))}</DataTableCell>
-            <DataTableCell><SaleStatusBadge status={sale.status} /></DataTableCell>
-            <DataTableCell>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="secondary" startIcon={<Eye size={15} />} onClick={() => onView(sale)}>استعراض</Button>
-                <Button size="sm" variant="secondary" startIcon={<Pencil size={15} />} onClick={() => onEdit(sale)}>تعديل</Button>
-                <Button size="sm" variant="danger" startIcon={<Trash2 size={15} />} onClick={() => onDelete(sale)}>حذف</Button>
-              </div>
-            </DataTableCell>
-          </DataTableRow>
-        ))}
+        {sales.map((sale) => {
+          const editable = sale.status === "draft";
+          return (
+            <DataTableRow key={sale.id}>
+              <DataTableCell className="font-bold text-[var(--text-primary)]">{sale.invoice_number}</DataTableCell>
+              <DataTableCell>{sale.invoice_date}</DataTableCell>
+              <DataTableCell>{sale.customer_name ?? "بيع نقدي"}</DataTableCell>
+              <DataTableCell>{money(sale.total)}</DataTableCell>
+              <DataTableCell>{money(sale.paid_amount)}</DataTableCell>
+              <DataTableCell>{money(sale.remaining_amount)}</DataTableCell>
+              <DataTableCell>
+                <SaleStatusBadge status={sale.status as never} />
+              </DataTableCell>
+              <DataTableCell>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="secondary" startIcon={<Eye size={15} />} onClick={() => onView(sale)}>استعراض</Button>
+                  <Button size="sm" variant="secondary" startIcon={<Pencil size={15} />} disabled={!editable} title={!editable ? "التعديل متاح للفواتير المسودة فقط" : undefined} onClick={() => onEdit(sale)}>تعديل</Button>
+                  <Button size="sm" variant="danger" startIcon={<Trash2 size={15} />} disabled={!editable} title={!editable ? "الحذف متاح للفواتير المسودة فقط" : undefined} onClick={() => onDelete(sale)}>حذف</Button>
+                </div>
+              </DataTableCell>
+            </DataTableRow>
+          );
+        })}
       </DataTableBody>
     </DataTable>
   );

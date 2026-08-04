@@ -26,7 +26,7 @@ export default function StockMovementBadge({
       ? "success"
       : type === "sale" ||
           type === "purchase_return"
-        ? "info"
+        ? "primary"
         : "warning";
 
   return (

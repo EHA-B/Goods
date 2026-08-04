@@ -4,12 +4,13 @@ import { Minus, Plus } from "lucide-react";
 
 export type NumberInputProps = Omit<
   InputHTMLAttributes<HTMLInputElement>,
-  "type" | "size"
+  "type" | "size" | "value"
 > & {
   error?: boolean;
   suffix?: string;
   step?: number;
   showControls?: boolean;
+  value?: string | number;
 };
 
 const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(

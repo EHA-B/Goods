@@ -458,18 +458,23 @@ interface Window {
       reverseSale(paymentId: number, reason: string): Promise<{ reversedPayment: PaymentRecord; invoice: SaleInvoiceRecord; cashbox: CashboxApiRecord }>;
       reversePurchase(paymentId: number, reason: string): Promise<{ reversedPayment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
     };
-    purchaseInvoices: {
+    purchases: {
       get(id: number): Promise<PurchaseInvoiceRecord>;
-      list(): Promise<PurchaseInvoiceRecord[]>;
-      listFiltered(filters?: InvoiceListFilters, pagination?: PaginationInput): Promise<PaginatedInvoices<PurchaseInvoiceRecord>>;
+      getAll(): Promise<PurchaseInvoiceRecord[]>;
+      list(filters?: InvoiceListFilters, pagination?: PaginationInput): Promise<PaginatedInvoices<PurchaseInvoiceRecord>>;
       getDetails(id: number): Promise<PurchaseInvoiceDetails>;
       createFull(input: CreatePurchaseInvoiceInput): Promise<PurchaseInvoiceDetails>;
       cancel(id: number, reason: string): Promise<PurchaseInvoiceDetails>;
+      recordPayment(input: RecordPurchasePaymentInput): Promise<{ payment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
+      reversePayment(paymentId: number, reason: string): Promise<{ reversedPayment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
       deleteDraft(id: number): Promise<{ success: true }>;
       getSalesDetails(id: number): Promise<unknown>;
+      getConsignmentSummary(id: number): Promise<unknown>;
+      previewConsignmentClosing(id: number, input?: unknown): Promise<unknown>;
       closeCommission(id: number, input?: unknown): Promise<unknown>;
+      getConsignmentSettlement(id: number): Promise<unknown>;
+      reverseConsignmentSettlement(id: number, reason: string): Promise<unknown>;
     };
-    purchaseInvoiceItems: GenericCrudApi;
     saleInvoices: {
       get(id: number): Promise<SaleInvoiceRecord>;
       list(): Promise<SaleInvoiceRecord[]>;
@@ -485,7 +490,13 @@ interface Window {
     saleTypes: GenericCrudApi;
     settings: GenericCrudApi;
     transactionCategories: GenericCrudApi;
-    transactions: GenericCrudApi;
+    transactions: {
+      list(filters?: any, pagination?: any): Promise<any>;
+      getDetails(id: number): Promise<any>;
+      createFinancial(input: any): Promise<any>;
+      cancel(id: number, reason: string): Promise<any>;
+      summary(filters?: any): Promise<any>;
+    };
     activityLogs: GenericCrudApi;
   };
 }

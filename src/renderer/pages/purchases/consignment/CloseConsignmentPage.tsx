@@ -1,4 +1,4 @@
-import { CheckCircle2, HandCoins } from "lucide-react";
+import { HandCoins } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import CommissionPreviewCard from "../../../components/consignment/CommissionPreviewCard";
@@ -16,7 +16,7 @@ export default function CloseConsignmentPage() {
   const [commission, setCommission] = useState("10"); const [cashboxId, setCashboxId] = useState(""); const [date, setDate] = useState(today);
   const [policy, setPolicy] = useState<RemainingStockPolicy>("return_to_supplier"); const [notes, setNotes] = useState("");
   const [preview, setPreview] = useState<ConsignmentClosingPreview | null>(null); const [loading, setLoading] = useState(true); const [submitting, setSubmitting] = useState(false); const [confirmOpen, setConfirmOpen] = useState(false); const [error, setError] = useState("");
-  useEffect(() => { void (async () => { try { setError(""); const [s, c] = await Promise.all([consignmentService.getSummary(id), consignmentService.getCashboxes()]); setSummary(s); setCashboxes(c); const matching = c.find((x) => x.currency === s.invoice.currency); if (matching) setCashboxId(String(matching.id)); } catch (e) { setError(e instanceof Error ? e.message : "تعذر تحميل بيانات التسوية."); } finally { setLoading(false); } })(); }, [id]);
+  useEffect(() => { void (async () => { try { setError(""); const [s, c] = await Promise.all([consignmentService.getSummary(id), consignmentService.getCashboxes()]); setSummary(s); setCashboxes(c.map((c: any) => ({ ...c, isActive: !!c.isActive }))); const matching = c.find((x) => x.currency === s.invoice.currency); if (matching) setCashboxId(String(matching.id)); } catch (e) { setError(e instanceof Error ? e.message : "تعذر تحميل بيانات التسوية."); } finally { setLoading(false); } })(); }, [id]);
   const input = useMemo<CloseConsignmentInput>(() => ({ commission_percentage: Number(commission), cashbox_id: Number(cashboxId), settlement_date: date, remaining_stock_policy: policy, notes: notes.trim() || null }), [commission, cashboxId, date, policy, notes]);
   useEffect(() => { if (!summary || !cashboxId) return; void consignmentService.getClosingPreview(id, input).then(setPreview); }, [summary, id, input, cashboxId]);
   if (loading) return <div className="flex min-h-72 items-center justify-center"><LoadingSpinner /></div>;

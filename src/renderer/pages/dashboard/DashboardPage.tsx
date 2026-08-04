@@ -21,19 +21,19 @@ function DashboardPage() {
   async function loadDashboard() {
     try {
       setLoading(true); setError("");
-      const [products, customers, suppliers, stockSummary, transactionData] = await Promise.all([
+      const [products, customers, suppliers, stockSummary, transactionsRes] = await Promise.all([
         window.stockliteApi.products.list() as Promise<unknown[]>,
         window.stockliteApi.customers.list() as Promise<unknown[]>,
         window.stockliteApi.suppliers.list() as Promise<unknown[]>,
         window.stockliteApi.stockBatches.summary() as Promise<Record<string, unknown>>,
-        transactionsService.loadAll(),
+        transactionsService.list({}, { page: 1, limit: 10 }),
       ]);
       setData({
         products: products.length,
         customers: customers.length,
         suppliers: suppliers.length,
         lowStock: Number(stockSummary.low_stock_count ?? stockSummary.lowStockCount ?? 0),
-        transactions: transactionData.transactions.sort((a, b) => `${b.transactionDate}-${b.id}`.localeCompare(`${a.transactionDate}-${a.id}`)),
+        transactions: transactionsRes.items.sort((a: any, b: any) => `${b.transaction_date}-${b.id}`.localeCompare(`${a.transaction_date}-${a.id}`)),
       });
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "تعذر تحميل بيانات لوحة التحكم.");

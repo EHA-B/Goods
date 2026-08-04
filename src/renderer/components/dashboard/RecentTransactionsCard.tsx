@@ -16,12 +16,12 @@ export default function RecentTransactionsCard({ items, loading }: { items: Fina
           {items.slice(0, 5).map((item) => (
             <Link key={item.id} to={`/transactions/${item.id}`} className="flex items-center justify-between gap-4 rounded-[var(--radius-sm)] border border-[var(--border)] p-3 transition hover:bg-[var(--surface-hover)]">
               <div className="flex min-w-0 items-center gap-3">
-                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${item.direction === "income" ? "bg-[var(--success-subtle)] text-[var(--success)]" : "bg-[var(--danger)]/10 text-[var(--danger)]"}`}>
-                  {item.direction === "income" ? <ArrowDownLeft size={17} /> : <ArrowUpRight size={17} />}
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${item.type === "income" ? "bg-[var(--success-subtle)] text-[var(--success)]" : "bg-[var(--danger)]/10 text-[var(--danger)]"}`}>
+                  {item.type === "income" ? <ArrowDownLeft size={17} /> : <ArrowUpRight size={17} />}
                 </span>
-                <div className="min-w-0"><p className="truncate text-sm font-bold text-[var(--text-primary)]">{item.categoryName}</p><p className="truncate text-xs text-[var(--text-muted)]">{item.description || item.cashboxName}</p></div>
+                <div className="min-w-0"><p className="truncate text-sm font-bold text-[var(--text-primary)]">{item.category_name}</p><p className="truncate text-xs text-[var(--text-muted)]">{item.description || item.cashbox_name}</p></div>
               </div>
-              <div className="shrink-0 text-left"><p dir="ltr" className="text-sm font-bold tabular-nums">{money(item.amount)} ل.س</p><p dir="ltr" className="mt-1 text-xs text-[var(--text-muted)]">{item.transactionDate}</p></div>
+              <div className="shrink-0 text-left"><p dir="ltr" className="text-sm font-bold tabular-nums">{money(item.amount)} ل.س</p><p dir="ltr" className="mt-1 text-xs text-[var(--text-muted)]">{item.transaction_date}</p></div>
             </Link>
           ))}
         </div>

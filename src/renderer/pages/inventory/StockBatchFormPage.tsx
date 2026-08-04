@@ -9,16 +9,19 @@ import { getInventoryErrorMessage, inventoryService, type InventoryItem } from "
 export default function StockBatchFormPage() {
   const { productId } = useParams(); const navigate = useNavigate(); const id = Number(productId);
   const [product, setProduct] = useState<InventoryItem>(); const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [batchCode, setBatchCode] = useState(""); const [supplierId, setSupplierId] = useState(""); const [quantity, setQuantity] = useState("1"); const [purchasePrice, setPurchasePrice] = useState("0"); const [receivedDate, setReceivedDate] = useState(new Date().toISOString().slice(0, 10)); const [expiryDate, setExpiryDate] = useState(""); const [notes, setNotes] = useState("");
+  const [batchCode, setBatchCode] = useState(""); const [supplierId, setSupplierId] = useState(""); const [quantity, setQuantity] = useState<number>(0); const [purchasePrice, setPurchasePrice] = useState<number>(0); const [receivedDate, setReceivedDate] = useState(new Date().toISOString().split("T")[0]); const [expiryDate, setExpiryDate] = useState(""); const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(true); const [isSaving, setIsSaving] = useState(false); const [error, setError] = useState("");
 
   useEffect(() => { let cancelled = false; (async () => { try { const [details, supplierRows] = await Promise.all([inventoryService.productDetails(id), suppliersService.list()]); if (!cancelled) { setProduct(details.item); setSuppliers(supplierRows.filter((x) => x.isActive)); } } catch (e) { if (!cancelled) setError(getInventoryErrorMessage(e)); } finally { if (!cancelled) setIsLoading(false); } })(); return () => { cancelled = true; }; }, [id]);
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); const q = Number(quantity); const price = Number(purchasePrice);
-    if (!supplierId || !Number.isFinite(q) || q <= 0 || !Number.isFinite(price) || price < 0 || !receivedDate) { setError("اختر المورد وأدخل كمية وسعرًا وتاريخ استلام صالحًا."); return; }
+    event.preventDefault();
+    if (!supplierId) return setError("يرجى اختيار المورد.");
+    if (quantity <= 0) return setError("أدخل كمية صحيحة.");
+    if (purchasePrice < 0) return setError("أدخل سعر شراء صحيح.");
+    if (!receivedDate) return setError("تاريخ الاستلام مطلوب.");
     if (expiryDate && expiryDate < receivedDate) { setError("تاريخ الانتهاء يجب أن يكون بعد تاريخ الاستلام."); return; }
-    try { setIsSaving(true); setError(""); await inventoryService.createBatch({ product_id: id, supplier_id: Number(supplierId), batch_code: batchCode.trim() || null, quantity: q, purchase_price: price, received_date: receivedDate, expiry_date: expiryDate || null, notes: notes.trim() || null, isActive: 1 }); toast.success("تمت إضافة الدفعة بنجاح"); navigate(`/inventory/${id}`); }
+    try { setIsSaving(true); setError(""); await inventoryService.createBatch({ product_id: id, supplier_id: Number(supplierId), batch_code: batchCode || null, quantity, purchase_price: purchasePrice, received_date: receivedDate, expiry_date: expiryDate || null, notes, isActive: 1 }); toast.success("تم إضافة الدفعة بنجاح"); navigate(`/inventory/${id}`); }
     catch (e) { const message = getInventoryErrorMessage(e); setError(message); toast.error(message); } finally { setIsSaving(false); }
   }
 
@@ -30,8 +33,8 @@ export default function StockBatchFormPage() {
     <Card header="بيانات الدفعة"><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
       <FormField label="رقم الدفعة" hint="اختياري"><Input dir="ltr" value={batchCode} placeholder="مثال: BAT-2026-001" onChange={(e) => setBatchCode(e.target.value)} /></FormField>
       <FormField label="اسم المورد" required><Select value={supplierId} placeholder="اختر المورد" options={suppliers.map((s) => ({ value: String(s.id), label: s.name }))} onChange={(e) => setSupplierId(e.target.value)} /></FormField>
-      <FormField label="الكمية" required><NumberInput min={0.001} step="0.001" value={quantity} suffix={product.unit} onChange={(e) => setQuantity(e.target.value)} /></FormField>
-      <FormField label="سعر الشراء" required><NumberInput min={0} value={purchasePrice} suffix="ل.س" onChange={(e) => setPurchasePrice(e.target.value)} /></FormField>
+      <FormField label="الكمية" required><NumberInput min={0.001} step={0.001} value={String(quantity)} suffix={product.unit} onChange={(e) => setQuantity(Number(e.target.value))} /></FormField>
+      <FormField label="سعر الشراء" required><NumberInput min={0} value={String(purchasePrice)} suffix="ل.س" onChange={(e) => setPurchasePrice(Number(e.target.value))} /></FormField>
       <FormField label="تاريخ الاستلام" required><Input type="date" dir="ltr" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} /></FormField>
       <FormField label="تاريخ الانتهاء"><Input type="date" dir="ltr" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} /></FormField>
       <div className="md:col-span-2 xl:col-span-3"><FormField label="ملاحظات"><Textarea rows={5} value={notes} placeholder="ملاحظات خاصة بالدفعة..." onChange={(e) => setNotes(e.target.value)} /></FormField></div>

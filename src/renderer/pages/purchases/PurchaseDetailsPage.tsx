@@ -1,5 +1,5 @@
-import { Banknote, HandCoins, Pencil, Plus, Printer, ReceiptText, Trash2 } from "lucide-react";
-import { useState,useEffect } from "react";
+import { Banknote, HandCoins, Pencil, Plus, Printer, ReceiptText, Trash2, XCircle } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DataTable from "../../components/common/DataTable";
 import DataTableBody from "../../components/common/DataTableBody";
@@ -19,10 +19,12 @@ export default function PurchaseDetailsPage() {
   const navigate = useNavigate();
   const { purchaseId } = useParams();
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [details, setDetails] = useState<PurchaseInvoiceDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const id = Number(purchaseId);
@@ -39,7 +41,8 @@ export default function PurchaseDetailsPage() {
   if (error || !details) return <EmptyState icon={<ReceiptText size={32} />} title="خطأ في التحميل" description={error || "تعذر العثور على فاتورة الشراء المطلوبة."} />;
 
   const { invoice, supplier, items, payments, financial_summary } = details;
-  const canCancel = invoice.status !== "cancelled";
+  const editable = invoice.status === "draft";
+  const canCancel = invoice.status === "confirmed" || invoice.status === "partially_paid";
 
   const handleCancel = async () => {
     setCancelling(true);
@@ -55,8 +58,21 @@ export default function PurchaseDetailsPage() {
     }
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await purchasesService.deleteDraft(invoice.id);
+      navigate(PATHS.PURCHASES);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || "تعذر حذف الفاتورة");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return <>
-    <PageHeader title={`فاتورة الشراء ${purchase.invoiceNumber}`} description="تفاصيل المورد والأصناف ودفعات المخزون والمدفوعات." actions={<div className="flex flex-wrap gap-2"><BackButton to={PATHS.PURCHASES} /><Button variant="secondary" startIcon={<Pencil size={17} />} disabled={!editable} title={!editable ? "التعديل متاح للفواتير المسودة فقط" : undefined} onClick={() => navigate(`/purchases/${purchase.id}/edit`)}>تعديل</Button><Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/purchases/${purchase.id}/print`)}>طباعة / PDF</Button>{purchase.purchaseType === "consignment" && <Button variant="secondary" startIcon={<HandCoins size={17} />} onClick={() => navigate(`/purchases/${purchase.id}/consignment`)}>متابعة الأمانة</Button>}{purchase.status !== "paid" && purchase.status !== "cancelled" && <Button startIcon={<Plus size={17} />} onClick={() => navigate(`/purchases/${purchase.id}/payments/new`)}>تسجيل دفعة</Button>}<Button variant="danger" startIcon={<Trash2 size={17} />} disabled={!editable} title={!editable ? "الحذف متاح للفواتير المسودة فقط" : undefined} onClick={() => setDeleteOpen(true)}>حذف</Button></div>} />
+    <PageHeader title={`فاتورة الشراء ${invoice.invoice_number}`} description="تفاصيل المورد والأصناف ودفعات المخزون والمدفوعات." actions={<div className="flex flex-wrap gap-2"><BackButton to={PATHS.PURCHASES} /><Button variant="secondary" startIcon={<Pencil size={17} />} disabled={!editable} title={!editable ? "التعديل متاح للفواتير المسودة فقط" : undefined} onClick={() => navigate(`/purchases/${invoice.id}/edit`)}>تعديل</Button><Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/print`)}>طباعة / PDF</Button>{invoice.invoice_type === "consignment" && <Button variant="secondary" startIcon={<HandCoins size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/consignment`)}>متابعة الأمانة</Button>}{invoice.status !== "paid" && invoice.status !== "cancelled" && <Button startIcon={<Plus size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/payments/new`)}>تسجيل دفعة</Button>}{canCancel && <Button variant="danger" startIcon={<XCircle size={17} />} onClick={() => setCancelOpen(true)}>إلغاء الفاتورة</Button>}<Button variant="danger" startIcon={<Trash2 size={17} />} disabled={!editable} title={!editable ? "الحذف متاح للفواتير المسودة فقط" : undefined} onClick={() => setDeleteOpen(true)}>حذف</Button></div>} />
     <p className="mb-5 text-xs text-[var(--text-muted)]">ملاحظة: التعديل والحذف متاحان للفواتير <strong className="text-[var(--text-secondary)]">المسودة</strong> فقط، بينما الفواتير المؤكدة والمدفوعة تكون للقراءة فقط حفاظًا على سلامة المخزون والبيانات المالية.</p>
     <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
       <div className="space-y-5">
@@ -161,6 +177,15 @@ export default function PurchaseDetailsPage() {
       message={`هل تريد إلغاء الفاتورة ${invoice.invoice_number}؟ سيتم عكس جميع الدفعات واستعادة أرصدة المورد.`}
       onCancel={() => setCancelOpen(false)}
       onConfirm={handleCancel}
+      loading={cancelling}
+    />
+    <ConfirmDialog
+      open={deleteOpen}
+      title="حذف مسودة الفاتورة"
+      message={`هل تريد حذف المسودة ${invoice.invoice_number} نهائيًا؟`}
+      onCancel={() => setDeleteOpen(false)}
+      onConfirm={handleDelete}
+      loading={deleting}
     />
   </>;
 }

@@ -1,71 +1,145 @@
-import { Pencil, Trash2 } from "lucide-react";
+import { Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import TransactionTypeBadge from "../../components/transactions/TransactionTypeBadge";
-import type { FinancialTransaction } from "../../components/transactions/types";
-import { BackButton, Button, Card, ConfirmDialog, PageHeader } from "../../components/ui";
+import { BackButton, Button, Card, PageHeader, Input, Dialog } from "../../components/ui";
 import { PATHS } from "../../routes/path";
 import { transactionsService } from "./transactionsService";
+import Badge from "../../components/ui/Badge";
+import { toast } from "sonner";
 
 const money = (value: number) => new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 const Row = ({ label, value }: { label: string; value: React.ReactNode }) => <div className="flex justify-between gap-4 border-b border-[var(--border)] py-3 last:border-0"><span className="text-sm text-[var(--text-muted)]">{label}</span><span className="text-sm font-medium text-[var(--text-primary)]">{value}</span></div>;
 
 export default function TransactionDetailsPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const transactionId = Number(id);
-  const [transaction, setTransaction] = useState<FinancialTransaction>();
-  const [confirm, setConfirm] = useState(false);
+  const [data, setData] = useState<any>(null);
+  const [cancelDialog, setCancelDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
   const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    void (async () => {
-      try {
-        setLoading(true);
-        const result = await transactionsService.getTransaction(transactionId);
-        if (!result) throw new Error("المعاملة غير موجودة.");
-        setTransaction(result);
-      } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : "تعذر تحميل المعاملة.");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    void loadData();
   }, [transactionId]);
 
-  async function remove() {
-    if (!transaction) return;
+  async function loadData() {
     try {
-      setDeleting(true);
-      await transactionsService.removeTransaction(transaction.id);
-      navigate(PATHS.TRANSACTIONS);
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "تعذر حذف المعاملة.");
-      setConfirm(false);
+      setLoading(true);
+      const result = await transactionsService.getDetails(transactionId);
+      if (!result || !result.transaction) throw new Error("المعاملة غير موجودة.");
+      setData(result);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "تعذر تحميل المعاملة.");
     } finally {
-      setDeleting(false);
+      setLoading(false);
+    }
+  }
+
+  async function handleCancel() {
+    if (!data?.transaction) return;
+    if (!cancelReason.trim()) {
+      toast.error("يرجى إدخال سبب الإلغاء.");
+      return;
+    }
+
+    try {
+      setCancelling(true);
+      await transactionsService.cancel(data.transaction.id, cancelReason);
+      setCancelDialog(false);
+      toast.success("تم إلغاء المعاملة المالية وعكس أثرها على الصندوق بنجاح.");
+      void loadData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "تعذر إلغاء المعاملة.");
+    } finally {
+      setCancelling(false);
     }
   }
 
   if (loading) return <Card>جاري تحميل المعاملة...</Card>;
-  if (!transaction) return <Card>{error || "المعاملة غير موجودة."}</Card>;
+  if (!data || !data.transaction) return <Card>{error || "المعاملة غير موجودة."}</Card>;
+
+  const { transaction, category, cashbox, cashbox_movement } = data;
 
   return (
     <>
       <PageHeader
         title="تفاصيل المعاملة المالية"
-        description={transaction.referenceNumber || `معاملة #${transaction.id}`}
-        actions={<div className="flex gap-2"><BackButton to={PATHS.TRANSACTIONS} /><Button variant="secondary" startIcon={<Pencil size={16} />} onClick={() => navigate(`/transactions/${transaction.id}/edit`)}>تعديل</Button><Button variant="danger" startIcon={<Trash2 size={16} />} onClick={() => setConfirm(true)}>حذف</Button></div>}
+        description={transaction.reference_number || `معاملة #${transaction.id}`}
+        actions={
+          <div className="flex gap-2">
+            <BackButton to={PATHS.TRANSACTIONS} />
+            {transaction.status === "active" && (
+              <Button variant="danger" startIcon={<Undo2 size={16} />} onClick={() => setCancelDialog(true)}>
+                إلغاء وعكس العملية
+              </Button>
+            )}
+          </div>
+        }
       />
-      <div className="mb-5 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--text-secondary)]">هذه المعاملة محفوظة في قاعدة البيانات، لكنها لا تعدّل رصيد الصندوق في النسخة الحالية.</div>
+      
+      {transaction.status === "cancelled" && (
+        <div className="mb-5 rounded-[var(--radius-md)] border border-[var(--danger)] bg-[var(--danger-light)] px-4 py-3 text-sm text-[var(--danger-dark)]">
+          <strong>معاملة ملغية:</strong> تم إلغاء هذه المعاملة بتاريخ {new Date(transaction.cancelled_at).toLocaleString('ar-SA')} بسبب: "{transaction.cancellation_reason}". أثرها المالي معكوس.
+        </div>
+      )}
+
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card header="معلومات المعاملة"><Row label="النوع" value={<TransactionTypeBadge type={transaction.direction} />} /><Row label="الفئة" value={transaction.categoryName} /><Row label="الصندوق" value={transaction.cashboxName} /><Row label="المبلغ" value={<span dir="ltr" className="tabular-nums">{money(transaction.amount)} ل.س</span>} /><Row label="التاريخ" value={<span dir="ltr">{transaction.transactionDate}</span>} /><Row label="رقم المرجع" value={<span dir="ltr">{transaction.referenceNumber || "—"}</span>} /></Card>
-        <Card header="البيان والملاحظات"><Row label="الوصف" value={transaction.description || "—"} /><Row label="الملاحظات" value={transaction.notes || "—"} /><p className="mt-4 text-xs text-[var(--text-muted)]">هذه معاملة يدوية مستقلة عن فواتير البيع والشراء.</p></Card>
+        <Card header="معلومات المعاملة">
+          <Row label="الحالة" value={transaction.status === "active" ? <Badge variant="success">فعال</Badge> : <Badge variant="danger">ملغي</Badge>} />
+          <Row label="النوع" value={<TransactionTypeBadge type={transaction.direction} />} />
+          <Row label="الفئة" value={category?.name || "—"} />
+          <Row label="الصندوق" value={cashbox?.name || "—"} />
+          <Row label="المبلغ" value={<span dir="ltr" className="font-bold tabular-nums">{money(transaction.amount)} ل.س</span>} />
+          <Row label="التاريخ" value={<span dir="ltr">{transaction.transaction_date}</span>} />
+          <Row label="رقم المرجع" value={<span dir="ltr">{transaction.reference_number || "—"}</span>} />
+        </Card>
+        
+        <div className="flex flex-col gap-5">
+          <Card header="البيان والملاحظات">
+            <Row label="الوصف" value={transaction.description || "—"} />
+            <Row label="الملاحظات" value={transaction.notes || "—"} />
+          </Card>
+          
+          <Card header="معلومات الصندوق (الأثر المالي)">
+            {cashbox_movement ? (
+              <>
+                <Row label="رقم حركة الصندوق" value={`#${cashbox_movement.id}`} />
+                <Row label="أثر الحركة" value={cashbox_movement.direction === "in" ? <span className="text-green-600">دخول أموال</span> : <span className="text-red-600">خروج أموال</span>} />
+              </>
+            ) : (
+              <div className="py-4 text-sm text-[var(--text-muted)] text-center">لا يوجد حركة صندوق مرتبطة</div>
+            )}
+          </Card>
+        </div>
       </div>
+      
       {error && <p className="mt-4 text-sm text-[var(--danger)]">{error}</p>}
-      <ConfirmDialog open={confirm} title="حذف المعاملة" message="سيتم حذف سجل المعاملة فقط، ولن يتغير رصيد الصندوق." loading={deleting} onCancel={() => setConfirm(false)} onConfirm={() => void remove()} />
+
+      {cancelDialog && (
+        <Dialog
+          open={cancelDialog}
+          title="إلغاء المعاملة المالية"
+          onClose={() => setCancelDialog(false)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setCancelDialog(false)} disabled={cancelling}>تراجع</Button>
+              <Button variant="danger" onClick={() => void handleCancel()} disabled={cancelling || !cancelReason.trim()}>تأكيد الإلغاء</Button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-[var(--text-secondary)]">هل أنت متأكد من رغبتك في إلغاء هذه المعاملة؟ سيتم إنشاء حركة صندوق معاكسة فوراً وتحديث الرصيد.</p>
+            <Input
+              placeholder="سبب الإلغاء (مطلوب)"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+            />
+          </div>
+        </Dialog>
+      )}
     </>
   );
 }

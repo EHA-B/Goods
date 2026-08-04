@@ -30,7 +30,7 @@ const customerController = require$1(path.join(__dirname$2, "../../src/controlle
 const paymentController = require$1(path.join(__dirname$2, "../../src/controllers", "paymentController.js"));
 const productController = require$1(path.join(__dirname$2, "../../src/controllers", "productController.js"));
 const purchaseInvoiceController = require$1(path.join(__dirname$2, "../../src/controllers", "purchaseInvoiceController.js"));
-const purchaseInvoiceItemController = require$1(path.join(__dirname$2, "../../src/controllers", "purchaseInvoiceItemController.js"));
+require$1(path.join(__dirname$2, "../../src/controllers", "purchaseInvoiceItemController.js"));
 const saleInvoiceController = require$1(path.join(__dirname$2, "../../src/controllers", "saleInvoiceController.js"));
 const saleInvoiceItemController = require$1(path.join(__dirname$2, "../../src/controllers", "saleInvoiceItemController.js"));
 const saleTypeController = require$1(path.join(__dirname$2, "../../src/controllers", "saleTypeController.js"));
@@ -405,7 +405,7 @@ ipcMain.handle("api:product:getProductWithStock", async (_event, id) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoice:createFullPurchaseInvoice", async (_event, input) => {
+ipcMain.handle("api:purchase:createFull", async (_event, input) => {
   try {
     const result = await purchaseInvoiceController.createFullPurchaseInvoice(input);
     return success(result);
@@ -413,7 +413,7 @@ ipcMain.handle("api:purchaseInvoice:createFullPurchaseInvoice", async (_event, i
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoice:getPurchaseInvoice", async (_event, id) => {
+ipcMain.handle("api:purchase:get", async (_event, id) => {
   try {
     const result = await purchaseInvoiceController.getPurchaseInvoice(id);
     return success(result);
@@ -421,7 +421,7 @@ ipcMain.handle("api:purchaseInvoice:getPurchaseInvoice", async (_event, id) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoice:getPurchaseInvoiceDetails", async (_event, id) => {
+ipcMain.handle("api:purchase:getDetails", async (_event, id) => {
   try {
     const result = await purchaseInvoiceController.getPurchaseInvoiceDetails(id);
     return success(result);
@@ -429,7 +429,7 @@ ipcMain.handle("api:purchaseInvoice:getPurchaseInvoiceDetails", async (_event, i
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoice:listPurchaseInvoices", async (_event, filters, pagination) => {
+ipcMain.handle("api:purchase:list", async (_event, filters, pagination) => {
   try {
     const result = await purchaseInvoiceController.listPurchaseInvoices(filters, pagination);
     return success(result);
@@ -437,7 +437,7 @@ ipcMain.handle("api:purchaseInvoice:listPurchaseInvoices", async (_event, filter
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoice:getAllPurchaseInvoices", async (_event) => {
+ipcMain.handle("api:purchase:getAll", async (_event) => {
   try {
     const result = await purchaseInvoiceController.getAllPurchaseInvoices();
     return success(result);
@@ -445,7 +445,7 @@ ipcMain.handle("api:purchaseInvoice:getAllPurchaseInvoices", async (_event) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoice:cancelPurchaseInvoice", async (_event, id, reason) => {
+ipcMain.handle("api:purchase:cancel", async (_event, id, reason) => {
   try {
     const result = await purchaseInvoiceController.cancelPurchaseInvoice(id, reason);
     return success(result);
@@ -453,7 +453,7 @@ ipcMain.handle("api:purchaseInvoice:cancelPurchaseInvoice", async (_event, id, r
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoice:deleteDraftPurchaseInvoice", async (_event, id) => {
+ipcMain.handle("api:purchase:deleteDraft", async (_event, id) => {
   try {
     const result = await purchaseInvoiceController.deleteDraftPurchaseInvoice(id);
     return success(result);
@@ -461,7 +461,7 @@ ipcMain.handle("api:purchaseInvoice:deleteDraftPurchaseInvoice", async (_event, 
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoice:getPurchaseInvoiceSalesDetails", async (_event, id) => {
+ipcMain.handle("api:purchase:getSalesDetails", async (_event, id) => {
   try {
     const result = await purchaseInvoiceController.getPurchaseInvoiceSalesDetails(id);
     return success(result);
@@ -469,49 +469,57 @@ ipcMain.handle("api:purchaseInvoice:getPurchaseInvoiceSalesDetails", async (_eve
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoice:closeCommissionInvoice", async (_event, id, input) => {
+ipcMain.handle("api:purchase:getConsignmentSummary", async (_event, id) => {
   try {
-    const result = await purchaseInvoiceController.closeCommissionInvoice(id, input);
+    const result = await purchaseInvoiceController.getConsignmentSummary(id);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoiceItem:createPurchaseInvoiceItem", async (_event, input) => {
+ipcMain.handle("api:purchase:previewConsignmentClosing", async (_event, id, input) => {
   try {
-    const result = await purchaseInvoiceItemController.createPurchaseInvoiceItem(input);
+    const result = await purchaseInvoiceController.previewConsignmentClosing(id, input);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoiceItem:getPurchaseInvoiceItem", async (_event, id) => {
+ipcMain.handle("api:purchase:closeCommission", async (_event, id, input) => {
   try {
-    const result = await purchaseInvoiceItemController.getPurchaseInvoiceItem(id);
+    const result = await purchaseInvoiceController.closeCommission(id, input);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoiceItem:getAllPurchaseInvoiceItems", async (_event) => {
+ipcMain.handle("api:purchase:getConsignmentSettlement", async (_event, id) => {
   try {
-    const result = await purchaseInvoiceItemController.getAllPurchaseInvoiceItems();
+    const result = await purchaseInvoiceController.getConsignmentSettlement(id);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoiceItem:updatePurchaseInvoiceItem", async (_event, id, input) => {
+ipcMain.handle("api:purchase:reverseConsignmentSettlement", async (_event, id, reason) => {
   try {
-    const result = await purchaseInvoiceItemController.updatePurchaseInvoiceItem(id, input);
+    const result = await purchaseInvoiceController.reverseCommissionSettlement(id, reason);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:purchaseInvoiceItem:deletePurchaseInvoiceItem", async (_event, id) => {
+ipcMain.handle("api:purchase:recordPayment", async (_event, input) => {
   try {
-    const result = await purchaseInvoiceItemController.deletePurchaseInvoiceItem(id);
+    const result = await paymentController.recordPurchasePayment(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:purchase:reversePayment", async (_event, paymentId, reason) => {
+  try {
+    const result = await paymentController.reversePurchasePayment(paymentId, reason);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
@@ -893,41 +901,41 @@ ipcMain.handle("api:transactionCategory:deleteTransactionCategory", async (_even
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:transaction:createTransaction", async (_event, input) => {
+ipcMain.handle("api:transaction:list", async (_event, filters, pagination) => {
   try {
-    const result = await transactionController.createTransaction(input);
+    const result = await transactionController.listFinancialTransactions(filters, pagination);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:transaction:getTransaction", async (_event, id) => {
+ipcMain.handle("api:transaction:getDetails", async (_event, id) => {
   try {
-    const result = await transactionController.getTransaction(id);
+    const result = await transactionController.getFinancialTransactionDetails(id);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:transaction:getAllTransactions", async (_event) => {
+ipcMain.handle("api:transaction:createFinancial", async (_event, input) => {
   try {
-    const result = await transactionController.getAllTransactions();
+    const result = await transactionController.createFinancialTransaction(input);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:transaction:updateTransaction", async (_event, id, input) => {
+ipcMain.handle("api:transaction:cancel", async (_event, id, reason) => {
   try {
-    const result = await transactionController.updateTransaction(id, input);
+    const result = await transactionController.cancelFinancialTransaction(id, reason);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:transaction:deleteTransaction", async (_event, id) => {
+ipcMain.handle("api:transaction:getSummary", async (_event, filters) => {
   try {
-    const result = await transactionController.deleteTransaction(id);
+    const result = await transactionController.getFinancialTransactionsSummary(filters);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
@@ -1018,11 +1026,7 @@ app.on("activate", () => {
 });
 app.whenReady().then(async () => {
   try {
-<<<<<<< HEAD
-    const { initDatabase } = await import("./dbmanager-D7YpDb5N.js");
-=======
-    const { initDatabase } = await import("./dbmanager-73iPAjuQ.js");
->>>>>>> c43df77202db305c3c288b8883a48b8fd1a66f3d
+    const { initDatabase } = await import("./dbmanager-fsL7LnXO.js");
     await initDatabase();
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {

@@ -11,7 +11,8 @@ import DataTableRow from "../../components/common/DataTableRow";
 import TableFooter from "../../components/common/TableFooter";
 import { BackButton, Button, Card, ConfirmDialog, EmptyState, PageHeader, StatusBadge } from "../../components/ui";
 import { PATHS } from "../../routes/path";
-import { transactionsService, type TransactionCategory } from "../transactions/transactionsService";
+import type { TransactionCategory } from "../../components/transactions/types";
+import { transactionsService } from "../transactions/transactionsService";
 
 export default function TransactionCategoriesPage() {
   const navigate = useNavigate();
@@ -24,8 +25,8 @@ export default function TransactionCategoriesPage() {
     try {
       setLoading(true);
       setError("");
-      const data = await transactionsService.loadAll();
-      setItems(data.categories);
+      const data = await transactionsService.loadCategories();
+      setItems(data);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "تعذر تحميل الفئات المالية.");
     } finally {
@@ -69,7 +70,7 @@ export default function TransactionCategoriesPage() {
                     <DataTableCell className="font-bold text-[var(--text-primary)]">{item.name}</DataTableCell>
                     <DataTableCell>{item.type === "income" ? "إيراد" : "مصروف"}</DataTableCell>
                     <DataTableCell>{item.description || "—"}</DataTableCell>
-                    <DataTableCell><StatusBadge status={item.isActive ? "active" : "inactive"} /></DataTableCell>
+                    <DataTableCell><StatusBadge variant={item.isActive ? "success" : "danger"}>{item.isActive ? "نشط" : "معطل"}</StatusBadge></DataTableCell>
                     <DataTableCell><span dir="ltr" className="tabular-nums">{new Intl.NumberFormat("en-US").format(item.transactionCount)}</span></DataTableCell>
                     <DataTableCell>
                       <div className="flex gap-2">

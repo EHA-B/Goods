@@ -63,7 +63,7 @@ export default function PurchaseFormPage() {
     updateItem(index, { product_id: productId, productName: product?.name ?? "" });
   };
 
-  const submit = async (status: "draft" | "confirmed") => {
+  const submit = async () => {
     setError("");
     if (!supplierId) { setError("اختر المورد"); return; }
     if (items.some((item) => !item.product_id || item.quantity <= 0 || item.purchase_price < 0)) {
@@ -211,9 +211,8 @@ export default function PurchaseFormPage() {
     <div className="fixed bottom-0 left-0 right-[260px] z-20 border-t border-[var(--border)] bg-[var(--surface)]/95 px-6 py-3 backdrop-blur">
       <div className="flex justify-end gap-3">
         <Button variant="secondary" onClick={() => navigate(PATHS.PURCHASES)}>إلغاء</Button>
-        <Button variant="secondary" startIcon={<Save size={17} />} disabled={loading} onClick={() => submit("draft")}>حفظ كمسودة</Button>
-        <Button startIcon={<Save size={17} />} disabled={loading} onClick={() => submit("confirmed")}>
-          {loading ? "جاري الحفظ..." : "حفظ وتأكيد"}
+        <Button startIcon={<Save size={17} />} disabled={loading} onClick={() => submit()}>
+          {loading ? "جاري الحفظ..." : "حفظ الفاتورة"}
         </Button>
       </div>
     </div>

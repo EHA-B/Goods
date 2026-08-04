@@ -180,34 +180,39 @@ const stockliteApi = {
       invokeApi("api:payment:reversePurchasePayment", paymentId, reason),
   },
 
-  purchaseInvoices: {
-    get: (id: number) =>
-      invokeApi("api:purchaseInvoice:getPurchaseInvoice", id),
-    list: () =>
-      invokeApi("api:purchaseInvoice:getAllPurchaseInvoices"),
-    listFiltered: (filters?: unknown, pagination?: unknown) =>
-      invokeApi("api:purchaseInvoice:listPurchaseInvoices", filters, pagination),
+  purchases: {
+    list: (filters?: unknown, pagination?: unknown) =>
+      invokeApi("api:purchase:list", filters, pagination),
     getDetails: (id: number) =>
-      invokeApi("api:purchaseInvoice:getPurchaseInvoiceDetails", id),
+      invokeApi("api:purchase:getDetails", id),
     createFull: (input: unknown) =>
-      invokeApi("api:purchaseInvoice:createFullPurchaseInvoice", input),
+      invokeApi("api:purchase:createFull", input),
     cancel: (id: number, reason: string) =>
-      invokeApi("api:purchaseInvoice:cancelPurchaseInvoice", id, reason),
+      invokeApi("api:purchase:cancel", id, reason),
+    recordPayment: (input: unknown) =>
+      invokeApi("api:purchase:recordPayment", input),
+    reversePayment: (paymentId: number, reason: string) =>
+      invokeApi("api:purchase:reversePayment", paymentId, reason),
     deleteDraft: (id: number) =>
-      invokeApi("api:purchaseInvoice:deleteDraftPurchaseInvoice", id),
+      invokeApi("api:purchase:deleteDraft", id),
     getSalesDetails: (id: number) =>
-      invokeApi("api:purchaseInvoice:getPurchaseInvoiceSalesDetails", id),
+      invokeApi("api:purchase:getSalesDetails", id),
+    getConsignmentSummary: (id: number) =>
+      invokeApi("api:purchase:getConsignmentSummary", id),
+    previewConsignmentClosing: (id: number, input?: unknown) =>
+      invokeApi("api:purchase:previewConsignmentClosing", id, input),
     closeCommission: (id: number, input?: unknown) =>
-      invokeApi("api:purchaseInvoice:closeCommissionInvoice", id, input),
+      invokeApi("api:purchase:closeCommission", id, input),
+    getConsignmentSettlement: (id: number) =>
+      invokeApi("api:purchase:getConsignmentSettlement", id),
+    reverseConsignmentSettlement: (id: number, reason: string) =>
+      invokeApi("api:purchase:reverseConsignmentSettlement", id, reason),
+    // Read-only legacy methods
+    get: (id: number) =>
+      invokeApi("api:purchase:get", id),
+    getAll: () =>
+      invokeApi("api:purchase:getAll"),
   },
-
-  purchaseInvoiceItems: crudApi("purchaseInvoiceItem", {
-    create: "createPurchaseInvoiceItem",
-    get: "getPurchaseInvoiceItem",
-    list: "getAllPurchaseInvoiceItems",
-    update: "updatePurchaseInvoiceItem",
-    remove: "deletePurchaseInvoiceItem",
-  }),
 
   saleInvoices: {
     get: (id: number) =>
@@ -262,13 +267,18 @@ const stockliteApi = {
     remove: "deleteTransactionCategory",
   }),
 
-  transactions: crudApi("transaction", {
-    create: "createTransaction",
-    get: "getTransaction",
-    list: "getAllTransactions",
-    update: "updateTransaction",
-    remove: "deleteTransaction",
-  }),
+  transactions: {
+    list: (filters?: unknown, pagination?: unknown) =>
+      invokeApi("api:transaction:list", filters, pagination),
+    getDetails: (id: number) =>
+      invokeApi("api:transaction:getDetails", id),
+    createFinancial: (input: unknown) =>
+      invokeApi("api:transaction:createFinancial", input),
+    cancel: (id: number, reason: string) =>
+      invokeApi("api:transaction:cancel", id, reason),
+    summary: (filters?: unknown) =>
+      invokeApi("api:transaction:getSummary", filters),
+  },
 
   activityLogs: crudApi("activityLog", {
     create: "createActivityLog",

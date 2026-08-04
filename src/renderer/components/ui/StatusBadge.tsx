@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import Badge from "./Badge";
 
 type Props = {
-  variant: "success" | "warning" | "danger" | "info";
+  variant: "success" | "warning" | "danger" | "primary" | "gray";
   children: ReactNode;
 };
 

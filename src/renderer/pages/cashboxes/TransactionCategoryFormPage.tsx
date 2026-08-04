@@ -21,7 +21,7 @@ export default function TransactionCategoryFormPage() {
     if (!categoryId) return;
     void (async () => {
       try {
-        const existing = await transactionsService.getCategory(categoryId);
+        const existing: any = await transactionsService.getCategory(categoryId);
         setName(existing.name ?? "");
         setType(existing.type ?? "expense");
         setDescription(existing.description ?? "");

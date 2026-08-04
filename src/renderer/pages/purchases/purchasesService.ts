@@ -7,51 +7,51 @@ export const purchasesService = {
   /**
    * List all purchase invoices (flat list for the overview page).
    */
-  list: () => window.stockliteApi.purchaseInvoices.list() as Promise<PurchaseInvoiceRecord[]>,
+  list: () => window.stockliteApi.purchases.list() as unknown as Promise<PurchaseInvoiceRecord[]>,
 
   /**
    * List filtered + paginated purchase invoices.
    */
   listFiltered: (filters?: InvoiceListFilters, pagination?: PaginationInput) =>
-    window.stockliteApi.purchaseInvoices.listFiltered(filters, pagination),
+    window.stockliteApi.purchases.list(filters, pagination),
 
   /**
    * Get a single purchase invoice row.
    */
-  getById: (id: number) => window.stockliteApi.purchaseInvoices.get(id) as Promise<PurchaseInvoiceRecord>,
+  getById: (id: number) => window.stockliteApi.purchases.get(id) as Promise<PurchaseInvoiceRecord>,
 
   /**
    * Get enriched details (supplier, items, payments, financial summary).
    */
-  getDetails: (id: number) => window.stockliteApi.purchaseInvoices.getDetails(id),
+  getDetails: (id: number) => window.stockliteApi.purchases.getDetails(id),
 
   /**
    * Create a full purchase invoice (items, batches, stock movements, optional payment).
    */
   createFull: (input: CreatePurchaseInvoiceInput) =>
-    window.stockliteApi.purchaseInvoices.createFull(input),
+    window.stockliteApi.purchases.createFull(input),
 
   /**
    * Cancel a confirmed/paid invoice. Verifies no stock was sold before cancelling.
    */
   cancel: (id: number, reason: string) =>
-    window.stockliteApi.purchaseInvoices.cancel(id, reason),
+    window.stockliteApi.purchases.cancel(id, reason),
 
   /**
    * Delete a draft invoice (only if it has no payments or stock batches).
    */
-  deleteDraft: (id: number) => window.stockliteApi.purchaseInvoices.deleteDraft(id),
+  deleteDraft: (id: number) => window.stockliteApi.purchases.deleteDraft(id),
 
   /**
    * Get stock/sales details for a purchase invoice (consignment tracking).
    */
-  getSalesDetails: (id: number) => window.stockliteApi.purchaseInvoices.getSalesDetails(id),
+  getSalesDetails: (id: number) => window.stockliteApi.purchases.getSalesDetails(id),
 
   /**
    * Close a consignment invoice.
    */
   closeCommission: (id: number, input?: unknown) =>
-    window.stockliteApi.purchaseInvoices.closeCommission(id, input),
+    window.stockliteApi.purchases.closeCommission(id, input),
 
   // ─── Lookup helpers ─────────────────────────────────────────────────────
 

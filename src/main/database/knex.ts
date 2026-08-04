@@ -9,6 +9,9 @@ import * as productCodeMigration from './migrations/20260731190000_add_product_c
 import * as optionalProductCodeMigration from './migrations/20260731210000_make_product_code_optional';
 import * as quantityBeforeAfterMigration from './migrations/20260801135327_add_quantity_before_after_to_stock_adjustments';
 import * as cashboxAccountingHardening from './migrations/20260803_cashbox_accounting_hardening';
+import * as singleUserAuthMigration from './migrations/20260803210000_single_user_auth';
+import * as consignmentSettlementsMigration from './migrations/20260804130000_consignment_settlements';
+import * as financialTransactionsHardening from './migrations/20260804140000_financial_transactions_hardening';
 import * as cashboxesSeed from './seeds/01_cashboxes';
 import * as usersSeed from './seeds/02_users';
 import * as commissionCashboxSeed from './seeds/01_commission_cashbox';
@@ -24,6 +27,9 @@ class MigrationSource {
       '20260731210000_make_product_code_optional.ts',
       '20260801135327_add_quantity_before_after_to_stock_adjustments.ts',
       '20260803_cashbox_accounting_hardening.ts',
+      '20260803210000_single_user_auth.ts',
+      '20260804130000_consignment_settlements.ts',
+      '20260804140000_financial_transactions_hardening.ts'
     ]);
   }
   getMigrationName(migration: string) {
@@ -47,6 +53,15 @@ class MigrationSource {
     }
     if (migration === '20260803_cashbox_accounting_hardening.ts') {
       return cashboxAccountingHardening;
+    }
+    if (migration === '20260803210000_single_user_auth.ts') {
+      return singleUserAuthMigration;
+    }
+    if (migration === '20260804130000_consignment_settlements.ts') {
+      return consignmentSettlementsMigration;
+    }
+    if (migration === '20260804140000_financial_transactions_hardening.ts') {
+      return financialTransactionsHardening;
     }
     throw new Error(`Migration ${migration} not found`);
   }
@@ -93,6 +108,8 @@ export async function initKnex(): Promise<void> {
       },
     },
   });
+
+  (global as any).__knex = knexInstance;
 
   console.log(`📁 Database location: ${dbPath}`);
 }

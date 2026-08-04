@@ -10,13 +10,13 @@ const OPERATION_OPTIONS = [{ value: "add", label: "إضافة إلى الدفع�
 export default function StockAdjustmentPage() {
   const { productId } = useParams(); const navigate = useNavigate(); const id = Number(productId);
   const [product, setProduct] = useState<InventoryItem>(); const [batches, setBatches] = useState<StockBatch[]>([]);
-  const [batchId, setBatchId] = useState(""); const [operation, setOperation] = useState<"add" | "subtract">("subtract"); const [quantity, setQuantity] = useState("1"); const [reason, setReason] = useState(""); const [notes, setNotes] = useState("");
+  const [batchId, setBatchId] = useState(""); const [operation, setOperation] = useState<"add" | "subtract">("subtract"); const [quantity, setQuantity] = useState<number>(1); const [reason, setReason] = useState(""); const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(true); const [isSaving, setIsSaving] = useState(false); const [error, setError] = useState("");
 
   useEffect(() => { let cancelled = false; (async () => { try { const details = await inventoryService.productDetails(id); if (!cancelled) { setProduct(details.item); const active = details.batches.filter((x) => x.isActive); setBatches(active); if (active.length) setBatchId(String(active[0].id)); } } catch (e) { if (!cancelled) setError(getInventoryErrorMessage(e)); } finally { if (!cancelled) setIsLoading(false); } })(); return () => { cancelled = true; }; }, [id]);
 
   const selectedBatch = useMemo(() => batches.find((x) => x.id === Number(batchId)), [batches, batchId]);
-  const amount = Number(quantity || 0);
+  const amount = quantity || 0;
   const expected = selectedBatch ? selectedBatch.remainingQuantity + (operation === "add" ? amount : -amount) : 0;
 
   async function submit(event: FormEvent) {
@@ -37,7 +37,7 @@ export default function StockAdjustmentPage() {
     <Card header="بيانات التسوية"><div className="grid gap-5 md:grid-cols-2">
       <FormField label="الدفعة" required><Select value={batchId} placeholder={batches.length ? "اختر الدفعة" : "لا توجد دفعات"} options={batches.map((b) => ({ value: String(b.id), label: `${b.batchCode} — المتبقي ${b.remainingQuantity.toLocaleString()} ${product.unit}` }))} onChange={(e) => { setBatchId(e.target.value); setError(""); }} /></FormField>
       <FormField label="نوع التسوية" required><Select value={operation} options={OPERATION_OPTIONS} onChange={(e) => { setOperation(e.target.value as "add" | "subtract"); setError(""); }} /></FormField>
-      <FormField label="الكمية" required><NumberInput min={0.001} step="0.001" value={quantity} suffix={product.unit} onChange={(e) => { setQuantity(e.target.value); setError(""); }} /></FormField>
+      <FormField label="الكمية" required><NumberInput min={0.001} step={0.001} value={String(quantity)} suffix={product.unit} onChange={(e) => { setQuantity(Number(e.target.value)); setError(""); }} /></FormField>
       <FormField label="سبب التسوية" required><Textarea rows={3} value={reason} placeholder="مثال: تلف، فرق جرد، تصحيح إدخال" onChange={(e) => setReason(e.target.value)} /></FormField>
       <div className="md:col-span-2"><FormField label="ملاحظات"><Textarea rows={4} value={notes} placeholder="تفاصيل إضافية..." onChange={(e) => setNotes(e.target.value)} /></FormField></div>
       {error && <p className="md:col-span-2 text-sm font-medium text-[var(--danger)]">{error}</p>}

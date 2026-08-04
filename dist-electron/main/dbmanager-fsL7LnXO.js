@@ -2,7 +2,7 @@ import knex from "knex";
 import path from "path";
 import { app } from "electron";
 import bcrypt from "bcrypt";
-async function up$5(knex2) {
+async function up$8(knex2) {
   await knex2.schema.createTable("customers", (table) => {
     table.increments("id").primary();
     table.string("name", 100).notNullable();
@@ -297,7 +297,7 @@ async function up$5(knex2) {
     table.index(["party_type", "party_id", "payment_date"]);
   });
 }
-async function down$5(knex2) {
+async function down$8(knex2) {
   await knex2.schema.dropTableIfExists("activity_logs");
   await knex2.schema.dropTableIfExists("payments");
   await knex2.schema.dropTableIfExists("transactions");
@@ -318,10 +318,10 @@ async function down$5(knex2) {
 }
 const initialSchema = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$5,
-  up: up$5
+  down: down$8,
+  up: up$8
 }, Symbol.toStringTag, { value: "Module" }));
-async function up$4(knex2) {
+async function up$7(knex2) {
   await knex2.schema.alterTable("suppliers", (table) => {
     table.decimal("balance", 15, 2).defaultTo(0);
   });
@@ -357,7 +357,7 @@ async function up$4(knex2) {
     });
   }
 }
-async function down$4(knex2) {
+async function down$7(knex2) {
   await knex2.schema.dropTableIfExists("stock_adjustments");
   await knex2.schema.alterTable("stock_batches", (table) => {
     table.dropColumn("purchase_invoice_id");
@@ -371,10 +371,10 @@ async function down$4(knex2) {
 }
 const consignmentMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$4,
-  up: up$4
+  down: down$7,
+  up: up$7
 }, Symbol.toStringTag, { value: "Module" }));
-async function up$3(knex2) {
+async function up$6(knex2) {
   const hasCode = await knex2.schema.hasColumn("products", "code");
   if (!hasCode) {
     await knex2.schema.alterTable("products", (table) => {
@@ -390,7 +390,7 @@ async function up$3(knex2) {
     "CREATE UNIQUE INDEX IF NOT EXISTS products_code_unique ON products(code)"
   );
 }
-async function down$3(knex2) {
+async function down$6(knex2) {
   await knex2.raw("DROP INDEX IF EXISTS products_code_unique");
   const hasCode = await knex2.schema.hasColumn("products", "code");
   if (hasCode) {
@@ -401,10 +401,10 @@ async function down$3(knex2) {
 }
 const productCodeMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$3,
-  up: up$3
+  down: down$6,
+  up: up$6
 }, Symbol.toStringTag, { value: "Module" }));
-async function up$2(knex2) {
+async function up$5(knex2) {
   const hasCode = await knex2.schema.hasColumn("products", "code");
   if (!hasCode) return;
   await knex2("products").where("code", "").update({ code: null });
@@ -413,7 +413,7 @@ async function up$2(knex2) {
     "CREATE UNIQUE INDEX IF NOT EXISTS products_code_unique ON products(code) WHERE code IS NOT NULL"
   );
 }
-async function down$2(knex2) {
+async function down$5(knex2) {
   const hasCode = await knex2.schema.hasColumn("products", "code");
   if (!hasCode) return;
   await knex2.raw("DROP INDEX IF EXISTS products_code_unique");
@@ -423,16 +423,16 @@ async function down$2(knex2) {
 }
 const optionalProductCodeMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$2,
-  up: up$2
+  down: down$5,
+  up: up$5
 }, Symbol.toStringTag, { value: "Module" }));
-async function up$1(knex2) {
+async function up$4(knex2) {
   await knex2.schema.alterTable("stock_adjustments", (table) => {
     table.decimal("quantity_before", 15, 3).notNullable().defaultTo(0);
     table.decimal("quantity_after", 15, 3).notNullable().defaultTo(0);
   });
 }
-async function down$1(knex2) {
+async function down$4(knex2) {
   await knex2.schema.alterTable("stock_adjustments", (table) => {
     table.dropColumn("quantity_before");
     table.dropColumn("quantity_after");
@@ -440,10 +440,10 @@ async function down$1(knex2) {
 }
 const quantityBeforeAfterMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$1,
-  up: up$1
+  down: down$4,
+  up: up$4
 }, Symbol.toStringTag, { value: "Module" }));
-async function up(knex2) {
+async function up$3(knex2) {
   const beforeCount = await knex2("cashbox_transactions").count("* as cnt").first();
   const rowCount = Number(beforeCount.cnt ?? 0);
   await knex2.schema.createTable("cashbox_transactions_new", (table) => {
@@ -505,7 +505,7 @@ async function up(knex2) {
     table.index(["cashbox_id", "transaction_date"], "idx_cbt_cashbox_date");
   });
 }
-async function down(knex2) {
+async function down$3(knex2) {
   await knex2.schema.createTable("cashbox_transactions_orig", (table) => {
     table.increments("id").primary();
     table.integer("cashbox_id").unsigned().notNullable();
@@ -544,6 +544,191 @@ async function down(knex2) {
   });
 }
 const cashboxAccountingHardening = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  down: down$3,
+  up: up$3
+}, Symbol.toStringTag, { value: "Module" }));
+async function up$2(knex2) {
+  const existingUser = await knex2("users").orderBy("id", "asc").first();
+  if (!existingUser) {
+    const passwordHash = await bcrypt.hash("password", 12);
+    await knex2("users").insert({
+      username: "admin",
+      password_hash: passwordHash,
+      full_name: "مدير النظام",
+      role: "admin",
+      isActive: true,
+      created_at: knex2.fn.now(),
+      updated_at: knex2.fn.now()
+    });
+  }
+}
+async function down$2(_knex) {
+}
+const singleUserAuthMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  down: down$2,
+  up: up$2
+}, Symbol.toStringTag, { value: "Module" }));
+async function up$1(knex2) {
+  await knex2.schema.createTable("consignment_settlements", (table) => {
+    table.increments("id").primary();
+    table.integer("purchase_invoice_id").unsigned().notNullable();
+    table.string("settlement_number").notNullable().unique();
+    table.timestamp("settlement_date").notNullable();
+    table.decimal("total_sales_amount", 15, 2).notNullable();
+    table.decimal("commission_percentage", 5, 2).notNullable();
+    table.decimal("commission_amount", 15, 2).notNullable();
+    table.decimal("supplier_share", 15, 2).notNullable();
+    table.integer("cashbox_id").unsigned().notNullable();
+    table.integer("cashbox_transaction_id").unsigned().nullable();
+    table.integer("payment_id").unsigned().nullable();
+    table.string("currency", 3).notNullable();
+    table.string("remaining_stock_policy").notNullable();
+    table.decimal("returned_quantity", 15, 3).defaultTo(0);
+    table.decimal("spoilage_quantity", 15, 3).defaultTo(0);
+    table.decimal("carried_quantity", 15, 3).defaultTo(0);
+    table.string("status").notNullable().defaultTo("completed");
+    table.integer("reversed_settlement_id").unsigned().nullable();
+    table.string("reversal_reason").nullable();
+    table.text("notes").nullable();
+    table.integer("created_by").unsigned().nullable();
+    table.timestamp("created_at").defaultTo(knex2.fn.now());
+    table.timestamp("updated_at").defaultTo(knex2.fn.now());
+    table.foreign("purchase_invoice_id").references("id").inTable("purchase_invoices").onDelete("RESTRICT");
+    table.foreign("cashbox_id").references("id").inTable("cashboxes").onDelete("RESTRICT");
+    table.index("purchase_invoice_id");
+    table.index("cashbox_id");
+    table.index("status");
+    table.index("settlement_date");
+  });
+  await knex2.schema.createTable("consignment_settlement_items", (table) => {
+    table.increments("id").primary();
+    table.integer("settlement_id").unsigned().notNullable();
+    table.integer("purchase_invoice_item_id").unsigned().nullable();
+    table.integer("product_id").unsigned().notNullable();
+    table.integer("stock_batch_id").unsigned().notNullable();
+    table.decimal("received_quantity", 15, 3).notNullable();
+    table.decimal("sold_quantity", 15, 3).notNullable();
+    table.decimal("remaining_quantity", 15, 3).notNullable();
+    table.decimal("sales_amount", 15, 2).notNullable();
+    table.string("resolution_policy").notNullable();
+    table.decimal("resolved_quantity", 15, 3).notNullable();
+    table.integer("stock_movement_id").unsigned().nullable();
+    table.text("notes").nullable();
+    table.timestamp("created_at").defaultTo(knex2.fn.now());
+    table.foreign("settlement_id").references("id").inTable("consignment_settlements").onDelete("CASCADE");
+    table.foreign("product_id").references("id").inTable("products").onDelete("RESTRICT");
+    table.foreign("stock_batch_id").references("id").inTable("stock_batches").onDelete("RESTRICT");
+  });
+  await knex2.schema.alterTable("purchase_invoices", (table) => {
+    table.string("settlement_status").defaultTo("pending");
+    table.timestamp("settled_at").nullable();
+    table.integer("consignment_settlement_id").unsigned().nullable();
+  });
+}
+async function down$1(knex2) {
+  await knex2.schema.alterTable("purchase_invoices", (table) => {
+    table.dropColumn("settlement_status");
+    table.dropColumn("settled_at");
+    table.dropColumn("consignment_settlement_id");
+  });
+  await knex2.schema.dropTableIfExists("consignment_settlement_items");
+  await knex2.schema.dropTableIfExists("consignment_settlements");
+}
+const consignmentSettlementsMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  down: down$1,
+  up: up$1
+}, Symbol.toStringTag, { value: "Module" }));
+async function up(knex2) {
+  const beforeCount = await knex2("transactions").count("* as cnt").first();
+  const rowCount = Number(beforeCount.cnt ?? 0);
+  await knex2.schema.createTable("transactions_new", (table) => {
+    table.increments("id").primary();
+    table.integer("category_id").unsigned().notNullable();
+    table.integer("cashbox_id").unsigned().notNullable();
+    table.decimal("amount", 15, 2).notNullable();
+    table.enum("direction", ["expense", "income"]).notNullable();
+    table.date("transaction_date").notNullable();
+    table.text("description");
+    table.string("reference_number", 50);
+    table.text("notes");
+    table.string("status", 20).defaultTo("active").notNullable();
+    table.integer("cashbox_transaction_id").unsigned().nullable();
+    table.timestamp("cancelled_at").nullable();
+    table.text("cancellation_reason").nullable();
+    table.integer("reversed_transaction_id").unsigned().nullable();
+    table.integer("created_by").unsigned().nullable();
+    table.timestamp("created_at").nullable();
+    table.timestamp("updated_at").nullable();
+    table.foreign("category_id").references("id").inTable("transaction_categories").onDelete("RESTRICT");
+    table.foreign("cashbox_id").references("id").inTable("cashboxes").onDelete("RESTRICT");
+    table.foreign("cashbox_transaction_id").references("id").inTable("cashbox_transactions").onDelete("RESTRICT");
+  });
+  await knex2.raw(`
+    INSERT INTO transactions_new
+      (id, category_id, cashbox_id, amount, direction, transaction_date, 
+       description, reference_number, notes, created_at, updated_at, status)
+    SELECT
+      id, category_id, cashbox_id, amount, direction, transaction_date, 
+      description, reference_number, notes, created_at, updated_at, 'active' as status
+    FROM transactions
+  `);
+  const afterCount = await knex2("transactions_new").count("* as cnt").first();
+  const newRowCount = Number(afterCount.cnt ?? 0);
+  if (newRowCount !== rowCount) {
+    throw new Error(
+      `Migration data verification failed: original table had ${rowCount} rows, new table has ${newRowCount} rows.`
+    );
+  }
+  await knex2.schema.dropTable("transactions");
+  await knex2.schema.renameTable("transactions_new", "transactions");
+  await knex2.schema.alterTable("transactions", (table) => {
+    table.index("category_id");
+    table.index("cashbox_id");
+    table.index("transaction_date");
+    table.index("direction");
+    table.index("status");
+    table.index("cashbox_transaction_id");
+    table.index("reversed_transaction_id");
+  });
+}
+async function down(knex2) {
+  await knex2.schema.createTable("transactions_orig", (table) => {
+    table.increments("id").primary();
+    table.integer("category_id").unsigned().notNullable();
+    table.integer("cashbox_id").unsigned().notNullable();
+    table.decimal("amount", 15, 2).notNullable();
+    table.enum("direction", ["expense", "income"]).notNullable();
+    table.date("transaction_date").notNullable();
+    table.text("description");
+    table.string("reference_number", 50);
+    table.text("notes");
+    table.timestamp("created_at").nullable();
+    table.timestamp("updated_at").nullable();
+    table.foreign("category_id").references("id").inTable("transaction_categories").onDelete("RESTRICT");
+    table.foreign("cashbox_id").references("id").inTable("cashboxes").onDelete("RESTRICT");
+  });
+  await knex2.raw(`
+    INSERT INTO transactions_orig
+      (id, category_id, cashbox_id, amount, direction, transaction_date, 
+       description, reference_number, notes, created_at, updated_at)
+    SELECT
+      id, category_id, cashbox_id, amount, direction, transaction_date, 
+      description, reference_number, notes, created_at, updated_at
+    FROM transactions
+  `);
+  await knex2.schema.dropTable("transactions");
+  await knex2.schema.renameTable("transactions_orig", "transactions");
+  await knex2.schema.alterTable("transactions", (table) => {
+    table.index("category_id");
+    table.index("cashbox_id");
+    table.index("transaction_date");
+    table.index("direction");
+  });
+}
+const financialTransactionsHardening = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   down,
   up
@@ -621,7 +806,10 @@ class MigrationSource {
       "20260731190000_add_product_code.ts",
       "20260731210000_make_product_code_optional.ts",
       "20260801135327_add_quantity_before_after_to_stock_adjustments.ts",
-      "20260803_cashbox_accounting_hardening.ts"
+      "20260803_cashbox_accounting_hardening.ts",
+      "20260803210000_single_user_auth.ts",
+      "20260804130000_consignment_settlements.ts",
+      "20260804140000_financial_transactions_hardening.ts"
     ]);
   }
   getMigrationName(migration) {
@@ -645,6 +833,15 @@ class MigrationSource {
     }
     if (migration === "20260803_cashbox_accounting_hardening.ts") {
       return cashboxAccountingHardening;
+    }
+    if (migration === "20260803210000_single_user_auth.ts") {
+      return singleUserAuthMigration;
+    }
+    if (migration === "20260804130000_consignment_settlements.ts") {
+      return consignmentSettlementsMigration;
+    }
+    if (migration === "20260804140000_financial_transactions_hardening.ts") {
+      return financialTransactionsHardening;
     }
     throw new Error(`Migration ${migration} not found`);
   }
@@ -687,6 +884,7 @@ async function initKnex() {
       }
     }
   });
+  global.__knex = knexInstance;
   console.log(`📁 Database location: ${dbPath}`);
 }
 async function closeKnex() {

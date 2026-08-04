@@ -117,6 +117,7 @@ export default function PurchasesPage() {
       message={`هل تريد ${pendingDelete?.status === "draft" ? "حذف" : "إلغاء"} الفاتورة ${pendingDelete?.invoice_number ?? ""}؟`}
       onCancel={() => setPendingDelete(null)}
       onConfirm={handleDelete}
+      loading={deleting}
     />
   </>;
 }

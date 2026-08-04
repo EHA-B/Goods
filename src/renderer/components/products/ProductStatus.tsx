@@ -12,7 +12,7 @@ const STATUS = {
   },
   inactive: {
     label: "غير نشط",
-    variant: "info",
+    variant: "primary",
   },
 } as const;
 

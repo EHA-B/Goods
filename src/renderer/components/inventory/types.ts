@@ -1,6 +1,6 @@
 export type { InventoryItem, InventoryStatus, StockBatch } from "../../pages/inventory/inventoryService";
 
-export type StockMovementType = "adjustment_in" | "adjustment_out";
+export type StockMovementType = "purchase" | "sale" | "purchase_return" | "sale_return" | "adjustment_in" | "adjustment_out" | "opening_balance";
 export type StockMovement = {
   id: number;
   createdAt: string;

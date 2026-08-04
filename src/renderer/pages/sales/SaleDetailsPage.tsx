@@ -178,6 +178,7 @@ export default function SaleDetailsPage() {
       message={`هل تريد إلغاء الفاتورة ${invoice.invoice_number}؟ سيتم عكس جميع الدفعات واستعادة كميات المخزون.`}
       onCancel={() => setCancelOpen(false)}
       onConfirm={handleCancel}
+      loading={cancelling}
     />
   </>;
 }

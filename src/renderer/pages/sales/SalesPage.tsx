@@ -109,6 +109,7 @@ export default function SalesPage() {
       message={`هل تريد ${pendingCancel?.status === "draft" ? "حذف" : "إلغاء"} الفاتورة ${pendingCancel?.invoice_number ?? ""}؟`}
       onCancel={() => setPendingCancel(null)}
       onConfirm={handleCancel}
+      loading={cancelling}
     />
   </>;
 }

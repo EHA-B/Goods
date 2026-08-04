@@ -399,6 +399,13 @@ interface Window {
     };
     system: {
       getAppInfo(): Promise<AppInfoApiRecord>;
+      backup(destinationPath: string): Promise<any>;
+      restore(sourcePath: string): Promise<any>;
+      getAutoBackupConfig(): Promise<any>;
+      setAutoBackupConfig(input: any): Promise<any>;
+      selectDirectory(): Promise<{ canceled: boolean; path: string | null }>;
+      selectSaveFile(): Promise<{ canceled: boolean; path: string | null }>;
+      selectOpenFile(): Promise<{ canceled: boolean; path: string | null }>;
     };
     products: {
       list(): Promise<ProductApiRecord[]>;

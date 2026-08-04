@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { app, ipcMain } from 'electron';
+import { app, ipcMain, dialog } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -35,7 +35,7 @@ const supplierController = require(path.join(__dirname, '../../src/controllers',
 const transactionCategoryController = require(path.join(__dirname, '../../src/controllers', 'transactionCategoryController.js'));
 const transactionController = require(path.join(__dirname, '../../src/controllers', 'transactionController.js'));
 const userController = require(path.join(__dirname, '../../src/controllers', 'userController.js'));
-
+const backupController = require(path.join(__dirname, '../../src/controllers', 'backupController.js'));
 
 
 /**
@@ -848,8 +848,74 @@ ipcMain.handle('api:purchase:reversePayment', async (_event, paymentId, reason) 
   }
 });
 
-
 /**
+ * Backup and Restore endpoints
+ */
+ipcMain.handle('api:system:backup', async (_event, destinationPath) => {
+  try {
+    const result = await backupController.createBackup(destinationPath);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+ipcMain.handle('api:system:restore', async (_event, sourcePath) => {
+  try {
+    const result = await backupController.restoreBackup(sourcePath);
+    if (result.success) {
+      // Force app relaunch and exit to reload the database cleanly
+      app.relaunch();
+      app.exit(0);
+    }
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+ipcMain.handle('api:system:getAutoBackupConfig', async () => {
+  try {
+    const result = await backupController.getAutoBackupConfig();
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+ipcMain.handle('api:system:setAutoBackupConfig', async (_event, input) => {
+  try {
+    const result = await backupController.setAutoBackupConfig(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+ipcMain.handle('api:system:selectDirectory', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory']
+  });
+  return success({ canceled: result.canceled, path: result.canceled ? null : result.filePaths[0] });
+});
+
+ipcMain.handle('api:system:selectSaveFile', async () => {
+  const result = await dialog.showSaveDialog({
+    title: 'Select Backup Location',
+    defaultPath: `farmer-market-backup-${new Date().toISOString().replace(/T/, '_').replace(/:/g, '-').split('.')[0]}.db`,
+    filters: [{ name: 'SQLite Database', extensions: ['db', 'sqlite'] }]
+  });
+  return success({ canceled: result.canceled, path: result.canceled ? null : result.filePath });
+});
+
+ipcMain.handle('api:system:selectOpenFile', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Select Backup File to Restore',
+    properties: ['openFile'],
+    filters: [{ name: 'SQLite Database', extensions: ['db', 'sqlite'] }]
+  });
+  return success({ canceled: result.canceled, path: result.canceled ? null : result.filePaths[0] });
+});/**
  * Endpoint: api:saleInvoice:createSaleProcess
  * Description: Atomically creates a sale invoice with items, stock deductions, customer balance, and optional payment.
  */

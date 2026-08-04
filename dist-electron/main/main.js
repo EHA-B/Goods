@@ -1,4 +1,4 @@
-import { ipcMain, app, BrowserWindow } from "electron";
+import { ipcMain, app, dialog, BrowserWindow } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -41,6 +41,7 @@ const supplierController = require$1(path.join(__dirname$2, "../../src/controlle
 const transactionCategoryController = require$1(path.join(__dirname$2, "../../src/controllers", "transactionCategoryController.js"));
 const transactionController = require$1(path.join(__dirname$2, "../../src/controllers", "transactionController.js"));
 const userController = require$1(path.join(__dirname$2, "../../src/controllers", "userController.js"));
+const backupController = require$1(path.join(__dirname$2, "../../src/controllers", "backupController.js"));
 ipcMain.handle("api:auth:login", async (_event, input) => {
   try {
     const user = await authController.login(input);
@@ -524,6 +525,64 @@ ipcMain.handle("api:purchase:reversePayment", async (_event, paymentId, reason) 
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
+});
+ipcMain.handle("api:system:backup", async (_event, destinationPath) => {
+  try {
+    const result = await backupController.createBackup(destinationPath);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:system:restore", async (_event, sourcePath) => {
+  try {
+    const result = await backupController.restoreBackup(sourcePath);
+    if (result.success) {
+      app.relaunch();
+      app.exit(0);
+    }
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:system:getAutoBackupConfig", async () => {
+  try {
+    const result = await backupController.getAutoBackupConfig();
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:system:setAutoBackupConfig", async (_event, input) => {
+  try {
+    const result = await backupController.setAutoBackupConfig(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:system:selectDirectory", async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openDirectory"]
+  });
+  return success({ canceled: result.canceled, path: result.canceled ? null : result.filePaths[0] });
+});
+ipcMain.handle("api:system:selectSaveFile", async () => {
+  const result = await dialog.showSaveDialog({
+    title: "Select Backup Location",
+    defaultPath: `farmer-market-backup-${(/* @__PURE__ */ new Date()).toISOString().replace(/T/, "_").replace(/:/g, "-").split(".")[0]}.db`,
+    filters: [{ name: "SQLite Database", extensions: ["db", "sqlite"] }]
+  });
+  return success({ canceled: result.canceled, path: result.canceled ? null : result.filePath });
+});
+ipcMain.handle("api:system:selectOpenFile", async () => {
+  const result = await dialog.showOpenDialog({
+    title: "Select Backup File to Restore",
+    properties: ["openFile"],
+    filters: [{ name: "SQLite Database", extensions: ["db", "sqlite"] }]
+  });
+  return success({ canceled: result.canceled, path: result.canceled ? null : result.filePaths[0] });
 });
 ipcMain.handle("api:saleInvoice:createSaleProcess", async (_event, input) => {
   try {
@@ -1031,6 +1090,17 @@ app.whenReady().then(async () => {
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {
     console.error("Failed to initialize database:", error);
+  }
+  try {
+    const { createRequire: createRequire2 } = await import("node:module");
+    const require2 = createRequire2(import.meta.url);
+    const backupController2 = require2(path.join(__dirname$1, "../../src/controllers/backupController.js"));
+    setInterval(() => {
+      backupController2.runAutoBackupCycle().catch(console.error);
+    }, 60 * 60 * 1e3);
+    backupController2.runAutoBackupCycle().catch(console.error);
+  } catch (error) {
+    console.error("Failed to start auto-backup service:", error);
   }
   createWindow();
 });

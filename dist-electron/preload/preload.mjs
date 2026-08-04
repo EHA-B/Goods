@@ -31,7 +31,14 @@ const stockliteApi = {
     changePassword: (input) => invokeApi("api:auth:changePassword", input)
   },
   system: {
-    getAppInfo: () => invokeApi("api:system:getAppInfo")
+    getAppInfo: () => invokeApi("api:system:getAppInfo"),
+    backup: (destinationPath) => invokeApi("api:system:backup", destinationPath),
+    restore: (sourcePath) => invokeApi("api:system:restore", sourcePath),
+    getAutoBackupConfig: () => invokeApi("api:system:getAutoBackupConfig"),
+    setAutoBackupConfig: (input) => invokeApi("api:system:setAutoBackupConfig", input),
+    selectDirectory: () => invokeApi("api:system:selectDirectory"),
+    selectSaveFile: () => invokeApi("api:system:selectSaveFile"),
+    selectOpenFile: () => invokeApi("api:system:selectOpenFile")
   },
   products: {
     ...crudApi("product", {

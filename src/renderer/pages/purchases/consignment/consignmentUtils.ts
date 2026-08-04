@@ -4,7 +4,6 @@ export const money = (value: number, currency = "SYP") => `${Number(value || 0).
 export const policyLabels: Record<RemainingStockPolicy, string> = {
   return_to_supplier: "إعادة المتبقي للمورد",
   spoilage: "اعتبار المتبقي تالفًا",
-  carry_forward: "ترحيل المتبقي لفترة لاحقة",
 };
 export const statusLabels: Record<SettlementStatus | "completed", string> = {
   pending: "بانتظار التسوية",

@@ -55,8 +55,14 @@ export const salesService = {
       window.stockliteApi.customers.list(),
       window.stockliteApi.cashboxes.list(),
     ]);
-    return { customers, cashboxes };
+    return {
+      customers: customers.filter((item) => Boolean(item.isActive)),
+      cashboxes: cashboxes.filter((item) => Boolean(item.isActive)),
+    };
   },
 
-  getProducts: () => window.stockliteApi.products.list(),
+  getProducts: async () => (await window.stockliteApi.products.list()).filter((item) => Boolean(item.isActive)),
+
+  reversePayment: (paymentId: number, reason: string) =>
+    window.stockliteApi.payments.reverseSale(paymentId, reason),
 };

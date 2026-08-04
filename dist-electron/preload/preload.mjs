@@ -24,6 +24,7 @@ const crudApi = (entity, methodNames) => ({
   remove: (id) => invokeApi(`api:${entity}:${methodNames.remove}`, id)
 });
 const stockliteApi = {
+  dashboard: { get: () => invokeApi("api:dashboard:get") },
   auth: {
     login: (input) => invokeApi("api:auth:login", input),
     logout: () => invokeApi("api:auth:logout"),
@@ -31,7 +32,14 @@ const stockliteApi = {
     changePassword: (input) => invokeApi("api:auth:changePassword", input)
   },
   system: {
-    getAppInfo: () => invokeApi("api:system:getAppInfo")
+    getAppInfo: () => invokeApi("api:system:getAppInfo"),
+    backup: (destinationPath) => invokeApi("api:system:backup", destinationPath),
+    restore: (sourcePath) => invokeApi("api:system:restore", sourcePath),
+    getAutoBackupConfig: () => invokeApi("api:system:getAutoBackupConfig"),
+    setAutoBackupConfig: (input) => invokeApi("api:system:setAutoBackupConfig", input),
+    selectDirectory: () => invokeApi("api:system:selectDirectory"),
+    selectSaveFile: () => invokeApi("api:system:selectSaveFile"),
+    selectOpenFile: () => invokeApi("api:system:selectOpenFile")
   },
   products: {
     ...crudApi("product", {
@@ -139,13 +147,6 @@ const stockliteApi = {
     deleteDraft: (id) => invokeApi("api:saleInvoice:deleteDraftSaleInvoice", id),
     availableBatches: (productId) => invokeApi("api:saleInvoice:getAvailableBatches", productId)
   },
-  saleInvoiceItems: crudApi("saleInvoiceItem", {
-    create: "createSaleInvoiceItem",
-    get: "getSaleInvoiceItem",
-    list: "getAllSaleInvoiceItems",
-    update: "updateSaleInvoiceItem",
-    remove: "deleteSaleInvoiceItem"
-  }),
   saleTypes: crudApi("saleType", {
     create: "createSaleType",
     get: "getSaleType",

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { app, ipcMain } from 'electron';
+import { app, ipcMain, dialog } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -35,7 +35,8 @@ const supplierController = require(path.join(__dirname, '../../src/controllers',
 const transactionCategoryController = require(path.join(__dirname, '../../src/controllers', 'transactionCategoryController.js'));
 const transactionController = require(path.join(__dirname, '../../src/controllers', 'transactionController.js'));
 const userController = require(path.join(__dirname, '../../src/controllers', 'userController.js'));
-
+const backupController = require(path.join(__dirname, '../../src/controllers', 'backupController.js'));
+const dashboardController = require(path.join(__dirname, '../../src/controllers', 'dashboardController.js'));
 
 
 /**
@@ -94,6 +95,12 @@ ipcMain.handle = ((channel, listener) =>
     }
     return listener(...args);
   })) as typeof ipcMain.handle;
+
+/** Dashboard: consolidated read-only overview. */
+ipcMain.handle('api:dashboard:get', async () => {
+  try { return success(await dashboardController.getDashboard()); }
+  catch (e) { return failure(e.code || 'DASHBOARD_LOAD_FAILED', e.message || 'Failed to load dashboard', e.details); }
+});
 
 /**
  * Endpoint: api:system:getAppInfo
@@ -848,8 +855,88 @@ ipcMain.handle('api:purchase:reversePayment', async (_event, paymentId, reason) 
   }
 });
 
-
 /**
+ * Backup and Restore endpoints
+ */
+ipcMain.handle('api:system:backup', async (_event, destinationPath) => {
+  try {
+    if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
+    const result = await backupController.createBackup(destinationPath);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+ipcMain.handle('api:system:restore', async (_event, sourcePath) => {
+  try {
+    if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
+
+    // Validate the selected backup and create an emergency snapshot before closing SQLite.
+    const prepared = await backupController.prepareRestore(sourcePath);
+    const { closeDatabase } = await import('../../src/main/database/dbmanager');
+    await closeDatabase();
+
+    try {
+      const result = await backupController.applyRestore(prepared.sourcePath);
+      app.relaunch();
+      app.exit(0);
+      return success({ ...result, emergencyBackupPath: prepared.emergencyBackupPath });
+    } catch (restoreError) {
+      // The active connection is already closed; relaunch so startup can report/recover cleanly.
+      app.relaunch();
+      app.exit(1);
+      throw restoreError;
+    }
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+ipcMain.handle('api:system:getAutoBackupConfig', async () => {
+  try {
+    if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
+    const result = await backupController.getAutoBackupConfig();
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+ipcMain.handle('api:system:setAutoBackupConfig', async (_event, input) => {
+  try {
+    if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
+    const result = await backupController.setAutoBackupConfig(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+ipcMain.handle('api:system:selectDirectory', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory']
+  });
+  return success({ canceled: result.canceled, path: result.canceled ? null : result.filePaths[0] });
+});
+
+ipcMain.handle('api:system:selectSaveFile', async () => {
+  const result = await dialog.showSaveDialog({
+    title: 'Select Backup Location',
+    defaultPath: `farmer-market-backup-${new Date().toISOString().replace(/T/, '_').replace(/:/g, '-').split('.')[0]}.db`,
+    filters: [{ name: 'SQLite Database', extensions: ['db', 'sqlite'] }]
+  });
+  return success({ canceled: result.canceled, path: result.canceled ? null : result.filePath });
+});
+
+ipcMain.handle('api:system:selectOpenFile', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Select Backup File to Restore',
+    properties: ['openFile'],
+    filters: [{ name: 'SQLite Database', extensions: ['db', 'sqlite'] }]
+  });
+  return success({ canceled: result.canceled, path: result.canceled ? null : result.filePaths[0] });
+});/**
  * Endpoint: api:saleInvoice:createSaleProcess
  * Description: Atomically creates a sale invoice with items, stock deductions, customer balance, and optional payment.
  */
@@ -967,20 +1054,6 @@ ipcMain.handle('api:saleInvoice:getAvailableBatches', async (_event, productId) 
 });
 
 /**
- * Endpoint: api:saleInvoiceItem:createSaleInvoiceItem
- * Description: Executes createSaleInvoiceItem on saleInvoiceItemController.
- * Usage: Invoked by frontend to perform createSaleInvoiceItem operation.
- */
-ipcMain.handle('api:saleInvoiceItem:createSaleInvoiceItem', async (_event, input) => {
-  try {
-    const result = await saleInvoiceItemController.createSaleInvoiceItem(input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
  * Endpoint: api:saleInvoiceItem:getSaleInvoiceItem
  * Description: Executes getSaleInvoiceItem on saleInvoiceItemController.
  * Usage: Invoked by frontend to perform getSaleInvoiceItem operation.
@@ -1002,34 +1075,6 @@ ipcMain.handle('api:saleInvoiceItem:getSaleInvoiceItem', async (_event, id) => {
 ipcMain.handle('api:saleInvoiceItem:getAllSaleInvoiceItems', async (_event) => {
   try {
     const result = await saleInvoiceItemController.getAllSaleInvoiceItems();
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
- * Endpoint: api:saleInvoiceItem:updateSaleInvoiceItem
- * Description: Executes updateSaleInvoiceItem on saleInvoiceItemController.
- * Usage: Invoked by frontend to perform updateSaleInvoiceItem operation.
- */
-ipcMain.handle('api:saleInvoiceItem:updateSaleInvoiceItem', async (_event, id, input) => {
-  try {
-    const result = await saleInvoiceItemController.updateSaleInvoiceItem(id, input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
- * Endpoint: api:saleInvoiceItem:deleteSaleInvoiceItem
- * Description: Executes deleteSaleInvoiceItem on saleInvoiceItemController.
- * Usage: Invoked by frontend to perform deleteSaleInvoiceItem operation.
- */
-ipcMain.handle('api:saleInvoiceItem:deleteSaleInvoiceItem', async (_event, id) => {
-  try {
-    const result = await saleInvoiceItemController.deleteSaleInvoiceItem(id);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);

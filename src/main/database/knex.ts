@@ -12,6 +12,9 @@ import * as cashboxAccountingHardening from './migrations/20260803_cashbox_accou
 import * as singleUserAuthMigration from './migrations/20260803210000_single_user_auth';
 import * as consignmentSettlementsMigration from './migrations/20260804130000_consignment_settlements';
 import * as financialTransactionsHardening from './migrations/20260804140000_financial_transactions_hardening';
+import * as purchaseRuntimeCompatibility from './migrations/20260804170000_purchase_runtime_compatibility';
+import * as saleRuntimeCompatibility from './migrations/20260804200000_sale_runtime_compatibility';
+import * as paymentPartyOptionalMigration from './migrations/20260804210000_make_payment_party_optional';
 import * as cashboxesSeed from './seeds/01_cashboxes';
 import * as usersSeed from './seeds/02_users';
 import * as commissionCashboxSeed from './seeds/01_commission_cashbox';
@@ -29,7 +32,10 @@ class MigrationSource {
       '20260803_cashbox_accounting_hardening.ts',
       '20260803210000_single_user_auth.ts',
       '20260804130000_consignment_settlements.ts',
-      '20260804140000_financial_transactions_hardening.ts'
+      '20260804140000_financial_transactions_hardening.ts',
+      '20260804170000_purchase_runtime_compatibility.ts',
+      '20260804200000_sale_runtime_compatibility.ts',
+      '20260804210000_make_payment_party_optional.ts'
     ]);
   }
   getMigrationName(migration: string) {
@@ -62,6 +68,15 @@ class MigrationSource {
     }
     if (migration === '20260804140000_financial_transactions_hardening.ts') {
       return financialTransactionsHardening;
+    }
+    if (migration === '20260804170000_purchase_runtime_compatibility.ts') {
+      return purchaseRuntimeCompatibility;
+    }
+    if (migration === '20260804200000_sale_runtime_compatibility.ts') {
+      return saleRuntimeCompatibility;
+    }
+    if (migration === '20260804210000_make_payment_party_optional.ts') {
+      return paymentPartyOptionalMigration;
     }
     throw new Error(`Migration ${migration} not found`);
   }

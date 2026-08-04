@@ -2,7 +2,7 @@ import knex from "knex";
 import path from "path";
 import { app } from "electron";
 import bcrypt from "bcrypt";
-async function up$8(knex2) {
+async function up$b(knex2) {
   await knex2.schema.createTable("customers", (table) => {
     table.increments("id").primary();
     table.string("name", 100).notNullable();
@@ -75,7 +75,8 @@ async function up$8(knex2) {
     table.decimal("tax", 15, 2).defaultTo(0);
     table.decimal("total", 15, 2).notNullable().defaultTo(0);
     table.decimal("paid_amount", 15, 2).defaultTo(0);
-    table.enum("status", ["draft", "confirmed", "paid", "cancelled"]).defaultTo("draft");
+    table.decimal("remaining_amount", 15, 2).defaultTo(0);
+    table.string("status", 20).defaultTo("draft");
     table.text("notes");
     table.timestamp("created_at").nullable();
     table.timestamp("updated_at").nullable();
@@ -113,23 +114,25 @@ async function up$8(knex2) {
   await knex2.schema.createTable("sale_invoices", (table) => {
     table.increments("id").primary();
     table.string("invoice_number", 50).unique().notNullable();
-    table.integer("customer_id").unsigned().notNullable();
-    table.integer("sale_type_id").unsigned().notNullable();
+    table.integer("customer_id").unsigned().nullable();
+    table.integer("sale_type_id").unsigned().nullable();
     table.integer("cashbox_id").unsigned();
     table.date("invoice_date").notNullable();
     table.decimal("subtotal", 15, 2).notNullable().defaultTo(0);
     table.decimal("discount", 15, 2).defaultTo(0);
+    table.decimal("discount_amount", 15, 2).defaultTo(0);
     table.decimal("commission_percentage", 5, 2).defaultTo(0);
     table.decimal("commission_amount", 15, 2).defaultTo(0);
     table.decimal("tax", 15, 2).defaultTo(0);
     table.decimal("total", 15, 2).notNullable().defaultTo(0);
     table.decimal("paid_amount", 15, 2).defaultTo(0);
-    table.enum("status", ["draft", "confirmed", "paid", "cancelled"]).defaultTo("draft");
+    table.decimal("remaining_amount", 15, 2).defaultTo(0);
+    table.string("status", 20).defaultTo("draft");
     table.text("notes");
     table.timestamp("created_at").nullable();
     table.timestamp("updated_at").nullable();
-    table.foreign("customer_id").references("id").inTable("customers").onDelete("RESTRICT");
-    table.foreign("sale_type_id").references("id").inTable("sale_types").onDelete("RESTRICT");
+    table.foreign("customer_id").references("id").inTable("customers").onDelete("SET NULL");
+    table.foreign("sale_type_id").references("id").inTable("sale_types").onDelete("SET NULL");
     table.index("customer_id");
     table.index("invoice_number");
     table.index("invoice_date");
@@ -219,7 +222,7 @@ async function up$8(knex2) {
   await knex2.schema.createTable("payments", (table) => {
     table.increments("id").primary();
     table.enum("party_type", ["customer", "supplier"]).notNullable();
-    table.integer("party_id").notNullable();
+    table.integer("party_id").nullable();
     table.enum("payment_type", ["sale", "purchase"]).notNullable();
     table.integer("invoice_id").notNullable();
     table.integer("cashbox_id").unsigned().notNullable();
@@ -297,7 +300,7 @@ async function up$8(knex2) {
     table.index(["party_type", "party_id", "payment_date"]);
   });
 }
-async function down$8(knex2) {
+async function down$b(knex2) {
   await knex2.schema.dropTableIfExists("activity_logs");
   await knex2.schema.dropTableIfExists("payments");
   await knex2.schema.dropTableIfExists("transactions");
@@ -318,10 +321,10 @@ async function down$8(knex2) {
 }
 const initialSchema = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$8,
-  up: up$8
+  down: down$b,
+  up: up$b
 }, Symbol.toStringTag, { value: "Module" }));
-async function up$7(knex2) {
+async function up$a(knex2) {
   await knex2.schema.alterTable("suppliers", (table) => {
     table.decimal("balance", 15, 2).defaultTo(0);
   });
@@ -357,7 +360,7 @@ async function up$7(knex2) {
     });
   }
 }
-async function down$7(knex2) {
+async function down$a(knex2) {
   await knex2.schema.dropTableIfExists("stock_adjustments");
   await knex2.schema.alterTable("stock_batches", (table) => {
     table.dropColumn("purchase_invoice_id");
@@ -371,10 +374,10 @@ async function down$7(knex2) {
 }
 const consignmentMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$7,
-  up: up$7
+  down: down$a,
+  up: up$a
 }, Symbol.toStringTag, { value: "Module" }));
-async function up$6(knex2) {
+async function up$9(knex2) {
   const hasCode = await knex2.schema.hasColumn("products", "code");
   if (!hasCode) {
     await knex2.schema.alterTable("products", (table) => {
@@ -390,7 +393,7 @@ async function up$6(knex2) {
     "CREATE UNIQUE INDEX IF NOT EXISTS products_code_unique ON products(code)"
   );
 }
-async function down$6(knex2) {
+async function down$9(knex2) {
   await knex2.raw("DROP INDEX IF EXISTS products_code_unique");
   const hasCode = await knex2.schema.hasColumn("products", "code");
   if (hasCode) {
@@ -401,10 +404,10 @@ async function down$6(knex2) {
 }
 const productCodeMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$6,
-  up: up$6
+  down: down$9,
+  up: up$9
 }, Symbol.toStringTag, { value: "Module" }));
-async function up$5(knex2) {
+async function up$8(knex2) {
   const hasCode = await knex2.schema.hasColumn("products", "code");
   if (!hasCode) return;
   await knex2("products").where("code", "").update({ code: null });
@@ -413,7 +416,7 @@ async function up$5(knex2) {
     "CREATE UNIQUE INDEX IF NOT EXISTS products_code_unique ON products(code) WHERE code IS NOT NULL"
   );
 }
-async function down$5(knex2) {
+async function down$8(knex2) {
   const hasCode = await knex2.schema.hasColumn("products", "code");
   if (!hasCode) return;
   await knex2.raw("DROP INDEX IF EXISTS products_code_unique");
@@ -423,16 +426,16 @@ async function down$5(knex2) {
 }
 const optionalProductCodeMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$5,
-  up: up$5
+  down: down$8,
+  up: up$8
 }, Symbol.toStringTag, { value: "Module" }));
-async function up$4(knex2) {
+async function up$7(knex2) {
   await knex2.schema.alterTable("stock_adjustments", (table) => {
     table.decimal("quantity_before", 15, 3).notNullable().defaultTo(0);
     table.decimal("quantity_after", 15, 3).notNullable().defaultTo(0);
   });
 }
-async function down$4(knex2) {
+async function down$7(knex2) {
   await knex2.schema.alterTable("stock_adjustments", (table) => {
     table.dropColumn("quantity_before");
     table.dropColumn("quantity_after");
@@ -440,10 +443,10 @@ async function down$4(knex2) {
 }
 const quantityBeforeAfterMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$4,
-  up: up$4
+  down: down$7,
+  up: up$7
 }, Symbol.toStringTag, { value: "Module" }));
-async function up$3(knex2) {
+async function up$6(knex2) {
   const beforeCount = await knex2("cashbox_transactions").count("* as cnt").first();
   const rowCount = Number(beforeCount.cnt ?? 0);
   await knex2.schema.createTable("cashbox_transactions_new", (table) => {
@@ -505,7 +508,7 @@ async function up$3(knex2) {
     table.index(["cashbox_id", "transaction_date"], "idx_cbt_cashbox_date");
   });
 }
-async function down$3(knex2) {
+async function down$6(knex2) {
   await knex2.schema.createTable("cashbox_transactions_orig", (table) => {
     table.increments("id").primary();
     table.integer("cashbox_id").unsigned().notNullable();
@@ -545,10 +548,10 @@ async function down$3(knex2) {
 }
 const cashboxAccountingHardening = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$3,
-  up: up$3
+  down: down$6,
+  up: up$6
 }, Symbol.toStringTag, { value: "Module" }));
-async function up$2(knex2) {
+async function up$5(knex2) {
   const existingUser = await knex2("users").orderBy("id", "asc").first();
   if (!existingUser) {
     const passwordHash = await bcrypt.hash("password", 12);
@@ -563,14 +566,14 @@ async function up$2(knex2) {
     });
   }
 }
-async function down$2(_knex) {
+async function down$5(_knex) {
 }
 const singleUserAuthMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$2,
-  up: up$2
+  down: down$5,
+  up: up$5
 }, Symbol.toStringTag, { value: "Module" }));
-async function up$1(knex2) {
+async function up$4(knex2) {
   await knex2.schema.createTable("consignment_settlements", (table) => {
     table.increments("id").primary();
     table.integer("purchase_invoice_id").unsigned().notNullable();
@@ -627,7 +630,7 @@ async function up$1(knex2) {
     table.integer("consignment_settlement_id").unsigned().nullable();
   });
 }
-async function down$1(knex2) {
+async function down$4(knex2) {
   await knex2.schema.alterTable("purchase_invoices", (table) => {
     table.dropColumn("settlement_status");
     table.dropColumn("settled_at");
@@ -638,10 +641,10 @@ async function down$1(knex2) {
 }
 const consignmentSettlementsMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  down: down$1,
-  up: up$1
+  down: down$4,
+  up: up$4
 }, Symbol.toStringTag, { value: "Module" }));
-async function up(knex2) {
+async function up$3(knex2) {
   const beforeCount = await knex2("transactions").count("* as cnt").first();
   const rowCount = Number(beforeCount.cnt ?? 0);
   await knex2.schema.createTable("transactions_new", (table) => {
@@ -694,7 +697,7 @@ async function up(knex2) {
     table.index("reversed_transaction_id");
   });
 }
-async function down(knex2) {
+async function down$3(knex2) {
   await knex2.schema.createTable("transactions_orig", (table) => {
     table.increments("id").primary();
     table.integer("category_id").unsigned().notNullable();
@@ -730,6 +733,366 @@ async function down(knex2) {
 }
 const financialTransactionsHardening = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  down: down$3,
+  up: up$3
+}, Symbol.toStringTag, { value: "Module" }));
+async function up$2(knex2) {
+  const hasPurchaseInvoices = await knex2.schema.hasTable("purchase_invoices");
+  if (!hasPurchaseInvoices) return;
+  if (!await knex2.schema.hasColumn("purchase_invoices", "discount_amount")) {
+    await knex2.schema.alterTable("purchase_invoices", (table) => {
+      table.decimal("discount_amount", 15, 2).notNullable().defaultTo(0);
+    });
+    await knex2.raw(`
+      UPDATE purchase_invoices
+      SET discount_amount = COALESCE(discount, 0)
+    `);
+  }
+  if (!await knex2.schema.hasColumn("purchase_invoices", "remaining_amount")) {
+    await knex2.schema.alterTable("purchase_invoices", (table) => {
+      table.decimal("remaining_amount", 15, 2).notNullable().defaultTo(0);
+    });
+    await knex2.raw(`
+      UPDATE purchase_invoices
+      SET remaining_amount = CASE
+        WHEN COALESCE(total, 0) - COALESCE(paid_amount, 0) > 0
+          THEN COALESCE(total, 0) - COALESCE(paid_amount, 0)
+        ELSE 0
+      END
+    `);
+  }
+  const hasPayments = await knex2.schema.hasTable("payments");
+  if (hasPayments) {
+    const paymentColumns = [
+      ["status", (table) => table.string("status", 20).notNullable().defaultTo("active")],
+      ["reversed_payment_id", (table) => table.integer("reversed_payment_id").nullable()],
+      ["cashbox_transaction_id", (table) => table.integer("cashbox_transaction_id").nullable()],
+      ["balance_before", (table) => table.decimal("balance_before", 15, 2).nullable()],
+      ["balance_after", (table) => table.decimal("balance_after", 15, 2).nullable()],
+      ["created_by", (table) => table.integer("created_by").nullable()],
+      ["reversal_reason", (table) => table.text("reversal_reason").nullable()]
+    ];
+    for (const [column, addColumn] of paymentColumns) {
+      if (!await knex2.schema.hasColumn("payments", column)) {
+        await knex2.schema.alterTable("payments", addColumn);
+      }
+    }
+    await knex2("payments").whereNull("status").update({ status: "active" });
+  }
+  if (!await knex2.schema.hasTable("stock_movements")) {
+    await knex2.schema.createTable("stock_movements", (table) => {
+      table.increments("id").primary();
+      table.integer("product_id").unsigned().notNullable();
+      table.integer("stock_batch_id").unsigned().notNullable();
+      table.string("movement_type", 40).notNullable();
+      table.decimal("quantity", 15, 3).notNullable();
+      table.decimal("quantity_before", 15, 3).notNullable();
+      table.decimal("quantity_after", 15, 3).notNullable();
+      table.string("reference_type", 40).nullable();
+      table.integer("reference_id").nullable();
+      table.string("reference_number", 100).nullable();
+      table.integer("supplier_id").unsigned().nullable();
+      table.integer("customer_id").unsigned().nullable();
+      table.text("notes").nullable();
+      table.integer("created_by").nullable();
+      table.timestamp("created_at").nullable();
+      table.foreign("product_id").references("id").inTable("products").onDelete("RESTRICT");
+      table.foreign("stock_batch_id").references("id").inTable("stock_batches").onDelete("RESTRICT");
+      table.index("product_id", "idx_sm_product_id");
+      table.index("stock_batch_id", "idx_sm_batch_id");
+      table.index("movement_type", "idx_sm_movement_type");
+      table.index("reference_type", "idx_sm_reference_type");
+      table.index("reference_id", "idx_sm_reference_id");
+      table.index("created_at", "idx_sm_created_at");
+    });
+  }
+}
+async function down$2(_knex) {
+}
+const purchaseRuntimeCompatibility = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  down: down$2,
+  up: up$2
+}, Symbol.toStringTag, { value: "Module" }));
+const TABLE_NAME$1 = "sale_invoices";
+const TEMP_TABLE_NAME$1 = "sale_invoices_runtime_compatibility_tmp";
+function rowsFromRaw$1(result) {
+  if (Array.isArray(result)) return result;
+  if (result && typeof result === "object" && "rows" in result) {
+    const rows = result.rows;
+    return Array.isArray(rows) ? rows : [];
+  }
+  return [];
+}
+async function up$1(knex2) {
+  if (!await knex2.schema.hasTable(TABLE_NAME$1)) return;
+  const tableInfo = rowsFromRaw$1(
+    await knex2.raw(`PRAGMA table_info(${TABLE_NAME$1})`)
+  );
+  const columns = new Set(tableInfo.map((column) => column.name));
+  const customerColumn = tableInfo.find((column) => column.name === "customer_id");
+  const saleTypeColumn = tableInfo.find((column) => column.name === "sale_type_id");
+  const schemaAlreadyCompatible = columns.has("discount_amount") && columns.has("remaining_amount") && Number((customerColumn == null ? void 0 : customerColumn.notnull) ?? 0) === 0 && Number((saleTypeColumn == null ? void 0 : saleTypeColumn.notnull) ?? 0) === 0;
+  if (schemaAlreadyCompatible) return;
+  const oldCountRow = await knex2(TABLE_NAME$1).count({ count: "*" }).first();
+  const oldCount = Number((oldCountRow == null ? void 0 : oldCountRow.count) ?? 0);
+  await knex2.raw("PRAGMA foreign_keys = OFF");
+  try {
+    await knex2.schema.dropTableIfExists(TEMP_TABLE_NAME$1);
+    await knex2.schema.createTable(TEMP_TABLE_NAME$1, (table) => {
+      table.increments("id").primary();
+      table.string("invoice_number", 50).notNullable().unique();
+      table.integer("customer_id").unsigned().nullable();
+      table.integer("sale_type_id").unsigned().nullable();
+      table.integer("cashbox_id").unsigned().nullable();
+      table.date("invoice_date").notNullable();
+      table.decimal("subtotal", 15, 2).notNullable().defaultTo(0);
+      table.decimal("discount", 15, 2).notNullable().defaultTo(0);
+      table.decimal("discount_amount", 15, 2).notNullable().defaultTo(0);
+      table.decimal("commission_percentage", 5, 2).notNullable().defaultTo(0);
+      table.decimal("commission_amount", 15, 2).notNullable().defaultTo(0);
+      table.decimal("tax", 15, 2).notNullable().defaultTo(0);
+      table.decimal("total", 15, 2).notNullable().defaultTo(0);
+      table.decimal("paid_amount", 15, 2).notNullable().defaultTo(0);
+      table.decimal("remaining_amount", 15, 2).notNullable().defaultTo(0);
+      table.string("status", 20).notNullable().defaultTo("draft");
+      table.text("notes").nullable();
+      table.timestamp("cancelled_at").nullable();
+      table.text("cancellation_reason").nullable();
+      table.timestamp("created_at").nullable();
+      table.timestamp("updated_at").nullable();
+      table.foreign("customer_id").references("id").inTable("customers").onDelete("SET NULL");
+      table.foreign("sale_type_id").references("id").inTable("sale_types").onDelete("SET NULL");
+      table.foreign("cashbox_id").references("id").inTable("cashboxes").onDelete("SET NULL");
+    });
+    const source = (column, fallback = "NULL") => columns.has(column) ? column : fallback;
+    const discountSource = columns.has("discount_amount") ? "COALESCE(discount_amount, 0)" : columns.has("discount") ? "COALESCE(discount, 0)" : "0";
+    const legacyDiscountSource = columns.has("discount") ? "COALESCE(discount, 0)" : discountSource;
+    const remainingSource = columns.has("remaining_amount") ? "COALESCE(remaining_amount, 0)" : `CASE
+          WHEN ${source("status", "'draft'")} = 'cancelled' THEN 0
+          ELSE MAX(0, COALESCE(${source("total", "0")}, 0) - COALESCE(${source("paid_amount", "0")}, 0))
+        END`;
+    await knex2.raw(`
+      INSERT INTO ${TEMP_TABLE_NAME$1} (
+        id,
+        invoice_number,
+        customer_id,
+        sale_type_id,
+        cashbox_id,
+        invoice_date,
+        subtotal,
+        discount,
+        discount_amount,
+        commission_percentage,
+        commission_amount,
+        tax,
+        total,
+        paid_amount,
+        remaining_amount,
+        status,
+        notes,
+        cancelled_at,
+        cancellation_reason,
+        created_at,
+        updated_at
+      )
+      SELECT
+        ${source("id")},
+        ${source("invoice_number")},
+        ${source("customer_id")},
+        ${source("sale_type_id")},
+        ${source("cashbox_id")},
+        ${source("invoice_date")},
+        COALESCE(${source("subtotal", "0")}, 0),
+        ${legacyDiscountSource},
+        ${discountSource},
+        COALESCE(${source("commission_percentage", "0")}, 0),
+        COALESCE(${source("commission_amount", "0")}, 0),
+        COALESCE(${source("tax", "0")}, 0),
+        COALESCE(${source("total", "0")}, 0),
+        COALESCE(${source("paid_amount", "0")}, 0),
+        ${remainingSource},
+        COALESCE(${source("status", "'draft'")}, 'draft'),
+        ${source("notes")},
+        ${source("cancelled_at")},
+        ${source("cancellation_reason")},
+        ${source("created_at")},
+        ${source("updated_at")}
+      FROM ${TABLE_NAME$1}
+    `);
+    const newCountRow = await knex2(TEMP_TABLE_NAME$1).count({ count: "*" }).first();
+    const newCount = Number((newCountRow == null ? void 0 : newCountRow.count) ?? 0);
+    if (newCount !== oldCount) {
+      throw new Error(
+        `Sale invoices migration count mismatch: old=${oldCount}, new=${newCount}`
+      );
+    }
+    await knex2.schema.dropTable(TABLE_NAME$1);
+    await knex2.schema.renameTable(TEMP_TABLE_NAME$1, TABLE_NAME$1);
+    await knex2.schema.alterTable(TABLE_NAME$1, (table) => {
+      table.index("customer_id", "idx_sale_invoices_customer_id");
+      table.index("sale_type_id", "idx_sale_invoices_sale_type_id");
+      table.index("cashbox_id", "idx_sale_invoices_cashbox_id");
+      table.index("invoice_date", "idx_sale_invoices_invoice_date");
+      table.index("status", "idx_sale_invoices_status");
+      table.index(["customer_id", "status"], "idx_sale_invoices_customer_status");
+      table.index(["invoice_date", "status"], "idx_sale_invoices_date_status");
+    });
+    await knex2.raw(`
+      UPDATE sqlite_sequence
+      SET seq = (SELECT COALESCE(MAX(id), 0) FROM ${TABLE_NAME$1})
+      WHERE name = '${TABLE_NAME$1}'
+    `);
+  } finally {
+    await knex2.raw("PRAGMA foreign_keys = ON");
+  }
+  const foreignKeyProblems = await knex2.raw("PRAGMA foreign_key_check");
+  const problemRows = Array.isArray(foreignKeyProblems) ? foreignKeyProblems : (foreignKeyProblems == null ? void 0 : foreignKeyProblems.rows) ?? [];
+  if (Array.isArray(problemRows) && problemRows.length > 0) {
+    throw new Error(
+      `Foreign-key check failed after sale migration: ${JSON.stringify(problemRows)}`
+    );
+  }
+}
+async function down$1(_knex) {
+}
+const config$1 = {
+  transaction: false
+};
+const saleRuntimeCompatibility = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  config: config$1,
+  down: down$1,
+  up: up$1
+}, Symbol.toStringTag, { value: "Module" }));
+const TABLE_NAME = "payments";
+const TEMP_TABLE_NAME = "payments_party_optional_tmp";
+function rowsFromRaw(result) {
+  if (Array.isArray(result)) return result;
+  if (result && typeof result === "object" && "rows" in result) {
+    const rows = result.rows;
+    return Array.isArray(rows) ? rows : [];
+  }
+  return [];
+}
+async function up(knex2) {
+  if (!await knex2.schema.hasTable(TABLE_NAME)) return;
+  const tableInfo = rowsFromRaw(
+    await knex2.raw(`PRAGMA table_info(${TABLE_NAME})`)
+  );
+  const partyIdColumn = tableInfo.find((column) => column.name === "party_id");
+  if (!partyIdColumn || Number(partyIdColumn.notnull) === 0) return;
+  const oldColumns = new Set(tableInfo.map((column) => column.name));
+  const oldCountRow = await knex2(TABLE_NAME).count({ count: "*" }).first();
+  const oldCount = Number((oldCountRow == null ? void 0 : oldCountRow.count) ?? 0);
+  await knex2.raw("PRAGMA foreign_keys = OFF");
+  try {
+    await knex2.schema.dropTableIfExists(TEMP_TABLE_NAME);
+    await knex2.schema.createTable(TEMP_TABLE_NAME, (table) => {
+      table.increments("id").primary();
+      table.string("party_type", 20).notNullable();
+      table.integer("party_id").nullable();
+      table.string("payment_type", 20).notNullable();
+      table.integer("invoice_id").notNullable();
+      table.integer("cashbox_id").unsigned().notNullable();
+      table.decimal("amount", 15, 2).notNullable();
+      table.date("payment_date").notNullable();
+      table.string("payment_method", 20).notNullable().defaultTo("cash");
+      table.string("reference_number", 50).nullable();
+      table.text("notes").nullable();
+      table.string("status", 20).notNullable().defaultTo("active");
+      table.integer("reversed_payment_id").nullable();
+      table.integer("cashbox_transaction_id").nullable();
+      table.decimal("balance_before", 15, 2).nullable();
+      table.decimal("balance_after", 15, 2).nullable();
+      table.integer("created_by").nullable();
+      table.text("reversal_reason").nullable();
+      table.timestamp("created_at").nullable();
+      table.timestamp("updated_at").nullable();
+      table.foreign("cashbox_id").references("id").inTable("cashboxes").onDelete("RESTRICT");
+    });
+    const targetColumns = [
+      "id",
+      "party_type",
+      "party_id",
+      "payment_type",
+      "invoice_id",
+      "cashbox_id",
+      "amount",
+      "payment_date",
+      "payment_method",
+      "reference_number",
+      "notes",
+      "status",
+      "reversed_payment_id",
+      "cashbox_transaction_id",
+      "balance_before",
+      "balance_after",
+      "created_by",
+      "reversal_reason",
+      "created_at",
+      "updated_at"
+    ];
+    const sourceExpression = (column) => {
+      if (oldColumns.has(column)) {
+        if (column === "status") return "COALESCE(status, 'active')";
+        if (column === "payment_method") return "COALESCE(payment_method, 'cash')";
+        return column;
+      }
+      if (column === "status") return "'active'";
+      if (column === "payment_method") return "'cash'";
+      return "NULL";
+    };
+    await knex2.raw(`
+      INSERT INTO ${TEMP_TABLE_NAME} (${targetColumns.join(", ")})
+      SELECT ${targetColumns.map(sourceExpression).join(", ")}
+      FROM ${TABLE_NAME}
+    `);
+    const newCountRow = await knex2(TEMP_TABLE_NAME).count({ count: "*" }).first();
+    const newCount = Number((newCountRow == null ? void 0 : newCountRow.count) ?? 0);
+    if (newCount !== oldCount) {
+      throw new Error(
+        `Payments migration count mismatch: old=${oldCount}, new=${newCount}`
+      );
+    }
+    await knex2.schema.dropTable(TABLE_NAME);
+    await knex2.schema.renameTable(TEMP_TABLE_NAME, TABLE_NAME);
+    await knex2.schema.alterTable(TABLE_NAME, (table) => {
+      table.index(["party_type", "party_id"], "idx_payments_party");
+      table.index(["payment_type", "invoice_id"], "idx_payments_invoice");
+      table.index("cashbox_id", "idx_payments_cashbox");
+      table.index("payment_date", "idx_payments_date");
+      table.index(
+        ["party_type", "party_id", "payment_date"],
+        "idx_payments_party_date"
+      );
+      table.index("status", "idx_payments_status");
+      table.index("reversed_payment_id", "idx_payments_reversed_id");
+    });
+    await knex2.raw(`
+      UPDATE sqlite_sequence
+      SET seq = (SELECT COALESCE(MAX(id), 0) FROM ${TABLE_NAME})
+      WHERE name = '${TABLE_NAME}'
+    `);
+  } finally {
+    await knex2.raw("PRAGMA foreign_keys = ON");
+  }
+  const foreignKeyProblems = await knex2.raw("PRAGMA foreign_key_check");
+  const problemRows = Array.isArray(foreignKeyProblems) ? foreignKeyProblems : (foreignKeyProblems == null ? void 0 : foreignKeyProblems.rows) ?? [];
+  if (Array.isArray(problemRows) && problemRows.length > 0) {
+    throw new Error(
+      `Foreign-key check failed after payments migration: ${JSON.stringify(problemRows)}`
+    );
+  }
+}
+async function down(_knex) {
+}
+const config = {
+  transaction: false
+};
+const paymentPartyOptionalMigration = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  config,
   down,
   up
 }, Symbol.toStringTag, { value: "Module" }));
@@ -809,7 +1172,10 @@ class MigrationSource {
       "20260803_cashbox_accounting_hardening.ts",
       "20260803210000_single_user_auth.ts",
       "20260804130000_consignment_settlements.ts",
-      "20260804140000_financial_transactions_hardening.ts"
+      "20260804140000_financial_transactions_hardening.ts",
+      "20260804170000_purchase_runtime_compatibility.ts",
+      "20260804200000_sale_runtime_compatibility.ts",
+      "20260804210000_make_payment_party_optional.ts"
     ]);
   }
   getMigrationName(migration) {
@@ -842,6 +1208,15 @@ class MigrationSource {
     }
     if (migration === "20260804140000_financial_transactions_hardening.ts") {
       return financialTransactionsHardening;
+    }
+    if (migration === "20260804170000_purchase_runtime_compatibility.ts") {
+      return purchaseRuntimeCompatibility;
+    }
+    if (migration === "20260804200000_sale_runtime_compatibility.ts") {
+      return saleRuntimeCompatibility;
+    }
+    if (migration === "20260804210000_make_payment_party_optional.ts") {
+      return paymentPartyOptionalMigration;
     }
     throw new Error(`Migration ${migration} not found`);
   }

@@ -1,103 +1,316 @@
-import { useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, DatabaseBackup, FileJson, RotateCcw } from "lucide-react";
-import { BackButton, Button, Card, PageHeader } from "../../components/ui";
+import { useEffect, useState } from "react";
+import {
+  AlertTriangle,
+  DatabaseBackup,
+  FolderOpen,
+  RotateCcw,
+  Save,
+} from "lucide-react";
+import { toast } from "sonner";
+import {
+  BackButton,
+  Button,
+  Card,
+  Input,
+  PageHeader,
+  Switch,
+} from "../../components/ui";
 import { PATHS } from "../../routes/path";
-import { settingsService } from "./settingsService";
 
-function formatDate(value: string) {
-  if (!value) return "لا توجد نسخة مسجلة";
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+type BackupInterval = "daily" | "weekly";
+
+type AutoBackupConfig = {
+  enabled: boolean;
+  interval: BackupInterval;
+  directory: string;
+  lastBackup: string | null;
+};
+
+const DEFAULT_CONFIG: AutoBackupConfig = {
+  enabled: false,
+  interval: "daily",
+  directory: "",
+  lastBackup: null,
+};
+
+function readableError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return "حدث خطأ غير متوقع";
 }
 
 export default function BackupSettingsPage() {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [lastBackup, setLastBackup] = useState(settingsService.getLastBackupAt());
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [status, setStatus] = useState<"idle" | "exported" | "restored" | "error">("idle");
-  const [acknowledged, setAcknowledged] = useState(false);
+  const [config, setConfig] = useState<AutoBackupConfig>(DEFAULT_CONFIG);
+  const [loadingConfig, setLoadingConfig] = useState(true);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [creatingBackup, setCreatingBackup] = useState(false);
+  const [restoringBackup, setRestoringBackup] = useState(false);
 
-  const exportBackup = () => {
-    const createdAt = settingsService.downloadBackup();
-    setLastBackup(createdAt);
-    setStatus("exported");
-  };
+  useEffect(() => {
+    let active = true;
 
-  const restoreBackup = async () => {
-    if (!selectedFile || !acknowledged) return;
+    window.stockliteApi.system
+      .getAutoBackupConfig()
+      .then((result) => {
+        if (active) setConfig(result as AutoBackupConfig);
+      })
+      .catch((error) => {
+        toast.error(`فشل تحميل إعدادات النسخ الاحتياطي: ${readableError(error)}`);
+      })
+      .finally(() => {
+        if (active) setLoadingConfig(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handleManualBackup() {
     try {
-      await settingsService.restoreBackup(selectedFile);
-      setStatus("restored");
-      setLastBackup(settingsService.getLastBackupAt());
-    } catch {
-      setStatus("error");
+      setCreatingBackup(true);
+      const selection = await window.stockliteApi.system.selectSaveFile();
+      if (selection.canceled || !selection.path) return;
+
+      const result = (await window.stockliteApi.system.backup(selection.path)) as {
+        destination?: string;
+      };
+
+      toast.success(
+        result.destination
+          ? `تم إنشاء النسخة الاحتياطية بنجاح في: ${result.destination}`
+          : "تم إنشاء النسخة الاحتياطية بنجاح.",
+      );
+    } catch (error) {
+      toast.error(`فشل النسخ الاحتياطي: ${readableError(error)}`);
+    } finally {
+      setCreatingBackup(false);
     }
-  };
+  }
+
+  async function handleManualRestore() {
+    try {
+      const selection = await window.stockliteApi.system.selectOpenFile();
+      if (selection.canceled || !selection.path) return;
+
+      const confirmed = window.confirm(
+        "سيتم التحقق من النسخة وإنشاء نسخة طوارئ من البيانات الحالية، ثم استبدال قاعدة البيانات وإعادة تشغيل التطبيق.\n\nهل تريد المتابعة؟",
+      );
+      if (!confirmed) return;
+
+      const typedConfirmation = window.prompt(
+        'للتأكيد النهائي اكتب كلمة "استعادة" ثم اضغط موافق:',
+      );
+      if (typedConfirmation?.trim() !== "استعادة") {
+        toast.info("تم إلغاء عملية الاستعادة.");
+        return;
+      }
+
+      setRestoringBackup(true);
+      toast.loading("جارٍ فحص النسخة واستعادة البيانات...", {
+        id: "database-restore",
+      });
+      await window.stockliteApi.system.restore(selection.path);
+    } catch (error) {
+      toast.dismiss("database-restore");
+      toast.error(`فشل استعادة البيانات: ${readableError(error)}`);
+      setRestoringBackup(false);
+    }
+  }
+
+  async function saveAutoBackupConfig() {
+    if (config.enabled && !config.directory.trim()) {
+      toast.error("الرجاء اختيار مجلد الحفظ للنسخ التلقائي.");
+      return;
+    }
+
+    try {
+      setSavingConfig(true);
+      const result = await window.stockliteApi.system.setAutoBackupConfig({
+        ...config,
+        directory: config.directory.trim(),
+      });
+      setConfig(result as AutoBackupConfig);
+      toast.success("تم حفظ إعدادات النسخ التلقائي بنجاح.");
+    } catch (error) {
+      toast.error(`فشل حفظ الإعدادات: ${readableError(error)}`);
+    } finally {
+      setSavingConfig(false);
+    }
+  }
+
+  async function selectAutoDirectory() {
+    try {
+      const selection = await window.stockliteApi.system.selectDirectory();
+      if (!selection.canceled && selection.path) {
+        setConfig((previous) => ({
+          ...previous,
+          directory: selection.path ?? "",
+        }));
+      }
+    } catch (error) {
+      toast.error(readableError(error));
+    }
+  }
+
+  function formatDate(value: string | null): string {
+    if (!value) return "لم يتم إجراء نسخ تلقائي بعد";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "غير معروف";
+    return date.toLocaleString("en-US", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
 
   return (
     <>
       <PageHeader
-        title="النسخ الاحتياطي"
-        description="احفظ نسخة من بيانات الواجهة الحالية أو استعد نسخة سابقة."
+        title="النسخ الاحتياطي والاستعادة"
+        description="إنشاء نسخة كاملة من قاعدة البيانات واستعادتها بأمان، مع دعم النسخ التلقائي."
         actions={<BackButton to={PATHS.SETTINGS} />}
       />
 
-      {status !== "idle" && (
-        <div className={`mb-4 flex items-center gap-2 rounded-[var(--radius-sm)] border px-4 py-3 text-sm font-medium ${status === "error" ? "border-[#e8b8b8] bg-[#fff4f4] text-[#9c3c3c]" : "border-[#b7d7c5] bg-[#f1f8f4] text-[#37634d]"}`}>
-          {status === "error" ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
-          {status === "exported" && "تم إنشاء ملف النسخة الاحتياطية بنجاح."}
-          {status === "restored" && "تمت استعادة البيانات. أعد فتح الصفحة لتحديث جميع الأقسام."}
-          {status === "error" && "الملف غير صالح أو لا ينتمي إلى نسخة StockLite."}
-        </div>
-      )}
-
       <div className="grid gap-5 xl:grid-cols-2">
-        <Card header="إنشاء نسخة احتياطية" description="يتم تصدير البيانات المحلية الحالية إلى ملف JSON.">
-          <div className="flex min-h-[250px] flex-col items-center justify-center text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--primary-subtle)] text-[var(--primary)]">
-              <DatabaseBackup size={29} />
+        <Card header="النسخ اليدوي" description="حفظ قاعدة البيانات أو استعادة نسخة سابقة">
+          <div className="flex flex-col gap-6">
+            <div className="flex min-h-[170px] flex-col items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-5 text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--primary-subtle)] text-[var(--primary)]">
+                <DatabaseBackup size={29} />
+              </div>
+              <h3 className="text-base font-bold text-[var(--text-primary)]">
+                إنشاء نسخة احتياطية متكاملة
+              </h3>
+              <p className="mt-2 max-w-sm text-sm text-[var(--text-muted)]">
+                ينشئ النظام لقطة SQLite سليمة ومستقلة تشمل جميع بيانات التطبيق.
+              </p>
+              <Button
+                className="mt-5"
+                isLoading={creatingBackup}
+                disabled={restoringBackup}
+                onClick={() => void handleManualBackup()}
+                startIcon={<DatabaseBackup size={17} />}
+              >
+                إنشاء نسخة احتياطية
+              </Button>
             </div>
-            <h3 className="mt-5 text-base font-bold text-[var(--text-primary)]">تنزيل نسخة من البيانات</h3>
-            <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--text-muted)]">احتفظ بالملف في مكان آمن. سيشمل إعدادات وبيانات التخزين المحلي المستخدمة حاليًا في الواجهة.</p>
-            <div className="mt-4 rounded-[var(--radius-sm)] bg-[var(--surface-subtle)] px-4 py-2 text-xs text-[var(--text-secondary)]">
-              آخر نسخة: <span dir="ltr" className="font-bold">{formatDate(lastBackup)}</span>
+
+            <div className="flex min-h-[180px] flex-col items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[#e6cf9a] bg-[#fff9e9] p-5 text-center dark:border-[#705f34] dark:bg-[#2c271a]">
+              <div className="mb-2 flex items-start gap-2 text-sm font-bold text-[#7c6023] dark:text-[#e7cc83]">
+                <AlertTriangle size={20} className="shrink-0" />
+                استعادة نسخة سابقة
+              </div>
+              <p className="max-w-sm text-xs leading-5 text-[#856f3d] dark:text-[#d7c184]">
+                يفحص النظام سلامة الملف أولًا، وينشئ نسخة طوارئ من البيانات الحالية، ثم يعيد تشغيل التطبيق بعد الاستعادة.
+              </p>
+              <Button
+                variant="danger"
+                className="mt-5"
+                isLoading={restoringBackup}
+                disabled={creatingBackup}
+                onClick={() => void handleManualRestore()}
+                startIcon={<RotateCcw size={17} />}
+              >
+                استعادة النسخة
+              </Button>
             </div>
-            <Button className="mt-5" onClick={exportBackup} startIcon={<DatabaseBackup size={17} />}>إنشاء نسخة احتياطية</Button>
           </div>
         </Card>
 
-        <Card header="استعادة نسخة احتياطية" description="اختر ملف JSON سبق إنشاؤه من النظام.">
-          <div className="min-h-[250px]">
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              className="flex w-full flex-col items-center justify-center rounded-[var(--radius-md)] border-2 border-dashed border-[var(--border-strong)] px-5 py-8 text-center transition-colors hover:border-[var(--primary)] hover:bg-[var(--primary-subtle)]"
-            >
-              <FileJson size={31} className="text-[var(--primary)]" />
-              <span className="mt-3 text-sm font-bold text-[var(--text-primary)]">{selectedFile ? selectedFile.name : "اختيار ملف النسخة"}</span>
-              <span className="mt-1 text-xs text-[var(--text-muted)]">ملفات JSON فقط</span>
-            </button>
-            <input ref={inputRef} hidden type="file" accept="application/json,.json" onChange={(event) => { setSelectedFile(event.target.files?.[0] ?? null); setStatus("idle"); setAcknowledged(false); }} />
-
-            <div className="mt-4 rounded-[var(--radius-sm)] border border-[#e6cf9a] bg-[#fff9e9] p-4">
-              <div className="flex items-start gap-2 text-sm font-bold text-[#7c6023]">
-                <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-                تنبيه قبل الاستعادة
-              </div>
-              <p className="mt-2 text-xs leading-5 text-[#856f3d]">ستستبدل الاستعادة بيانات التخزين المحلي الحالية بالبيانات الموجودة داخل الملف المختار.</p>
-              <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs font-medium text-[#6f5c31]">
-                <input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} className="mt-0.5" />
-                أفهم أن البيانات الحالية ستُستبدل عند المتابعة.
-              </label>
+        <Card
+          header="النسخ الاحتياطي التلقائي"
+          description="حفظ نسخة دورية أثناء تشغيل التطبيق والاحتفاظ بآخر سبع نسخ"
+        >
+          {loadingConfig ? (
+            <div className="py-14 text-center text-sm text-[var(--text-muted)]">
+              جارٍ تحميل الإعدادات...
             </div>
+          ) : (
+            <div className="flex flex-col gap-5">
+              <div className="flex items-center justify-between border-b border-[var(--divider)] pb-4">
+                <div>
+                  <h4 className="text-sm font-bold">تفعيل النسخ التلقائي</h4>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
+                    يفحص النظام موعد النسخة كل ساعة أثناء تشغيل التطبيق.
+                  </p>
+                </div>
+                <Switch
+                  checked={config.enabled}
+                  onChange={(event) =>
+                    setConfig((previous) => ({
+                      ...previous,
+                      enabled: event.target.checked,
+                    }))
+                  }
+                />
+              </div>
 
-            <Button fullWidth className="mt-4" variant="secondary" disabled={!selectedFile || !acknowledged} onClick={restoreBackup} startIcon={<RotateCcw size={17} />}>استعادة النسخة المختارة</Button>
-          </div>
+              <div
+                className={`flex flex-col gap-5 ${
+                  config.enabled ? "" : "pointer-events-none opacity-50"
+                }`}
+              >
+                <div>
+                  <label className="mb-2 block text-sm font-bold text-[var(--text-primary)]">
+                    مجلد الحفظ التلقائي
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      className="flex-1"
+                      value={config.directory}
+                      readOnly
+                      placeholder="اختر مجلدًا يمكن الكتابة فيه..."
+                    />
+                    <Button
+                      variant="secondary"
+                      onClick={() => void selectAutoDirectory()}
+                      startIcon={<FolderOpen size={16} />}
+                    >
+                      تصفح
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-bold text-[var(--text-primary)]">
+                    فترة النسخ
+                  </label>
+                  <select
+                    className="flex w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]"
+                    value={config.interval}
+                    onChange={(event) =>
+                      setConfig((previous) => ({
+                        ...previous,
+                        interval: event.target.value as BackupInterval,
+                      }))
+                    }
+                  >
+                    <option value="daily">يوميًا</option>
+                    <option value="weekly">أسبوعيًا</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-2 rounded-[var(--radius-sm)] bg-[var(--surface-subtle)] p-3 text-xs text-[var(--text-secondary)]">
+                آخر نسخة تلقائية: {" "}
+                <span dir="ltr" className="font-bold">
+                  {formatDate(config.lastBackup)}
+                </span>
+              </div>
+
+              <div className="mt-2 flex justify-end">
+                <Button
+                  isLoading={savingConfig}
+                  onClick={() => void saveAutoBackupConfig()}
+                  startIcon={<Save size={16} />}
+                >
+                  حفظ الإعدادات
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       </div>
     </>

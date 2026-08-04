@@ -2,7 +2,6 @@ export type TransactionDirection = "income" | "expense";
 export type FinancialTransactionStatus = "active" | "cancelled";
 
 export type FinancialTransaction = {
-  referenceNumber: any;
   id: number;
   type: TransactionDirection; // using 'type' instead of 'direction' as per plan
   category_id: number;

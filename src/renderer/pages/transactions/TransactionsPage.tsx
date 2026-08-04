@@ -94,7 +94,7 @@ export default function TransactionsPage() {
         }
       />
 
-      <TransactionsSummaryCards income={totalIncome} expense={totalExpense} count={summary?.activeTransactionsCount || 0} />
+      <TransactionsSummaryCards income={totalIncome} expense={totalExpense} count={totalCount} />
 
       <Card padding={false} className="mt-5" header="سجل المعاملات" description="الإيرادات والمصروفات المالية المسجلة.">
         <div className="grid gap-3 border-b border-[var(--border)] p-4 lg:grid-cols-[minmax(240px,1fr)_180px_180px_180px_auto]">

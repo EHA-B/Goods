@@ -24,7 +24,7 @@ export default function SalePaymentPage() {
     Promise.all([salesService.getDetails(id), salesService.getLookups()])
       .then(([data, lookups]) => {
         setDetails(data);
-        setCashboxes(lookups.cashboxes);
+        setCashboxes(lookups.cashboxes.filter((item) => Boolean(item.isActive)));
         setAmount(data.financial_summary.remaining_amount);
         if (lookups.cashboxes.length > 0) setCashboxId(lookups.cashboxes[0].id);
       })
@@ -75,7 +75,7 @@ export default function SalePaymentPage() {
             <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </FormField>
           <FormField label="الصندوق" htmlFor="cashbox" required>
-            <Select id="cashbox" value={String(cashboxId)} options={cashboxes.map((c) => ({ value: String(c.id), label: c.name }))} onChange={(e) => setCashboxId(Number(e.target.value))} />
+            <Select id="cashbox" value={String(cashboxId)} options={[{ value: "0", label: "اختر الصندوق" }, ...cashboxes.map((c) => ({ value: String(c.id), label: `${c.name} — ${Number(c.balance ?? 0).toLocaleString("en-US")} ${c.currency}` }))]} onChange={(e) => setCashboxId(Number(e.target.value))} />
           </FormField>
           <FormField label="ملاحظات" htmlFor="notes" className="md:col-span-2">
             <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />

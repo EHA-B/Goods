@@ -10,6 +10,7 @@ import * as optionalProductCodeMigration from './migrations/20260731210000_make_
 import * as quantityBeforeAfterMigration from './migrations/20260801135327_add_quantity_before_after_to_stock_adjustments';
 import * as cashboxAccountingHardening from './migrations/20260803_cashbox_accounting_hardening';
 import * as singleUserAuthMigration from './migrations/20260803210000_single_user_auth';
+import * as sales_purchases_hardening from './migrations/20260804_sales_purchases_hardening';
 import * as consignmentSettlementsMigration from './migrations/20260804130000_consignment_settlements';
 import * as financialTransactionsHardening from './migrations/20260804140000_financial_transactions_hardening';
 import * as cashboxesSeed from './seeds/01_cashboxes';
@@ -29,7 +30,8 @@ class MigrationSource {
       '20260803_cashbox_accounting_hardening.ts',
       '20260803210000_single_user_auth.ts',
       '20260804130000_consignment_settlements.ts',
-      '20260804140000_financial_transactions_hardening.ts'
+      '20260804140000_financial_transactions_hardening.ts',
+      '20260804_sales_purchases_hardening.ts'
     ]);
   }
   getMigrationName(migration: string) {
@@ -62,6 +64,9 @@ class MigrationSource {
     }
     if (migration === '20260804140000_financial_transactions_hardening.ts') {
       return financialTransactionsHardening;
+    }
+    if (migration === '20260804_sales_purchases_hardening.ts') {
+      return sales_purchases_hardening;
     }
     throw new Error(`Migration ${migration} not found`);
   }

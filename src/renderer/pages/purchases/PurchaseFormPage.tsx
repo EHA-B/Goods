@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Calculator, PackagePlus, Plus, Save, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { BackButton, Button, Card, FormField, FormSection, Input, PageHeader, Select, Textarea } from "../../components/ui";
+import { BackButton, Button, Card, Dialog, FormField, FormSection, Input, PageHeader, Select, Textarea } from "../../components/ui";
 import { PATHS } from "../../routes/path";
 import { purchasesService } from "./purchasesService";
+import { getProductErrorMessage, productsService } from "../products/productsService";
 
 type PurchaseItemForm = {
   product_id: number;
@@ -41,6 +42,16 @@ export default function PurchaseFormPage() {
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentCashboxId, setPaymentCashboxId] = useState(0);
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [quickProductIndex, setQuickProductIndex] = useState<number | null>(null);
+  const [quickProductSaving, setQuickProductSaving] = useState(false);
+  const [quickProductError, setQuickProductError] = useState("");
+  const [quickProduct, setQuickProduct] = useState({
+    name: "",
+    code: "",
+    unit: "",
+    category: "",
+    description: "",
+  });
 
   const [lookups, setLookups] = useState<{ suppliers: PartyApiRecord[]; cashboxes: CashboxApiRecord[]; products: ProductApiRecord[] } | null>(null);
   const [lookupsLoading, setLookupsLoading] = useState(true);
@@ -65,6 +76,53 @@ export default function PurchaseFormPage() {
   const selectProduct = (index: number, productId: number) => {
     const product = lookups?.products.find((p) => p.id === productId);
     updateItem(index, { product_id: productId, productName: product?.name ?? "" });
+  };
+
+  const openQuickProduct = (index: number) => {
+    setQuickProductIndex(index);
+    setQuickProductError("");
+    setQuickProduct({ name: "", code: "", unit: "", category: "", description: "" });
+  };
+
+  const createQuickProduct = async () => {
+    if (quickProductIndex === null) return;
+    if (!quickProduct.name.trim() || !quickProduct.unit.trim()) {
+      setQuickProductError("اسم المنتج والوحدة مطلوبان.");
+      return;
+    }
+
+    try {
+      setQuickProductSaving(true);
+      setQuickProductError("");
+      const created = await productsService.create({
+        name: quickProduct.name,
+        code: quickProduct.code,
+        unit: quickProduct.unit,
+        category: quickProduct.category,
+        description: quickProduct.description,
+        isActive: true,
+      });
+
+      const apiProduct: ProductApiRecord = {
+        id: created.id,
+        name: created.name,
+        code: created.code,
+        unit: created.unit,
+        category: created.category,
+        description: created.description,
+        isActive: created.isActive,
+      };
+
+      setLookups((current) => current
+        ? { ...current, products: [...current.products, apiProduct].sort((a, b) => a.name.localeCompare(b.name, "ar")) }
+        : current);
+      updateItem(quickProductIndex, { product_id: created.id, productName: created.name });
+      setQuickProductIndex(null);
+    } catch (createError) {
+      setQuickProductError(getProductErrorMessage(createError));
+    } finally {
+      setQuickProductSaving(false);
+    }
   };
 
   const submit = async () => {
@@ -145,10 +203,25 @@ export default function PurchaseFormPage() {
       <Card padding={false} header="أصناف الفاتورة" description="أضف المنتجات وحدد الكمية وسعر الشراء وبيانات دفعة المخزون.">
         <div className="space-y-4 p-4">
           {items.map((item, index) => (
-            <div key={index} className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
+            <div key={index} className="relative rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4 pt-14">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="absolute left-3 top-3 h-8 border border-[var(--danger)]/30 px-2.5 text-[var(--danger)] hover:bg-[var(--danger-subtle)] hover:text-[var(--danger)]"
+                startIcon={<Trash2 size={15} />}
+                disabled={items.length === 1}
+                onClick={() => setItems((curr) => curr.filter((_, i) => i !== index))}
+              >
+                حذف الصنف
+              </Button>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <FormField label="المنتج" required>
-                  <Select value={String(item.product_id)} disabled={lookupsLoading} options={[{ value: "0", label: lookupsLoading ? "جاري تحميل المنتجات..." : "اختر المنتج" }, ...(lookups?.products ?? []).map((p) => ({ value: String(p.id), label: `${p.name} — ${p.code ?? ""}` }))]} onChange={(e) => selectProduct(index, Number(e.target.value))} />
+                  <div className="flex gap-2">
+                    <div className="min-w-0 flex-1">
+                      <Select value={String(item.product_id)} disabled={lookupsLoading} options={[{ value: "0", label: lookupsLoading ? "جاري تحميل المنتجات..." : "اختر المنتج" }, ...(lookups?.products ?? []).map((p) => ({ value: String(p.id), label: `${p.name} — ${p.code ?? ""}` }))]} onChange={(e) => selectProduct(index, Number(e.target.value))} />
+                    </div>
+                    <Button size="sm" variant="secondary" className="h-11 shrink-0 px-3" startIcon={<Plus size={15} />} onClick={() => openQuickProduct(index)}>منتج جديد</Button>
+                  </div>
                 </FormField>
                 <FormField label="الكمية" required>
                   <Input type="number" min="0.001" step="0.001" value={item.quantity} onChange={(e) => updateItem(index, { quantity: Number(e.target.value) })} />
@@ -168,9 +241,7 @@ export default function PurchaseFormPage() {
                 <FormField label="تاريخ الانتهاء">
                   <Input type="date" value={item.expiry_date} onChange={(e) => updateItem(index, { expiry_date: e.target.value })} />
                 </FormField>
-                <div className="flex items-end">
-                  <Button variant="danger" startIcon={<Trash2 size={16} />} disabled={items.length === 1} onClick={() => setItems((curr) => curr.filter((_, i) => i !== index))}>حذف</Button>
-                </div>
+
               </div>
             </div>
           ))}
@@ -218,6 +289,35 @@ export default function PurchaseFormPage() {
         </Card>
       </div>
     </div>
+
+    <Dialog
+      open={quickProductIndex !== null}
+      title="إضافة منتج جديد"
+      onClose={() => !quickProductSaving && setQuickProductIndex(null)}
+      footer={<>
+        <Button variant="secondary" disabled={quickProductSaving} onClick={() => setQuickProductIndex(null)}>إلغاء</Button>
+        <Button isLoading={quickProductSaving} loadingText="جاري الإضافة..." startIcon={<Save size={16} />} onClick={() => void createQuickProduct()}>إضافة واختيار المنتج</Button>
+      </>}
+    >
+      <div className="grid gap-4 md:grid-cols-2">
+        <FormField label="اسم المنتج" required>
+          <Input autoFocus value={quickProduct.name} placeholder="مثال: سكر أبيض 1 كغ" onChange={(e) => setQuickProduct((current) => ({ ...current, name: e.target.value }))} />
+        </FormField>
+        <FormField label="كود المنتج">
+          <Input dir="ltr" value={quickProduct.code} placeholder="اختياري" onChange={(e) => setQuickProduct((current) => ({ ...current, code: e.target.value }))} />
+        </FormField>
+        <FormField label="الوحدة" required>
+          <Input value={quickProduct.unit} placeholder="كغ، قطعة، عبوة..." onChange={(e) => setQuickProduct((current) => ({ ...current, unit: e.target.value }))} />
+        </FormField>
+        <FormField label="التصنيف">
+          <Input value={quickProduct.category} placeholder="اختياري" onChange={(e) => setQuickProduct((current) => ({ ...current, category: e.target.value }))} />
+        </FormField>
+        <FormField label="الوصف" className="md:col-span-2">
+          <Textarea value={quickProduct.description} placeholder="وصف أو ملاحظات إضافية..." onChange={(e) => setQuickProduct((current) => ({ ...current, description: e.target.value }))} />
+        </FormField>
+        {quickProductError && <p className="md:col-span-2 rounded-[var(--radius-sm)] bg-[var(--danger-subtle)] px-3 py-2 text-sm font-bold text-[var(--danger)]">{quickProductError}</p>}
+      </div>
+    </Dialog>
 
     <div className="fixed bottom-0 left-0 right-[260px] z-20 border-t border-[var(--border)] bg-[var(--surface)]/95 px-6 py-3 backdrop-blur">
       <div className="flex justify-end gap-3">

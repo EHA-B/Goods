@@ -24,6 +24,7 @@ const crudApi = (entity, methodNames) => ({
   remove: (id) => invokeApi(`api:${entity}:${methodNames.remove}`, id)
 });
 const stockliteApi = {
+  dashboard: { get: () => invokeApi("api:dashboard:get") },
   auth: {
     login: (input) => invokeApi("api:auth:login", input),
     logout: () => invokeApi("api:auth:logout"),
@@ -146,13 +147,6 @@ const stockliteApi = {
     deleteDraft: (id) => invokeApi("api:saleInvoice:deleteDraftSaleInvoice", id),
     availableBatches: (productId) => invokeApi("api:saleInvoice:getAvailableBatches", productId)
   },
-  saleInvoiceItems: crudApi("saleInvoiceItem", {
-    create: "createSaleInvoiceItem",
-    get: "getSaleInvoiceItem",
-    list: "getAllSaleInvoiceItems",
-    update: "updateSaleInvoiceItem",
-    remove: "deleteSaleInvoiceItem"
-  }),
   saleTypes: crudApi("saleType", {
     create: "createSaleType",
     get: "getSaleType",

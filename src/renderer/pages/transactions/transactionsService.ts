@@ -12,18 +12,21 @@ export const transactionsService = {
     const items = response.items.map((item: any) => ({
       id: Number(item.id),
       type: item.direction,
-      categoryId: Number(item.category_id),
-      categoryName: item.category_name || "فئة غير معروفة",
-      cashboxId: Number(item.cashbox_id),
-      cashboxName: item.cashbox_name || "صندوق غير معروف",
+      category_id: Number(item.category_id),
+      category_name: item.category_name || "فئة غير معروفة",
+      cashbox_id: Number(item.cashbox_id),
+      cashbox_name: item.cashbox_name || "صندوق غير معروف",
       amount: Number(item.amount),
-      transactionDate: item.transaction_date,
-      description: item.description || "",
-      notes: item.notes || "",
+      transaction_date: item.transaction_date,
+      description: item.description || null,
+      reference_number: item.reference_number || null,
+      notes: item.notes || null,
       status: item.status,
-      cashboxTransactionId: item.cashbox_transaction_id ? Number(item.cashbox_transaction_id) : null,
-      cancelledAt: item.cancelled_at || null,
-      cancellationReason: item.cancellation_reason || null,
+      cashbox_transaction_id: item.cashbox_transaction_id ? Number(item.cashbox_transaction_id) : null,
+      cancelled_at: item.cancelled_at || null,
+      cancellation_reason: item.cancellation_reason || null,
+      created_at: item.created_at || "",
+      updated_at: item.updated_at || "",
     }));
 
     return {
@@ -43,6 +46,7 @@ export const transactionsService = {
     amount: number;
     transactionDate: string;
     description?: string;
+    referenceNumber?: string;
     notes?: string;
   }) {
     return window.stockliteApi.transactions.createFinancial({
@@ -52,6 +56,7 @@ export const transactionsService = {
       amount: input.amount,
       transaction_date: input.transactionDate,
       description: input.description || null,
+      reference_number: input.referenceNumber || null,
       notes: input.notes || null,
     });
   },

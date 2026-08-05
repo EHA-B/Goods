@@ -1,4 +1,4 @@
-import { Banknote, HandCoins, Pencil, Plus, Printer, ReceiptText, Trash2, XCircle } from "lucide-react";
+import { Banknote, HandCoins, Plus, Printer, ReceiptText, RotateCcw, Trash2, XCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DataTable from "../../components/common/DataTable";
@@ -42,12 +42,14 @@ export default function PurchaseDetailsPage() {
 
   const { invoice, supplier, items, payments, financial_summary } = details;
   const editable = invoice.status === "draft";
-  const canCancel = invoice.status === "confirmed" || invoice.status === "partially_paid";
+  const canCancel = ["confirmed", "partially_paid", "paid"].includes(invoice.status);
 
   const handleCancel = async () => {
     setCancelling(true);
     try {
-      const updated = await purchasesService.cancel(invoice.id, "إلغاء يدوي من صفحة التفاصيل");
+      const reason = window.prompt("اكتب سبب إلغاء فاتورة الشراء:", "إلغاء بطلب المستخدم");
+      if (!reason?.trim()) { setCancelling(false); return; }
+      const updated = await purchasesService.cancel(invoice.id, reason.trim());
       setDetails(updated);
       setCancelOpen(false);
     } catch (err: unknown) {
@@ -72,8 +74,8 @@ export default function PurchaseDetailsPage() {
   };
 
   return <>
-    <PageHeader title={`فاتورة الشراء ${invoice.invoice_number}`} description="تفاصيل المورد والأصناف ودفعات المخزون والمدفوعات." actions={<div className="flex flex-wrap gap-2"><BackButton to={PATHS.PURCHASES} /><Button variant="secondary" startIcon={<Pencil size={17} />} disabled={!editable} title={!editable ? "التعديل متاح للفواتير المسودة فقط" : undefined} onClick={() => navigate(`/purchases/${invoice.id}/edit`)}>تعديل</Button><Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/print`)}>طباعة / PDF</Button>{invoice.invoice_type === "consignment" && <Button variant="secondary" startIcon={<HandCoins size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/consignment`)}>متابعة الأمانة</Button>}{invoice.status !== "paid" && invoice.status !== "cancelled" && <Button startIcon={<Plus size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/payments/new`)}>تسجيل دفعة</Button>}{canCancel && <Button variant="danger" startIcon={<XCircle size={17} />} onClick={() => setCancelOpen(true)}>إلغاء الفاتورة</Button>}<Button variant="danger" startIcon={<Trash2 size={17} />} disabled={!editable} title={!editable ? "الحذف متاح للفواتير المسودة فقط" : undefined} onClick={() => setDeleteOpen(true)}>حذف</Button></div>} />
-    <p className="mb-5 text-xs text-[var(--text-muted)]">ملاحظة: التعديل والحذف متاحان للفواتير <strong className="text-[var(--text-secondary)]">المسودة</strong> فقط، بينما الفواتير المؤكدة والمدفوعة تكون للقراءة فقط حفاظًا على سلامة المخزون والبيانات المالية.</p>
+    <PageHeader title={`فاتورة الشراء ${invoice.invoice_number}`} description="تفاصيل المورد والأصناف ودفعات المخزون والمدفوعات." actions={<div className="flex flex-wrap gap-2"><BackButton to={PATHS.PURCHASES} /><Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/print`)}>طباعة / PDF</Button>{invoice.invoice_type === "consignment" && <Button variant="secondary" startIcon={<HandCoins size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/consignment`)}>متابعة الأمانة</Button>}{invoice.status !== "paid" && invoice.status !== "cancelled" && <Button startIcon={<Plus size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/payments/new`)}>تسجيل دفعة</Button>}{canCancel && <Button variant="danger" startIcon={<XCircle size={17} />} onClick={() => setCancelOpen(true)}>إلغاء الفاتورة</Button>}<Button variant="danger" startIcon={<Trash2 size={17} />} disabled={!editable} title={!editable ? "الحذف متاح للفواتير المسودة فقط" : undefined} onClick={() => setDeleteOpen(true)}>حذف</Button></div>} />
+    <p className="mb-5 text-xs text-[var(--text-muted)]">الفاتورة المؤكدة لا تُعدّل مباشرة. التصحيح يتم بالإلغاء للحفاظ على المخزون والأرصدة والسجل المالي.</p>
     <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
       <div className="space-y-5">
         <Card header="بيانات الفاتورة">
@@ -127,7 +129,7 @@ export default function PurchaseDetailsPage() {
             <DataTable>
               <DataTableHead>
                 <DataTableRow>
-                  {["التاريخ", "الصندوق", "المبلغ", "الحالة", "الملاحظات"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
+                  {["التاريخ", "الصندوق", "المبلغ", "الحالة", "الملاحظات", "الإجراء"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
                 </DataTableRow>
               </DataTableHead>
               <DataTableBody>
@@ -138,6 +140,14 @@ export default function PurchaseDetailsPage() {
                     <DataTableCell className="font-bold">{money(payment.amount)}</DataTableCell>
                     <DataTableCell>{payment.status === "reversed" ? "ملغي" : "نشط"}</DataTableCell>
                     <DataTableCell>{payment.notes ?? "-"}</DataTableCell>
+                    <DataTableCell>{payment.status === "active" ? <Button size="sm" variant="secondary" startIcon={<RotateCcw size={15} />} onClick={async () => {
+                      const reason = window.prompt("سبب عكس الدفعة:", "تصحيح دفعة");
+                      if (!reason?.trim()) return;
+                      try {
+                        await purchasesService.reversePayment(payment.id, reason.trim());
+                        setDetails(await purchasesService.getDetails(invoice.id));
+                      } catch (err: unknown) { setError((err as Error).message || "تعذر عكس الدفعة"); }
+                    }}>عكس الدفعة</Button> : "-"}</DataTableCell>
                   </DataTableRow>
                 ))}
               </DataTableBody>

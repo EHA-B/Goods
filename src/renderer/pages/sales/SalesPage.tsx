@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, ReceiptText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import TableFooter from "../../components/common/TableFooter";
 import SalesSummaryCards from "../../components/sales/SalesSummaryCards";
 import SalesTable from "../../components/sales/SalesTable";
-import { Button, Card, ConfirmDialog, EmptyState, Input, PageHeader, Select } from "../../components/ui";
+import { Button, Card, ConfirmDialog, EmptyState, Input, PageHeader, Pagination, Select } from "../../components/ui";
 import { PATHS } from "../../routes/path";
 import { salesService } from "./salesService";
 
@@ -13,103 +12,69 @@ const emptyTotals = { total: 0, paid: 0, remaining: 0, profit: 0, count: 0 };
 export default function SalesPage() {
   const navigate = useNavigate();
   const [sales, setSales] = useState<SaleInvoiceRecord[]>([]);
+  const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState("");
   const [pendingCancel, setPendingCancel] = useState<SaleInvoiceRecord | null>(null);
   const [cancelling, setCancelling] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
-    setError("");
+  const load = async (page = pagination.page) => {
+    setLoading(true); setError("");
     try {
-      const data = await salesService.list();
-      setSales(data);
+      const result = await salesService.listFiltered(
+        { search: query.trim() || undefined, status: status as InvoiceStatus | "" },
+        { page, limit: pagination.limit },
+      );
+      setSales(result.items);
+      setPagination(result.pagination);
     } catch (err: unknown) {
-      const e = err as Error;
-      setError(e.message || "خطأ في تحميل الفواتير");
-    } finally {
-      setLoading(false);
-    }
+      setError((err as Error).message || "خطأ في تحميل الفواتير");
+      setSales([]);
+    } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { const timer = window.setTimeout(() => void load(1), 250); return () => window.clearTimeout(timer); }, [query, status]);
 
-  const filtered = useMemo(() =>
-    sales.filter((sale) =>
-      (!query.trim() || `${sale.invoice_number} ${sale.customer_name ?? ""}`.toLowerCase().includes(query.toLowerCase())) &&
-      (status === "all" || sale.status === status)
-    ),
-    [sales, query, status]
-  );
-
-  const totals = useMemo(() => ({
-    total:     sales.reduce((s, i) => s + Number(i.total ?? 0), 0),
-    paid:      sales.reduce((s, i) => s + Number(i.paid_amount ?? 0), 0),
-    remaining: sales.reduce((s, i) => s + Number(i.remaining_amount ?? 0), 0),
-    profit:    0, // profit requires join with items — not in flat list
-    count:     sales.length,
-  }), [sales]);
+  const totals = sales.reduce((acc, item) => ({
+    total: acc.total + Number(item.total ?? 0),
+    paid: acc.paid + Number(item.paid_amount ?? 0),
+    remaining: acc.remaining + Number(item.remaining_amount ?? 0),
+    profit: acc.profit,
+    count: pagination.total,
+  }), { ...emptyTotals });
 
   const handleCancel = async () => {
     if (!pendingCancel) return;
     setCancelling(true);
     try {
-      if (pendingCancel.status === "draft") {
-        await salesService.deleteDraft(pendingCancel.id);
-      } else {
-        await salesService.cancel(pendingCancel.id, "إلغاء من قائمة الفواتير");
+      if (pendingCancel.status === "draft") await salesService.deleteDraft(pendingCancel.id);
+      else {
+        const reason = window.prompt("اكتب سبب إلغاء فاتورة البيع:", "إلغاء بطلب المستخدم");
+        if (!reason?.trim()) { setCancelling(false); return; }
+        await salesService.cancel(pendingCancel.id, reason.trim());
       }
-      setPendingCancel(null);
-      await load();
-    } catch (err: unknown) {
-      const e = err as Error;
-      setError(e.message || "تعذر إلغاء الفاتورة");
-      setPendingCancel(null);
-    } finally {
-      setCancelling(false);
-    }
+      setPendingCancel(null); await load(pagination.page);
+    } catch (err: unknown) { setError((err as Error).message || "تعذر تنفيذ العملية"); setPendingCancel(null); }
+    finally { setCancelling(false); }
   };
 
   return <>
-    <PageHeader
-      title="المبيعات"
-      description="إدارة فواتير البيع والمدفوعات والأرباح وحالات الفواتير."
-      actions={<Button startIcon={<Plus size={17} />} onClick={() => navigate(PATHS.SALE_NEW)}>فاتورة بيع جديدة</Button>}
-    />
+    <PageHeader title="المبيعات" description="إدارة فواتير البيع والمدفوعات وحالات الفواتير." actions={<Button startIcon={<Plus size={17} />} onClick={() => navigate(PATHS.SALE_NEW)}>فاتورة بيع جديدة</Button>} />
     <SalesSummaryCards {...(loading ? emptyTotals : totals)} />
-    <Card padding={false} className="mt-5" header="فواتير المبيعات" description="استعراض الفواتير وتصفية النتائج حسب العميل أو الحالة.">
+    <Card padding={false} className="mt-5" header="فواتير المبيعات" description="البيانات محملة مباشرة من الباك مع بحث وفلترة وتقسيم صفحات.">
       <div className="grid gap-3 border-b border-[var(--border)] p-4 md:grid-cols-[1fr_220px_auto]">
         <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث برقم الفاتورة أو اسم العميل" />
-        <Select value={status} onChange={(e) => setStatus(e.target.value)} options={[{ value: "all", label: "كل الحالات" }, { value: "draft", label: "مسودة" }, { value: "confirmed", label: "مؤكدة" }, { value: "partially_paid", label: "مدفوعة جزئيًا" }, { value: "paid", label: "مدفوعة" }, { value: "cancelled", label: "ملغاة" }]} />
-        <Button variant="secondary" onClick={() => { setQuery(""); setStatus("all"); }}>مسح الفلاتر</Button>
+        <Select value={status} onChange={(e) => setStatus(e.target.value)} options={[{ value: "", label: "كل الحالات" }, { value: "draft", label: "مسودة" }, { value: "confirmed", label: "مؤكدة" }, { value: "partially_paid", label: "مدفوعة جزئيًا" }, { value: "paid", label: "مدفوعة" }, { value: "cancelled", label: "ملغاة" }]} />
+        <Button variant="secondary" onClick={() => { setQuery(""); setStatus(""); }}>مسح الفلاتر</Button>
       </div>
-
       {error && <div className="m-4 rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
-
-      {loading ? (
-        <div className="px-6 py-12 text-center text-sm text-[var(--text-muted)]">جاري التحميل...</div>
-      ) : filtered.length ? <>
-        <SalesTable
-          sales={filtered as never[]}
-          onView={(sale) => navigate(`/sales/${(sale as SaleInvoiceRecord).id}`)}
-          onEdit={(sale) => navigate(`/sales/${(sale as SaleInvoiceRecord).id}/edit`)}
-          onDelete={(sale) => setPendingCancel(sale as SaleInvoiceRecord)}
-        />
-        <TableFooter visibleCount={filtered.length} totalCount={sales.length} entityName="فاتورة" />
-      </> : (
-        <EmptyState icon={<ReceiptText size={32} />} title="لا توجد فواتير مطابقة" description="غيّر البحث أو الحالة، أو أنشئ فاتورة بيع جديدة." />
-      )}
+      {loading ? <div className="px-6 py-12 text-center text-sm text-[var(--text-muted)]">جاري التحميل...</div> : sales.length ? <>
+        <SalesTable sales={sales} onView={(s) => navigate(`/sales/${s.id}`)} onDelete={setPendingCancel} />
+        <div className="px-5 pb-5"><Pagination page={pagination.page} totalPages={Math.max(1, pagination.totalPages)} onChange={(page) => void load(page)} /></div>
+      </> : <EmptyState icon={<ReceiptText size={32} />} title="لا توجد فواتير مطابقة" description="غيّر البحث أو الحالة، أو أنشئ فاتورة بيع جديدة." />}
     </Card>
-
-    <ConfirmDialog
-      open={Boolean(pendingCancel)}
-      title={pendingCancel?.status === "draft" ? "حذف فاتورة البيع" : "إلغاء فاتورة البيع"}
-      message={`هل تريد ${pendingCancel?.status === "draft" ? "حذف" : "إلغاء"} الفاتورة ${pendingCancel?.invoice_number ?? ""}؟`}
-      onCancel={() => setPendingCancel(null)}
-      onConfirm={handleCancel}
-      loading={cancelling}
-    />
+    <ConfirmDialog open={Boolean(pendingCancel)} title={pendingCancel?.status === "draft" ? "حذف فاتورة البيع" : "إلغاء فاتورة البيع"} message={`هل تريد ${pendingCancel?.status === "draft" ? "حذف" : "إلغاء"} الفاتورة ${pendingCancel?.invoice_number ?? ""}؟`} onCancel={() => setPendingCancel(null)} onConfirm={handleCancel} loading={cancelling} />
   </>;
 }

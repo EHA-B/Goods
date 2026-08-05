@@ -56,6 +56,7 @@ const crudApi = (entity: string, methodNames: {
 });
 
 const stockliteApi = {
+  dashboard: { get: () => invokeApi("api:dashboard:get") },
   auth: {
     login: (input: { username: string; password: string }) =>
       invokeApi("api:auth:login", input),
@@ -248,14 +249,6 @@ const stockliteApi = {
     availableBatches: (productId: number) =>
       invokeApi("api:saleInvoice:getAvailableBatches", productId),
   },
-
-  saleInvoiceItems: crudApi("saleInvoiceItem", {
-    create: "createSaleInvoiceItem",
-    get: "getSaleInvoiceItem",
-    list: "getAllSaleInvoiceItems",
-    update: "updateSaleInvoiceItem",
-    remove: "deleteSaleInvoiceItem",
-  }),
 
   saleTypes: crudApi("saleType", {
     create: "createSaleType",

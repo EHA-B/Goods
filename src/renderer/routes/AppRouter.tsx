@@ -76,13 +76,11 @@ function AppRouter() {
                     <Route path={PATHS.SALES} element={<SalesPage />} />
                     <Route path={PATHS.SALE_NEW} element={<SaleFormPage />} />
                     <Route path={PATHS.SALE_DETAILS} element={<SaleDetailsPage />} />
-                    <Route path={PATHS.SALE_EDIT} element={<SaleFormPage />} />
                     <Route path={PATHS.SALE_PAYMENT_NEW} element={<SalePaymentPage />} />
                     <Route path={PATHS.SALE_PRINT} element={<InvoicePrintPage type="sale" />} />
                     <Route path={PATHS.PURCHASES} element={<PurchasesPage />} />
                     <Route path={PATHS.PURCHASE_NEW} element={<PurchaseFormPage />} />
                     <Route path={PATHS.PURCHASE_DETAILS} element={<PurchaseDetailsPage />} />
-                    <Route path={PATHS.PURCHASE_EDIT} element={<PurchaseFormPage />} />
                     <Route path={PATHS.PURCHASE_PAYMENT_NEW} element={<PurchasePaymentPage />} />
                     <Route path={PATHS.PURCHASE_PRINT} element={<InvoicePrintPage type="purchase" />} />
                     <Route path={PATHS.PURCHASE_CONSIGNMENT} element={<ConsignmentOverviewPage />} />

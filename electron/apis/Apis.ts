@@ -36,6 +36,7 @@ const transactionCategoryController = require(path.join(__dirname, '../../src/co
 const transactionController = require(path.join(__dirname, '../../src/controllers', 'transactionController.js'));
 const userController = require(path.join(__dirname, '../../src/controllers', 'userController.js'));
 const backupController = require(path.join(__dirname, '../../src/controllers', 'backupController.js'));
+const dashboardController = require(path.join(__dirname, '../../src/controllers', 'dashboardController.js'));
 
 
 /**
@@ -94,6 +95,12 @@ ipcMain.handle = ((channel, listener) =>
     }
     return listener(...args);
   })) as typeof ipcMain.handle;
+
+/** Dashboard: consolidated read-only overview. */
+ipcMain.handle('api:dashboard:get', async () => {
+  try { return success(await dashboardController.getDashboard()); }
+  catch (e) { return failure(e.code || 'DASHBOARD_LOAD_FAILED', e.message || 'Failed to load dashboard', e.details); }
+});
 
 /**
  * Endpoint: api:system:getAppInfo
@@ -853,6 +860,7 @@ ipcMain.handle('api:purchase:reversePayment', async (_event, paymentId, reason) 
  */
 ipcMain.handle('api:system:backup', async (_event, destinationPath) => {
   try {
+    if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
     const result = await backupController.createBackup(destinationPath);
     return success(result);
   } catch (e) {
@@ -862,13 +870,24 @@ ipcMain.handle('api:system:backup', async (_event, destinationPath) => {
 
 ipcMain.handle('api:system:restore', async (_event, sourcePath) => {
   try {
-    const result = await backupController.restoreBackup(sourcePath);
-    if (result.success) {
-      // Force app relaunch and exit to reload the database cleanly
+    if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
+
+    // Validate the selected backup and create an emergency snapshot before closing SQLite.
+    const prepared = await backupController.prepareRestore(sourcePath);
+    const { closeDatabase } = await import('../../src/main/database/dbmanager');
+    await closeDatabase();
+
+    try {
+      const result = await backupController.applyRestore(prepared.sourcePath);
       app.relaunch();
       app.exit(0);
+      return success({ ...result, emergencyBackupPath: prepared.emergencyBackupPath });
+    } catch (restoreError) {
+      // The active connection is already closed; relaunch so startup can report/recover cleanly.
+      app.relaunch();
+      app.exit(1);
+      throw restoreError;
     }
-    return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
   }
@@ -876,6 +895,7 @@ ipcMain.handle('api:system:restore', async (_event, sourcePath) => {
 
 ipcMain.handle('api:system:getAutoBackupConfig', async () => {
   try {
+    if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
     const result = await backupController.getAutoBackupConfig();
     return success(result);
   } catch (e) {
@@ -885,6 +905,7 @@ ipcMain.handle('api:system:getAutoBackupConfig', async () => {
 
 ipcMain.handle('api:system:setAutoBackupConfig', async (_event, input) => {
   try {
+    if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
     const result = await backupController.setAutoBackupConfig(input);
     return success(result);
   } catch (e) {
@@ -1033,20 +1054,6 @@ ipcMain.handle('api:saleInvoice:getAvailableBatches', async (_event, productId) 
 });
 
 /**
- * Endpoint: api:saleInvoiceItem:createSaleInvoiceItem
- * Description: Executes createSaleInvoiceItem on saleInvoiceItemController.
- * Usage: Invoked by frontend to perform createSaleInvoiceItem operation.
- */
-ipcMain.handle('api:saleInvoiceItem:createSaleInvoiceItem', async (_event, input) => {
-  try {
-    const result = await saleInvoiceItemController.createSaleInvoiceItem(input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
  * Endpoint: api:saleInvoiceItem:getSaleInvoiceItem
  * Description: Executes getSaleInvoiceItem on saleInvoiceItemController.
  * Usage: Invoked by frontend to perform getSaleInvoiceItem operation.
@@ -1068,34 +1075,6 @@ ipcMain.handle('api:saleInvoiceItem:getSaleInvoiceItem', async (_event, id) => {
 ipcMain.handle('api:saleInvoiceItem:getAllSaleInvoiceItems', async (_event) => {
   try {
     const result = await saleInvoiceItemController.getAllSaleInvoiceItems();
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
- * Endpoint: api:saleInvoiceItem:updateSaleInvoiceItem
- * Description: Executes updateSaleInvoiceItem on saleInvoiceItemController.
- * Usage: Invoked by frontend to perform updateSaleInvoiceItem operation.
- */
-ipcMain.handle('api:saleInvoiceItem:updateSaleInvoiceItem', async (_event, id, input) => {
-  try {
-    const result = await saleInvoiceItemController.updateSaleInvoiceItem(id, input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
- * Endpoint: api:saleInvoiceItem:deleteSaleInvoiceItem
- * Description: Executes deleteSaleInvoiceItem on saleInvoiceItemController.
- * Usage: Invoked by frontend to perform deleteSaleInvoiceItem operation.
- */
-ipcMain.handle('api:saleInvoiceItem:deleteSaleInvoiceItem', async (_event, id) => {
-  try {
-    const result = await saleInvoiceItemController.deleteSaleInvoiceItem(id);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);

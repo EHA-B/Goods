@@ -1,45 +1,223 @@
 const path = require('path');
 const fs = require('fs');
+const sqlite3 = require('sqlite3');
 const { app } = require('electron');
 
 function getKnex() {
-    if (!global.__knex) throw new Error("Knex not initialized");
+    if (!global.__knex) {
+        const error = new Error('Database is not initialized');
+        error.code = 'DATABASE_NOT_INITIALIZED';
+        throw error;
+    }
     return global.__knex;
 }
 
+function createError(code, message, details) {
+    const error = new Error(message);
+    error.code = code;
+    if (details !== undefined) error.details = details;
+    return error;
+}
+
+function escapeSqliteString(value) {
+    return String(value).replace(/'/g, "''");
+}
+
+function timestampForFile(date = new Date()) {
+    return date.toISOString().replace(/T/, '_').replace(/:/g, '-').split('.')[0];
+}
+
 class BackupController {
-
-    async createBackup(destinationPath) {
-        if (!destinationPath) throw new Error("Destination path is required");
-        
-        const knex = getKnex();
-        // Force SQLite to flush WAL and checkpoint
-        await knex.raw('PRAGMA wal_checkpoint(TRUNCATE)');
-
-        const dbPath = path.join(app.getPath('userData'), 'farmer-market.db');
-        
-        // Copy file
-        await fs.promises.copyFile(dbPath, destinationPath);
-        return { success: true, destination: destinationPath };
+    getDatabasePath() {
+        return path.join(app.getPath('userData'), 'farmer-market.db');
     }
 
-    async restoreBackup(sourcePath) {
-        if (!sourcePath) throw new Error("Source path is required");
-        if (!fs.existsSync(sourcePath)) throw new Error("Backup file not found at " + sourcePath);
+    getEmergencyBackupDirectory() {
+        return path.join(app.getPath('userData'), 'backups');
+    }
 
-        const dbPath = path.join(app.getPath('userData'), 'farmer-market.db');
-        
-        // Copy the backup over the current DB
-        await fs.promises.copyFile(sourcePath, dbPath);
+    async validateBackupFile(sourcePath) {
+        if (!sourcePath || typeof sourcePath !== 'string') {
+            throw createError('SOURCE_PATH_REQUIRED', 'Backup source path is required');
+        }
 
-        // Delete WAL and SHM files to prevent corruption if they exist
-        const walPath = dbPath + '-wal';
-        const shmPath = dbPath + '-shm';
-        if (fs.existsSync(walPath)) await fs.promises.unlink(walPath);
-        if (fs.existsSync(shmPath)) await fs.promises.unlink(shmPath);
+        const resolvedPath = path.resolve(sourcePath);
+        let stat;
+        try {
+            stat = await fs.promises.stat(resolvedPath);
+        } catch {
+            throw createError('BACKUP_FILE_NOT_FOUND', 'Backup file was not found');
+        }
 
-        // Signal success. It is up to the caller (main process) to restart the app immediately
-        return { success: true };
+        if (!stat.isFile() || stat.size < 100) {
+            throw createError('INVALID_BACKUP_FILE', 'The selected file is not a valid database backup');
+        }
+
+        const handle = await fs.promises.open(resolvedPath, 'r');
+        try {
+            const header = Buffer.alloc(16);
+            await handle.read(header, 0, 16, 0);
+            if (header.toString('utf8') !== 'SQLite format 3\u0000') {
+                throw createError('INVALID_BACKUP_FILE', 'The selected file is not a SQLite database');
+            }
+        } finally {
+            await handle.close();
+        }
+
+        const validation = await new Promise((resolve, reject) => {
+            const db = new sqlite3.Database(resolvedPath, sqlite3.OPEN_READONLY, (openError) => {
+                if (openError) {
+                    reject(createError('BACKUP_OPEN_FAILED', 'Could not open the backup database', openError.message));
+                    return;
+                }
+
+                db.get('PRAGMA integrity_check', [], (integrityError, integrityRow) => {
+                    if (integrityError) {
+                        db.close(() => reject(createError('BACKUP_INTEGRITY_CHECK_FAILED', 'Could not verify backup integrity', integrityError.message)));
+                        return;
+                    }
+
+                    const integrityResult = integrityRow && Object.values(integrityRow)[0];
+                    if (String(integrityResult).toLowerCase() !== 'ok') {
+                        db.close(() => reject(createError('CORRUPTED_BACKUP', 'The backup database is corrupted', integrityResult)));
+                        return;
+                    }
+
+                    db.all(
+                        `SELECT name FROM sqlite_master WHERE type = 'table'`,
+                        [],
+                        (tablesError, rows) => {
+                            db.close((closeError) => {
+                                if (tablesError) {
+                                    reject(createError('BACKUP_SCHEMA_CHECK_FAILED', 'Could not inspect backup schema', tablesError.message));
+                                    return;
+                                }
+                                if (closeError) {
+                                    reject(createError('BACKUP_CLOSE_FAILED', 'Could not close backup validation connection', closeError.message));
+                                    return;
+                                }
+
+                                const tables = new Set((rows || []).map((row) => row.name));
+                                const requiredTables = ['settings', 'products', 'customers', 'suppliers', 'cashboxes'];
+                                const missingTables = requiredTables.filter((name) => !tables.has(name));
+                                if (missingTables.length > 0) {
+                                    reject(createError(
+                                        'INCOMPATIBLE_BACKUP',
+                                        'The selected database is not a compatible GoodsApp backup',
+                                        { missingTables },
+                                    ));
+                                    return;
+                                }
+
+                                resolve({
+                                    path: resolvedPath,
+                                    size: stat.size,
+                                    modifiedAt: stat.mtime.toISOString(),
+                                    tablesCount: tables.size,
+                                });
+                            });
+                        },
+                    );
+                });
+            });
+        });
+
+        return validation;
+    }
+
+    async createBackup(destinationPath) {
+        if (!destinationPath || typeof destinationPath !== 'string') {
+            throw createError('DESTINATION_PATH_REQUIRED', 'Backup destination path is required');
+        }
+
+        const dbPath = path.resolve(this.getDatabasePath());
+        const destination = path.resolve(destinationPath);
+
+        if (destination === dbPath) {
+            throw createError('INVALID_BACKUP_DESTINATION', 'The backup cannot overwrite the active database');
+        }
+
+        await fs.promises.mkdir(path.dirname(destination), { recursive: true });
+
+        const knex = getKnex();
+        await knex.raw('PRAGMA wal_checkpoint(FULL)');
+
+        const temporaryPath = `${destination}.tmp-${process.pid}-${Date.now()}`;
+        await fs.promises.rm(temporaryPath, { force: true });
+
+        try {
+            // VACUUM INTO creates a consistent standalone SQLite snapshot while the app is running.
+            await knex.raw(`VACUUM INTO '${escapeSqliteString(temporaryPath)}'`);
+            const validation = await this.validateBackupFile(temporaryPath);
+
+            await fs.promises.rm(destination, { force: true });
+            await fs.promises.rename(temporaryPath, destination);
+
+            const result = {
+                success: true,
+                destination,
+                size: validation.size,
+                createdAt: new Date().toISOString(),
+            };
+
+            return result;
+        } catch (error) {
+            await fs.promises.rm(temporaryPath, { force: true }).catch(() => undefined);
+            if (error && error.code) throw error;
+            throw createError('BACKUP_CREATE_FAILED', 'Failed to create database backup', error?.message);
+        }
+    }
+
+    async prepareRestore(sourcePath) {
+        const source = path.resolve(sourcePath || '');
+        const dbPath = path.resolve(this.getDatabasePath());
+
+        if (source === dbPath) {
+            throw createError('INVALID_RESTORE_SOURCE', 'The active database cannot be restored onto itself');
+        }
+
+        const validation = await this.validateBackupFile(source);
+
+        const emergencyDirectory = this.getEmergencyBackupDirectory();
+        await fs.promises.mkdir(emergencyDirectory, { recursive: true });
+        const emergencyBackupPath = path.join(
+            emergencyDirectory,
+            `before-restore-${timestampForFile()}.db`,
+        );
+
+        await this.createBackup(emergencyBackupPath);
+
+        return {
+            sourcePath: source,
+            emergencyBackupPath,
+            validation,
+        };
+    }
+
+    async applyRestore(sourcePath) {
+        const source = path.resolve(sourcePath || '');
+        await this.validateBackupFile(source);
+
+        const dbPath = path.resolve(this.getDatabasePath());
+        const restoreTempPath = `${dbPath}.restore-${process.pid}-${Date.now()}`;
+        const walPath = `${dbPath}-wal`;
+        const shmPath = `${dbPath}-shm`;
+
+        try {
+            await fs.promises.copyFile(source, restoreTempPath);
+            await this.validateBackupFile(restoreTempPath);
+
+            await fs.promises.rm(walPath, { force: true });
+            await fs.promises.rm(shmPath, { force: true });
+            await fs.promises.rm(dbPath, { force: true });
+            await fs.promises.rename(restoreTempPath, dbPath);
+
+            return { success: true, restoredFrom: source };
+        } catch (error) {
+            await fs.promises.rm(restoreTempPath, { force: true }).catch(() => undefined);
+            if (error && error.code) throw error;
+            throw createError('RESTORE_APPLY_FAILED', 'Failed to replace the active database', error?.message);
+        }
     }
 
     async getAutoBackupConfig() {
@@ -48,14 +226,14 @@ class BackupController {
             'auto_backup_enabled',
             'auto_backup_interval',
             'auto_backup_directory',
-            'last_auto_backup'
+            'last_auto_backup',
         ]);
 
         const config = {
             enabled: false,
-            interval: 'daily', // 'daily' | 'weekly'
+            interval: 'daily',
             directory: '',
-            lastBackup: null
+            lastBackup: null,
         };
 
         for (const row of settings) {
@@ -68,49 +246,67 @@ class BackupController {
         return config;
     }
 
-    async setAutoBackupConfig(input) {
+    async setAutoBackupConfig(input = {}) {
+        const enabled = Boolean(input.enabled);
+        const interval = input.interval || 'daily';
+        const directory = typeof input.directory === 'string' ? input.directory.trim() : '';
+
+        if (!['daily', 'weekly'].includes(interval)) {
+            throw createError('INVALID_BACKUP_INTERVAL', 'Backup interval must be daily or weekly');
+        }
+        if (enabled && !directory) {
+            throw createError('BACKUP_DIRECTORY_REQUIRED', 'Auto-backup directory is required');
+        }
+
+        if (enabled) {
+            await fs.promises.mkdir(directory, { recursive: true });
+            await fs.promises.access(directory, fs.constants.W_OK);
+        }
+
         const knex = getKnex();
         await knex.transaction(async (trx) => {
             const keys = {
-                'auto_backup_enabled': input.enabled !== undefined ? String(input.enabled) : null,
-                'auto_backup_interval': input.interval,
-                'auto_backup_directory': input.directory,
-                'last_auto_backup': input.lastBackup
+                auto_backup_enabled: String(enabled),
+                auto_backup_interval: interval,
+                auto_backup_directory: directory,
+                last_auto_backup: input.lastBackup,
             };
 
             for (const [key, value] of Object.entries(keys)) {
                 if (value === undefined || value === null) continue;
-                
+
                 const existing = await trx('settings').where('setting_key', key).first();
                 if (existing) {
-                    await trx('settings').where('setting_key', key).update({ setting_value: value, updated_at: trx.fn.now() });
+                    await trx('settings').where('setting_key', key).update({
+                        setting_value: String(value),
+                        updated_at: trx.fn.now(),
+                    });
                 } else {
                     await trx('settings').insert({
                         setting_key: key,
-                        setting_value: value,
+                        setting_value: String(value),
                         description: `Auto generated for ${key}`,
                         category: 'System',
                         created_at: trx.fn.now(),
-                        updated_at: trx.fn.now()
+                        updated_at: trx.fn.now(),
                     });
                 }
             }
         });
+
         return this.getAutoBackupConfig();
     }
 
     async runAutoBackupCycle() {
         const config = await this.getAutoBackupConfig();
-        if (!config.enabled || !config.directory) return;
+        if (!config.enabled || !config.directory) return { skipped: true };
 
-        // Ensure directory exists
-        if (!fs.existsSync(config.directory)) {
-            try {
-                fs.mkdirSync(config.directory, { recursive: true });
-            } catch (e) {
-                console.error("Auto Backup Error: Could not create directory", e);
-                return;
-            }
+        try {
+            await fs.promises.mkdir(config.directory, { recursive: true });
+            await fs.promises.access(config.directory, fs.constants.W_OK);
+        } catch (error) {
+            console.error('Auto Backup Error: directory is unavailable', error);
+            return { skipped: true, reason: 'DIRECTORY_UNAVAILABLE' };
         }
 
         const now = new Date();
@@ -120,48 +316,49 @@ class BackupController {
             shouldBackup = true;
         } else {
             const lastDate = new Date(config.lastBackup);
-            const hoursSinceLast = (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60);
-
-            if (config.interval === 'daily' && hoursSinceLast >= 24) shouldBackup = true;
-            if (config.interval === 'weekly' && hoursSinceLast >= (24 * 7)) shouldBackup = true;
+            if (Number.isNaN(lastDate.getTime())) {
+                shouldBackup = true;
+            } else {
+                const hoursSinceLast = (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60);
+                if (config.interval === 'daily' && hoursSinceLast >= 24) shouldBackup = true;
+                if (config.interval === 'weekly' && hoursSinceLast >= 24 * 7) shouldBackup = true;
+            }
         }
 
-        if (shouldBackup) {
-            try {
-                // Generate filename
-                const dateStr = now.toISOString().replace(/T/, '_').replace(/:/g, '-').split('.')[0];
-                const filename = `farmer-market-backup-${dateStr}.db`;
-                const dest = path.join(config.directory, filename);
-                
-                await this.createBackup(dest);
-                
-                // Update last backup time
-                await this.setAutoBackupConfig({ lastBackup: now.toISOString() });
-                
-                // Cleanup old backups (keep last 7)
-                await this.cleanupOldBackups(config.directory, 7);
-            } catch (error) {
-                console.error("Auto Backup Failed:", error);
-            }
+        if (!shouldBackup) return { skipped: true };
+
+        try {
+            const filename = `farmer-market-backup-${timestampForFile(now)}.db`;
+            const destination = path.join(config.directory, filename);
+            const result = await this.createBackup(destination);
+            await this.setAutoBackupConfig({ ...config, lastBackup: now.toISOString() });
+            await this.cleanupOldBackups(config.directory, 7);
+            return result;
+        } catch (error) {
+            console.error('Auto Backup Failed:', error);
+            return { success: false, error: error.message };
         }
     }
 
-    async cleanupOldBackups(directory, keepCount) {
+    async cleanupOldBackups(directory, keepCount = 7) {
         try {
             const files = await fs.promises.readdir(directory);
-            const backupFiles = files
-                .filter(f => f.startsWith('farmer-market-backup-') && f.endsWith('.db'))
-                .map(f => ({ name: f, path: path.join(directory, f), time: fs.statSync(path.join(directory, f)).mtime.getTime() }))
-                .sort((a, b) => b.time - a.time); // newest first
+            const backupFiles = await Promise.all(
+                files
+                    .filter((file) => file.startsWith('farmer-market-backup-') && file.endsWith('.db'))
+                    .map(async (name) => {
+                        const filePath = path.join(directory, name);
+                        const stat = await fs.promises.stat(filePath);
+                        return { name, path: filePath, time: stat.mtime.getTime() };
+                    }),
+            );
 
-            if (backupFiles.length > keepCount) {
-                const toDelete = backupFiles.slice(keepCount);
-                for (const file of toDelete) {
-                    await fs.promises.unlink(file.path);
-                }
+            backupFiles.sort((a, b) => b.time - a.time);
+            for (const file of backupFiles.slice(Math.max(0, keepCount))) {
+                await fs.promises.unlink(file.path);
             }
         } catch (error) {
-            console.error("Backup Cleanup Failed:", error);
+            console.error('Backup Cleanup Failed:', error);
         }
     }
 }

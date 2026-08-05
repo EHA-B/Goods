@@ -97,7 +97,8 @@ export async function up(knex: Knex): Promise<void> {
     table.decimal('tax', 15, 2).defaultTo(0);
     table.decimal('total', 15, 2).notNullable().defaultTo(0);
     table.decimal('paid_amount', 15, 2).defaultTo(0);
-    table.enum('status', ['draft', 'confirmed', 'paid', 'cancelled']).defaultTo('draft');
+    table.decimal('remaining_amount', 15, 2).defaultTo(0);
+    table.string('status', 20).defaultTo('draft');
     table.text('notes');
     table.timestamp('created_at').nullable();
     table.timestamp('updated_at').nullable();
@@ -152,24 +153,26 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('sale_invoices', (table) => {
     table.increments('id').primary();
     table.string('invoice_number', 50).unique().notNullable();
-    table.integer('customer_id').unsigned().notNullable();
-    table.integer('sale_type_id').unsigned().notNullable();
+    table.integer('customer_id').unsigned().nullable();
+    table.integer('sale_type_id').unsigned().nullable();
     table.integer('cashbox_id').unsigned();
     table.date('invoice_date').notNullable();
     table.decimal('subtotal', 15, 2).notNullable().defaultTo(0);
     table.decimal('discount', 15, 2).defaultTo(0);
+    table.decimal('discount_amount', 15, 2).defaultTo(0);
     table.decimal('commission_percentage', 5, 2).defaultTo(0);
     table.decimal('commission_amount', 15, 2).defaultTo(0);
     table.decimal('tax', 15, 2).defaultTo(0);
     table.decimal('total', 15, 2).notNullable().defaultTo(0);
     table.decimal('paid_amount', 15, 2).defaultTo(0);
-    table.enum('status', ['draft', 'confirmed', 'paid', 'cancelled']).defaultTo('draft');
+    table.decimal('remaining_amount', 15, 2).defaultTo(0);
+    table.string('status', 20).defaultTo('draft');
     table.text('notes');
     table.timestamp('created_at').nullable();
     table.timestamp('updated_at').nullable();
     
-    table.foreign('customer_id').references('id').inTable('customers').onDelete('RESTRICT');
-    table.foreign('sale_type_id').references('id').inTable('sale_types').onDelete('RESTRICT');
+    table.foreign('customer_id').references('id').inTable('customers').onDelete('SET NULL');
+    table.foreign('sale_type_id').references('id').inTable('sale_types').onDelete('SET NULL');
     
     table.index('customer_id');
     table.index('invoice_number');
@@ -293,7 +296,8 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('payments', (table) => {
     table.increments('id').primary();
     table.enum('party_type', ['customer', 'supplier']).notNullable();
-    table.integer('party_id').notNullable();
+    // Cash sales may be completed without a saved customer.
+    table.integer('party_id').nullable();
     table.enum('payment_type', ['sale', 'purchase']).notNullable();
     table.integer('invoice_id').notNullable();
     table.integer('cashbox_id').unsigned().notNullable();

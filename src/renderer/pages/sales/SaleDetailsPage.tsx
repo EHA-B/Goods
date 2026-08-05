@@ -1,4 +1,4 @@
-import { Banknote, Plus, Printer, ReceiptText, XCircle } from "lucide-react";
+import { Banknote, Plus, Printer, ReceiptText, RotateCcw, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DataTable from "../../components/common/DataTable";
@@ -45,7 +45,9 @@ export default function SaleDetailsPage() {
   const handleCancel = async () => {
     setCancelling(true);
     try {
-      const updated = await salesService.cancel(invoice.id, "إلغاء يدوي من صفحة التفاصيل");
+      const reason = window.prompt("اكتب سبب إلغاء فاتورة البيع:", "إلغاء بطلب المستخدم");
+      if (!reason?.trim()) { setCancelling(false); return; }
+      const updated = await salesService.cancel(invoice.id, reason.trim());
       setDetails(updated);
       setCancelOpen(false);
     } catch (err: unknown) {
@@ -126,7 +128,7 @@ export default function SaleDetailsPage() {
             <DataTable>
               <DataTableHead>
                 <DataTableRow>
-                  {["التاريخ", "الصندوق", "المبلغ", "الحالة", "الملاحظات"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
+                  {["التاريخ", "الصندوق", "المبلغ", "الحالة", "الملاحظات", "الإجراء"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
                 </DataTableRow>
               </DataTableHead>
               <DataTableBody>
@@ -137,6 +139,7 @@ export default function SaleDetailsPage() {
                     <DataTableCell className="font-bold">{money(payment.amount)}</DataTableCell>
                     <DataTableCell>{payment.status === "reversed" ? "ملغي" : "نشط"}</DataTableCell>
                     <DataTableCell>{payment.notes ?? "-"}</DataTableCell>
+                    <DataTableCell>{payment.status === "active" ? <Button size="sm" variant="secondary" startIcon={<RotateCcw size={15} />} onClick={async () => { const reason = window.prompt("سبب عكس الدفعة:", "تصحيح دفعة"); if (!reason?.trim()) return; try { await salesService.reversePayment(payment.id, reason.trim()); setDetails(await salesService.getDetails(invoice.id)); } catch (err: unknown) { setError((err as Error).message || "تعذر عكس الدفعة"); } }}>عكس الدفعة</Button> : "-"}</DataTableCell>
                   </DataTableRow>
                 ))}
               </DataTableBody>

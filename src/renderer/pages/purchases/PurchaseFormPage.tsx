@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Calculator, PackagePlus, Plus, Save, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { BackButton, Button, Card, FormField, FormSection, Input, PageHeader, Select, Textarea } from "../../components/ui";
@@ -42,14 +42,18 @@ export default function PurchaseFormPage() {
   const [paymentCashboxId, setPaymentCashboxId] = useState(0);
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
 
-  // Lookups loaded lazily once
   const [lookups, setLookups] = useState<{ suppliers: PartyApiRecord[]; cashboxes: CashboxApiRecord[]; products: ProductApiRecord[] } | null>(null);
-  const loadLookups = () => {
-    if (lookups) return;
+  const [lookupsLoading, setLookupsLoading] = useState(true);
+
+  useEffect(() => {
     Promise.all([purchasesService.getLookups(), purchasesService.getProducts()])
-      .then(([data, products]) => setLookups({ ...data, products }))
-      .catch(() => {});
-  };
+      .then(([data, products]) => {
+        setLookups({ ...data, products });
+        if (data.suppliers.length === 1) setSupplierId(data.suppliers[0].id);
+      })
+      .catch((err: Error) => setError(err.message || "تعذر تحميل الموردين والمنتجات والصناديق"))
+      .finally(() => setLookupsLoading(false));
+  }, []);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.quantity * item.purchase_price, 0), [items]);
   const total = Math.max(0, subtotal - discount);
@@ -66,7 +70,13 @@ export default function PurchaseFormPage() {
   const submit = async () => {
     setError("");
     if (!supplierId) { setError("اختر المورد"); return; }
-    if (items.some((item) => !item.product_id || item.quantity <= 0 || item.purchase_price < 0)) {
+    if (!invoiceDate) { setError("تاريخ الفاتورة مطلوب"); return; }
+    if (discount < 0 || discount > subtotal) { setError("الخصم غير صالح أو يتجاوز المجموع الفرعي"); return; }
+    if (paymentAmount < 0 || paymentAmount > total) { setError("المبلغ المدفوع غير صالح أو يتجاوز إجمالي الفاتورة"); return; }
+    if (paymentAmount > 0 && !paymentCashboxId) { setError("اختر الصندوق عند تسجيل دفعة أولية"); return; }
+    const productIds = items.map((item) => item.product_id).filter(Boolean);
+    if (new Set(productIds).size !== productIds.length) { setError("لا يمكن تكرار المنتج في أكثر من سطر. اجمع الكمية في سطر واحد"); return; }
+    if (items.some((item) => !item.product_id || item.quantity <= 0 || item.purchase_price < 0 || !item.received_date || (item.expiry_date && item.expiry_date < item.received_date))) {
       setError("راجع الأصناف — المنتج والكمية والسعر مطلوبة");
       return;
     }
@@ -94,6 +104,7 @@ export default function PurchaseFormPage() {
     setLoading(true);
     try {
       const result = await purchasesService.createFull(input);
+      if (!result?.invoice?.id) throw new Error("لم يرجع الباك رقم الفاتورة المنشأة");
       navigate(`/purchases/${result.invoice.id}`);
     } catch (err: unknown) {
       const e = err as Error;
@@ -109,7 +120,7 @@ export default function PurchaseFormPage() {
       description="أدخل بيانات المورد والأصناف ودفعات المخزون والمبالغ المالية."
       actions={<BackButton to={PATHS.PURCHASES} />}
     />
-    <div className="space-y-5 pb-24" onClick={loadLookups}>
+    <div className="space-y-5 pb-24">
       {error && <div className="rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
       <FormSection title="بيانات الفاتورة" description="المورد ونوع الفاتورة والتاريخ." icon={<PackagePlus size={18} />}>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -120,7 +131,7 @@ export default function PurchaseFormPage() {
             <Input id="invoiceDate" type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
           </FormField>
           <FormField label="المورد" htmlFor="supplier" required>
-            <Select id="supplier" value={String(supplierId)} options={[{ value: "0", label: "اختر المورد" }, ...(lookups?.suppliers ?? []).map((s) => ({ value: String(s.id), label: s.name }))]} onChange={(e) => setSupplierId(Number(e.target.value))} />
+            <Select id="supplier" value={String(supplierId)} disabled={lookupsLoading} options={[{ value: "0", label: lookupsLoading ? "جاري تحميل الموردين..." : "اختر المورد" }, ...(lookups?.suppliers ?? []).map((s) => ({ value: String(s.id), label: s.name }))]} onChange={(e) => setSupplierId(Number(e.target.value))} />
           </FormField>
           <FormField label="نوع الفاتورة" htmlFor="purchaseType">
             <Select id="purchaseType" value={invoiceType} options={[{ value: "standard", label: "فاتورة عادية" }, { value: "consignment", label: "فاتورة أمانة" }]} onChange={(e) => setInvoiceType(e.target.value as "standard" | "consignment")} />
@@ -137,7 +148,7 @@ export default function PurchaseFormPage() {
             <div key={index} className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <FormField label="المنتج" required>
-                  <Select value={String(item.product_id)} options={[{ value: "0", label: "اختر المنتج" }, ...(lookups?.products ?? []).map((p) => ({ value: String(p.id), label: `${p.name} — ${p.code ?? ""}` }))]} onChange={(e) => selectProduct(index, Number(e.target.value))} />
+                  <Select value={String(item.product_id)} disabled={lookupsLoading} options={[{ value: "0", label: lookupsLoading ? "جاري تحميل المنتجات..." : "اختر المنتج" }, ...(lookups?.products ?? []).map((p) => ({ value: String(p.id), label: `${p.name} — ${p.code ?? ""}` }))]} onChange={(e) => selectProduct(index, Number(e.target.value))} />
                 </FormField>
                 <FormField label="الكمية" required>
                   <Input type="number" min="0.001" step="0.001" value={item.quantity} onChange={(e) => updateItem(index, { quantity: Number(e.target.value) })} />
@@ -176,7 +187,7 @@ export default function PurchaseFormPage() {
               <Input type="number" min="0" max={total} value={paymentAmount} onChange={(e) => setPaymentAmount(Number(e.target.value))} />
             </FormField>
             <FormField label="الصندوق">
-              <Select value={String(paymentCashboxId)} options={[{ value: "0", label: "اختر الصندوق" }, ...(lookups?.cashboxes ?? []).map((c) => ({ value: String(c.id), label: c.name }))]} onChange={(e) => setPaymentCashboxId(Number(e.target.value))} />
+              <Select value={String(paymentCashboxId)} disabled={lookupsLoading || paymentAmount <= 0} options={[{ value: "0", label: paymentAmount <= 0 ? "لا توجد دفعة أولية" : lookupsLoading ? "جاري تحميل الصناديق..." : "اختر الصندوق" }, ...(lookups?.cashboxes ?? []).map((c) => ({ value: String(c.id), label: `${c.name} — ${Number(c.balance).toLocaleString("en-US")} ${c.currency}` }))]} onChange={(e) => setPaymentCashboxId(Number(e.target.value))} />
             </FormField>
             <FormField label="تاريخ الدفع">
               <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
@@ -211,7 +222,7 @@ export default function PurchaseFormPage() {
     <div className="fixed bottom-0 left-0 right-[260px] z-20 border-t border-[var(--border)] bg-[var(--surface)]/95 px-6 py-3 backdrop-blur">
       <div className="flex justify-end gap-3">
         <Button variant="secondary" onClick={() => navigate(PATHS.PURCHASES)}>إلغاء</Button>
-        <Button startIcon={<Save size={17} />} disabled={loading} onClick={() => submit()}>
+        <Button startIcon={<Save size={17} />} disabled={loading || lookupsLoading} onClick={() => submit()}>
           {loading ? "جاري الحفظ..." : "حفظ الفاتورة"}
         </Button>
       </div>

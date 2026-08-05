@@ -43,7 +43,7 @@ export default function PurchasePaymentPage() {
 
     setSubmitting(true);
     try {
-      await window.stockliteApi.payments.recordPurchase({
+      await purchasesService.recordPayment({
         purchase_invoice_id: Number(purchaseId),
         cashbox_id: cashboxId,
         amount,
@@ -76,7 +76,7 @@ export default function PurchasePaymentPage() {
             <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </FormField>
           <FormField label="الصندوق" htmlFor="cashbox" required>
-            <Select id="cashbox" value={String(cashboxId)} options={cashboxes.map((c) => ({ value: String(c.id), label: c.name }))} onChange={(e) => setCashboxId(Number(e.target.value))} />
+            <Select id="cashbox" value={String(cashboxId)} options={[{ value: "0", label: "اختر الصندوق" }, ...cashboxes.map((c) => ({ value: String(c.id), label: `${c.name} — ${Number(c.balance).toLocaleString("en-US")} ${c.currency}` }))]} onChange={(e) => setCashboxId(Number(e.target.value))} />
           </FormField>
           <FormField label="ملاحظات" htmlFor="notes" className="md:col-span-2">
             <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />

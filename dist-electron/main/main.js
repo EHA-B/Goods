@@ -42,6 +42,7 @@ const transactionCategoryController = require$1(path.join(__dirname$2, "../../sr
 const transactionController = require$1(path.join(__dirname$2, "../../src/controllers", "transactionController.js"));
 const userController = require$1(path.join(__dirname$2, "../../src/controllers", "userController.js"));
 const backupController = require$1(path.join(__dirname$2, "../../src/controllers", "backupController.js"));
+const dashboardController = require$1(path.join(__dirname$2, "../../src/controllers", "dashboardController.js"));
 ipcMain.handle("api:auth:login", async (_event, input) => {
   try {
     const user = await authController.login(input);
@@ -74,6 +75,13 @@ ipcMain.handle = (channel, listener) => registerProtectedHandler(channel, async 
     return failure("UNAUTHENTICATED", "Authentication is required");
   }
   return listener(...args);
+});
+ipcMain.handle("api:dashboard:get", async () => {
+  try {
+    return success(await dashboardController.getDashboard());
+  } catch (e) {
+    return failure(e.code || "DASHBOARD_LOAD_FAILED", e.message || "Failed to load dashboard", e.details);
+  }
 });
 ipcMain.handle("api:system:getAppInfo", async () => {
   try {
@@ -528,6 +536,7 @@ ipcMain.handle("api:purchase:reversePayment", async (_event, paymentId, reason) 
 });
 ipcMain.handle("api:system:backup", async (_event, destinationPath) => {
   try {
+    if (!getCurrentUser()) return failure("UNAUTHENTICATED", "Authentication is required");
     const result = await backupController.createBackup(destinationPath);
     return success(result);
   } catch (e) {
@@ -536,18 +545,27 @@ ipcMain.handle("api:system:backup", async (_event, destinationPath) => {
 });
 ipcMain.handle("api:system:restore", async (_event, sourcePath) => {
   try {
-    const result = await backupController.restoreBackup(sourcePath);
-    if (result.success) {
+    if (!getCurrentUser()) return failure("UNAUTHENTICATED", "Authentication is required");
+    const prepared = await backupController.prepareRestore(sourcePath);
+    const { closeDatabase } = await import("./dbmanager-C1w2KwTq.js");
+    await closeDatabase();
+    try {
+      const result = await backupController.applyRestore(prepared.sourcePath);
       app.relaunch();
       app.exit(0);
+      return success({ ...result, emergencyBackupPath: prepared.emergencyBackupPath });
+    } catch (restoreError) {
+      app.relaunch();
+      app.exit(1);
+      throw restoreError;
     }
-    return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
 ipcMain.handle("api:system:getAutoBackupConfig", async () => {
   try {
+    if (!getCurrentUser()) return failure("UNAUTHENTICATED", "Authentication is required");
     const result = await backupController.getAutoBackupConfig();
     return success(result);
   } catch (e) {
@@ -556,6 +574,7 @@ ipcMain.handle("api:system:getAutoBackupConfig", async () => {
 });
 ipcMain.handle("api:system:setAutoBackupConfig", async (_event, input) => {
   try {
+    if (!getCurrentUser()) return failure("UNAUTHENTICATED", "Authentication is required");
     const result = await backupController.setAutoBackupConfig(input);
     return success(result);
   } catch (e) {
@@ -656,14 +675,6 @@ ipcMain.handle("api:saleInvoice:getAvailableBatches", async (_event, productId) 
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-ipcMain.handle("api:saleInvoiceItem:createSaleInvoiceItem", async (_event, input) => {
-  try {
-    const result = await saleInvoiceItemController.createSaleInvoiceItem(input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
-  }
-});
 ipcMain.handle("api:saleInvoiceItem:getSaleInvoiceItem", async (_event, id) => {
   try {
     const result = await saleInvoiceItemController.getSaleInvoiceItem(id);
@@ -675,22 +686,6 @@ ipcMain.handle("api:saleInvoiceItem:getSaleInvoiceItem", async (_event, id) => {
 ipcMain.handle("api:saleInvoiceItem:getAllSaleInvoiceItems", async (_event) => {
   try {
     const result = await saleInvoiceItemController.getAllSaleInvoiceItems();
-    return success(result);
-  } catch (e) {
-    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
-  }
-});
-ipcMain.handle("api:saleInvoiceItem:updateSaleInvoiceItem", async (_event, id, input) => {
-  try {
-    const result = await saleInvoiceItemController.updateSaleInvoiceItem(id, input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
-  }
-});
-ipcMain.handle("api:saleInvoiceItem:deleteSaleInvoiceItem", async (_event, id) => {
-  try {
-    const result = await saleInvoiceItemController.deleteSaleInvoiceItem(id);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
@@ -1085,11 +1080,24 @@ app.on("activate", () => {
 });
 app.whenReady().then(async () => {
   try {
-    const { initDatabase } = await import("./dbmanager-Q6IexOXb.js");
+    const { initDatabase } = await import("./dbmanager-C1w2KwTq.js");
     await initDatabase();
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {
     console.error("Failed to initialize database:", error);
+    app.quit();
+    return;
+  }
+  try {
+    const { createRequire: createRequire2 } = await import("node:module");
+    const require2 = createRequire2(import.meta.url);
+    const backupController2 = require2(path.join(__dirname$1, "../../src/controllers/backupController.js"));
+    setInterval(() => {
+      backupController2.runAutoBackupCycle().catch(console.error);
+    }, 60 * 60 * 1e3);
+    backupController2.runAutoBackupCycle().catch(console.error);
+  } catch (error) {
+    console.error("Failed to start auto-backup service:", error);
   }
   try {
     const { createRequire: createRequire2 } = await import("node:module");

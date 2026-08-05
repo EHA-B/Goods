@@ -94,14 +94,14 @@ type CashboxMovementRecord = {
   id: number;
   cashbox_id: number;
   reference_type:
-    | 'opening_balance'
-    | 'sale'
-    | 'purchase'
-    | 'expense'
-    | 'income'
-    | 'transfer'
-    | 'adjustment'
-    | 'reversal';
+  | 'opening_balance'
+  | 'sale'
+  | 'purchase'
+  | 'expense'
+  | 'income'
+  | 'transfer'
+  | 'adjustment'
+  | 'reversal';
   reference_id: number | null;
   amount: number;
   direction: 'in' | 'out';
@@ -353,7 +353,6 @@ type SaleInvoiceItem = {
   stock_batch_id: number;
   quantity: number;
   sale_price: number;
-  cost_price?: number;
   notes?: string | null;
 };
 
@@ -389,8 +388,28 @@ type PaginatedInvoices<T> = {
 
 // ─── Window Interface ─────────────────────────────────────────────────────────
 
+type DashboardTrendPoint = { date: string; sales: number; purchases: number; profit: number };
+type DashboardApiData = {
+  summary: {
+    salesToday: number; salesMonth: number; salesTodayCount: number;
+    purchasesToday: number; purchasesMonth: number; purchasesTodayCount: number;
+    profitToday: number; profitMonth: number; cashBalance: number; cashboxesCount: number;
+    customerDebt: number; supplierDebt: number; inventoryValue: number;
+    lowStockCount: number; outOfStockCount: number; productsCount: number; customersCount: number; suppliersCount: number;
+  };
+  trend: DashboardTrendPoint[];
+  topProducts: Array<{ id: number; name: string; quantity: number; revenue: number }>;
+  recentSales: Array<{ id: number; invoice_number: string; invoice_date: string; total: number; status: string; customer_name: string }>;
+  recentPurchases: Array<{ id: number; invoice_number: string; invoice_date: string; total: number; status: string; supplier_name: string }>;
+  recentTransactions: Array<{ id: number; transaction_date: string; amount: number; type: string; description?: string; category_name?: string; cashbox_name?: string }>;
+  alerts: Array<{ id: number; name: string; quantity: number }>;
+};
+
 interface Window {
   stockliteApi: {
+    dashboard: {
+      get(): Promise<DashboardApiData>;
+    };
     auth: {
       login(input: { username: string; password: string }): Promise<AuthUserApiRecord>;
       logout(): Promise<{ success: true }>;
@@ -399,10 +418,34 @@ interface Window {
     };
     system: {
       getAppInfo(): Promise<AppInfoApiRecord>;
-      backup(destinationPath: string): Promise<any>;
-      restore(sourcePath: string): Promise<any>;
-      getAutoBackupConfig(): Promise<any>;
-      setAutoBackupConfig(input: any): Promise<any>;
+      backup(destinationPath: string): Promise<{
+        success: true;
+        destination: string;
+        size: number;
+        createdAt: string;
+      }>;
+      restore(sourcePath: string): Promise<{
+        success: true;
+        restoredFrom: string;
+        emergencyBackupPath: string;
+      }>;
+      getAutoBackupConfig(): Promise<{
+        enabled: boolean;
+        interval: "daily" | "weekly";
+        directory: string;
+        lastBackup: string | null;
+      }>;
+      setAutoBackupConfig(input: {
+        enabled: boolean;
+        interval: "daily" | "weekly";
+        directory: string;
+        lastBackup?: string | null;
+      }): Promise<{
+        enabled: boolean;
+        interval: "daily" | "weekly";
+        directory: string;
+        lastBackup: string | null;
+      }>;
       selectDirectory(): Promise<{ canceled: boolean; path: string | null }>;
       selectSaveFile(): Promise<{ canceled: boolean; path: string | null }>;
       selectOpenFile(): Promise<{ canceled: boolean; path: string | null }>;
@@ -493,7 +536,6 @@ interface Window {
       deleteDraft(id: number): Promise<{ success: true }>;
       availableBatches(productId: number): Promise<StockBatchRecord[]>;
     };
-    saleInvoiceItems: GenericCrudApi;
     saleTypes: GenericCrudApi;
     settings: GenericCrudApi;
     transactionCategories: GenericCrudApi;

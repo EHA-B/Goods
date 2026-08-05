@@ -69,6 +69,24 @@ app.whenReady().then(async () => {
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {
     console.error("Failed to initialize database:", error);
+    app.quit();
+    return;
+  }
+
+  // Start auto-backup service (runs every hour)
+  try {
+    const { createRequire } = await import("node:module");
+    const require = createRequire(import.meta.url);
+    const backupController = require(path.join(__dirname, "../../src/controllers/backupController.js"));
+    
+    setInterval(() => {
+      backupController.runAutoBackupCycle().catch(console.error);
+    }, 60 * 60 * 1000); // 1 hour
+    
+    // Run an initial check on startup
+    backupController.runAutoBackupCycle().catch(console.error);
+  } catch (error) {
+    console.error("Failed to start auto-backup service:", error);
   }
 
   // Start auto-backup service (runs every hour)

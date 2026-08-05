@@ -1,8 +1,8 @@
-export type RemainingStockPolicy = "return_to_supplier" | "spoilage" | "carry_forward";
+export type RemainingStockPolicy = "return_to_supplier" | "spoilage";
 export type SettlementStatus = "pending" | "partially_settled" | "settled" | "reversed";
 
 export type ConsignmentInvoiceItemSummary = {
-  purchase_invoice_item_id: number;
+  purchase_invoice_item_id: number | null;
   product_id: number;
   product_name: string;
   stock_batch_id: number;
@@ -31,8 +31,10 @@ export type ConsignmentSettlement = {
   returned_quantity: number;
   carried_quantity: number;
   status: "completed" | "reversed";
+  reversal_reason?: string | null;
   notes: string | null;
   created_at: string;
+  items?: unknown[];
 };
 
 export type ConsignmentInvoiceSummary = {
@@ -59,6 +61,7 @@ export type CloseConsignmentInput = {
   settlement_date: string;
   remaining_stock_policy: RemainingStockPolicy;
   notes?: string | null;
+  calculation_hash?: string;
 };
 
 export type ConsignmentClosingPreview = {
@@ -72,6 +75,7 @@ export type ConsignmentClosingPreview = {
   balance_after_settlement: number;
   can_submit: boolean;
   warnings: string[];
+  calculation_hash: string;
 };
 
 export type ConsignmentCashbox = { id: number; name: string; currency: string; balance: number; isActive: boolean };

@@ -89,7 +89,8 @@ export default function TransactionFormPage() {
         amount, 
         type: direction, 
         transactionDate: date,
-        description: description.trim(), 
+        description: description.trim(),
+        referenceNumber: reference.trim(),
         notes: notes.trim(),
       });
       

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Calculator, Plus, Save, ShoppingCart, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { BackButton, Button, Card, FormField, FormSection, Input, PageHeader, Select, Textarea } from "../../components/ui";
@@ -44,12 +44,13 @@ export default function SaleFormPage() {
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [lookups, setLookups] = useState<{ customers: PartyApiRecord[]; cashboxes: CashboxApiRecord[]; products: ProductApiRecord[] } | null>(null);
 
-  const loadLookups = () => {
-    if (lookups) return;
+  useEffect(() => {
+    let active = true;
     Promise.all([salesService.getLookups(), salesService.getProducts()])
-      .then(([data, products]) => setLookups({ ...data, products }))
-      .catch(() => {});
-  };
+      .then(([data, products]) => { if (active) setLookups({ ...data, products }); })
+      .catch((err: Error) => { if (active) setError(err.message || "تعذر تحميل بيانات النموذج"); });
+    return () => { active = false; };
+  }, []);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.quantity * item.sale_price, 0), [items]);
   const total = Math.max(0, subtotal - discount);
@@ -83,10 +84,14 @@ export default function SaleFormPage() {
 
   const submit = async () => {
     setError("");
-    if (items.some((item) => !item.product_id || !item.stock_batch_id || item.quantity <= 0)) {
-      setError("راجع الأصناف — المنتج والدفعة والكمية مطلوبة");
+    if (items.some((item) => !item.product_id || !item.stock_batch_id || item.quantity <= 0 || item.sale_price < 0)) {
+      setError("راجع الأصناف — المنتج والدفعة والكمية وسعر البيع الصحيح مطلوبة");
       return;
     }
+    if (items.some((item) => { const batch = item.availableBatches.find((b) => b.id === item.stock_batch_id); return batch && item.quantity > Number(batch.remaining_quantity) + 0.001; })) { setError("إحدى الكميات أكبر من المتوفر في الدفعة"); return; }
+    if (discount < 0 || discount > subtotal) { setError("قيمة الخصم غير صحيحة"); return; }
+    if (paymentAmount < 0 || paymentAmount > total + 0.001) { setError("قيمة الدفعة الأولية غير صحيحة"); return; }
+    if (paymentAmount > 0 && !paymentCashboxId) { setError("اختر صندوق الدفعة الأولية"); return; }
     if (!customerId && paymentAmount < total - 0.001) {
       setError("يجب تحديد عميل للبيع الآجل. البيع النقدي يتطلب دفع المبلغ كاملًا.");
       return;
@@ -103,7 +108,6 @@ export default function SaleFormPage() {
         stock_batch_id: item.stock_batch_id,
         quantity: item.quantity,
         sale_price: item.sale_price,
-        cost_price: item.cost_price || undefined,
       })),
       initial_payment: paymentAmount > 0 && paymentCashboxId
         ? { cashbox_id: paymentCashboxId, amount: paymentAmount, payment_date: paymentDate }
@@ -128,7 +132,7 @@ export default function SaleFormPage() {
       description="أدخل بيانات العميل والأصناف ودفعات المخزون والمبالغ."
       actions={<BackButton to={PATHS.SALES} />}
     />
-    <div className="space-y-5 pb-24" onClick={loadLookups}>
+    <div className="space-y-5 pb-24">
       {error && <div className="rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
       <FormSection title="بيانات الفاتورة" description="العميل والتاريخ ورقم الفاتورة." icon={<ShoppingCart size={18} />}>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -200,7 +204,7 @@ export default function SaleFormPage() {
               <Input type="number" min="0" max={total} value={paymentAmount} onChange={(e) => setPaymentAmount(Number(e.target.value))} />
             </FormField>
             <FormField label="الصندوق">
-              <Select value={String(paymentCashboxId)} options={[{ value: "0", label: "اختر الصندوق" }, ...(lookups?.cashboxes ?? []).map((c) => ({ value: String(c.id), label: c.name }))]} onChange={(e) => setPaymentCashboxId(Number(e.target.value))} />
+              <Select value={String(paymentCashboxId)} options={[{ value: "0", label: "اختر الصندوق" }, ...(lookups?.cashboxes ?? []).map((c) => ({ value: String(c.id), label: `${c.name} — ${Number(c.balance ?? 0).toLocaleString("en-US")} ${c.currency}` }))]} onChange={(e) => setPaymentCashboxId(Number(e.target.value))} />
             </FormField>
             <FormField label="تاريخ الدفع">
               <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />

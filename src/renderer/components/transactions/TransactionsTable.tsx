@@ -25,7 +25,7 @@ export default function TransactionsTable({ items, onView }: { items: FinancialT
       <DataTableBody>
         {items.map((x) => (
           <DataTableRow key={x.id}>
-            <DataTableCell>{x.transaction_date || x.transaction_date}</DataTableCell>
+            <DataTableCell>{x.transaction_date || "—"}</DataTableCell>
             <DataTableCell>
               <TransactionTypeBadge type={x.type} />
             </DataTableCell>

@@ -20,7 +20,7 @@ function validateDate(dateStr) {
 class TransactionController {
 
     async createFinancialTransaction(input) {
-        const { type, category_id, cashbox_id, amount, transaction_date, description, notes } = input;
+        const { type, category_id, cashbox_id, amount, transaction_date, description, reference_number, notes } = input;
 
         if (!type || !['income', 'expense'].includes(type)) {
             throw { code: 'VALIDATION_ERROR', message: 'type must be income or expense' };
@@ -72,6 +72,7 @@ class TransactionController {
                 direction: type,
                 transaction_date: txDate,
                 description: description || null,
+                reference_number: reference_number || null,
                 notes: notes || null,
                 status: 'active',
                 created_at: knex.fn.now(),

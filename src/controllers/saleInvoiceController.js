@@ -50,6 +50,7 @@ class SaleInvoiceController {
             if (customer_id) {
                 customer = await dbGet(db, 'SELECT * FROM customers WHERE id = ?', [customer_id]);
                 if (!customer) throw { code: 'CUSTOMER_NOT_FOUND', message: 'العميل غير موجود' };
+                if (!customer.isActive) throw { code: 'INACTIVE_CUSTOMER', message: 'العميل غير نشط' };
             }
 
             // 2. Map items to calculation shape
@@ -60,7 +61,7 @@ class SaleInvoiceController {
                 quantity: Number(item.quantity ?? 0),
                 price: Number(item.sale_price ?? item.unit_price ?? item.unitPrice ?? 0),
                 sale_price: Number(item.sale_price ?? item.unit_price ?? item.unitPrice ?? 0),
-                cost_price: Number(item.cost_price ?? item.costPrice ?? 0),
+                cost_price: 0,
             }));
 
             // 3. Validate each item's batch
@@ -76,8 +77,11 @@ class SaleInvoiceController {
                     throw { code: 'INSUFFICIENT_STOCK', message: `الصنف رقم ${i + 1}: الكمية المطلوبة (${item.quantity}) أكبر من المتوفر (${batch.remaining_quantity})` };
                 }
 
-                // Attach cost_price from batch if not provided
-                mappedItems[i].cost_price = mappedItems[i].cost_price || batch.purchase_price;
+                const product = await dbGet(db, 'SELECT id, isActive FROM products WHERE id = ?', [item.product_id]);
+                if (!product) throw { code: 'PRODUCT_NOT_FOUND', message: `الصنف رقم ${i + 1}: المنتج غير موجود` };
+                if (!product.isActive) throw { code: 'INACTIVE_PRODUCT', message: `الصنف رقم ${i + 1}: المنتج غير نشط` };
+                // Cost is always authoritative from the selected stock batch.
+                mappedItems[i].cost_price = batch.purchase_price;
                 mappedItems[i]._batch = batch;
             }
 
@@ -345,8 +349,13 @@ class SaleInvoiceController {
                     [reason, payment.id]
                 );
                 // Deduct from cashbox (reverse of 'in')
-                const cashbox = await dbGet(db, 'SELECT balance FROM cashboxes WHERE id = ?', [payment.cashbox_id]);
+                const cashbox = await dbGet(db, 'SELECT balance, isActive FROM cashboxes WHERE id = ?', [payment.cashbox_id]);
+                if (!cashbox) throw { code: 'CASHBOX_NOT_FOUND', message: 'صندوق الدفعة غير موجود' };
+                if (!cashbox.isActive) throw { code: 'INACTIVE_CASHBOX', message: 'صندوق الدفعة غير نشط' };
                 const balBefore = normalizeAmount(cashbox.balance);
+                if (balBefore < amount - 0.001) {
+                    throw { code: 'SALE_CANNOT_BE_CANCELLED_CASHBOX_BALANCE', message: 'لا يمكن إلغاء الفاتورة لأن رصيد الصندوق لا يكفي لعكس الدفعات' };
+                }
                 const balAfter  = Math.round((balBefore - amount) * 100) / 100;
                 await dbRun(db, `UPDATE cashboxes SET balance = ?, updated_at = datetime('now') WHERE id = ?`, [balAfter, payment.cashbox_id]);
                 await dbRun(db,

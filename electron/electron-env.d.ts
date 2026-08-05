@@ -314,6 +314,8 @@ type CreatePurchaseInvoiceInput = {
   notes?: string;
   items: PurchaseInvoiceItem[];
   initial_payment?: InitialPaymentInput;
+  currency?: string;
+  exchange_rate?: number;
 };
 
 type SaleInvoiceRecord = {
@@ -364,6 +366,8 @@ type CreateSaleInvoiceInput = {
   notes?: string;
   items: SaleInvoiceItem[];
   initial_payment?: InitialPaymentInput;
+  currency?: string;
+  exchange_rate?: number;
 };
 
 type InvoiceListFilters = {

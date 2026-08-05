@@ -34,6 +34,8 @@ class PurchaseInvoiceController {
             notes,
             items,
             initial_payment,
+            currency,
+            exchange_rate,
         } = input ?? {};
 
         if (!supplier_id) throw { code: 'SUPPLIER_NOT_FOUND', message: 'supplier_id مطلوب' };
@@ -96,14 +98,19 @@ class PurchaseInvoiceController {
             if (invoice_type === 'consignment') status = 'confirmed'; // consignment stays confirmed until closed
 
             // 7. Insert purchase invoice
+            const invoiceCurrency = currency?.trim() || 'SYP';
+            const invoiceRate = Number(exchange_rate) || 1;
+            
             const { lastID: invoiceId } = await dbRun(db,
                 `INSERT INTO purchase_invoices
                    (invoice_number, supplier_id, invoice_type, invoice_date,
                     subtotal, discount, discount_amount, tax, total, paid_amount, remaining_amount, status, notes,
+                    currency, exchange_rate,
                     created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, datetime('now'), datetime('now'))`,
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
                 [invNumber, supplier_id, invoice_type, validatedDate,
-                 subtotal, discountAmount, discountAmount, totalAmount, totalAmount, status, notes ?? null]
+                 subtotal, discountAmount, discountAmount, totalAmount, totalAmount, status, notes ?? null,
+                 invoiceCurrency, invoiceRate]
             );
 
             // 8. Insert items + create stock batches + stock movements
@@ -156,9 +163,10 @@ class PurchaseInvoiceController {
             }
 
             // 9. Increase supplier payable balance by invoice total
+            const supplierBaseAmount = Math.round((totalAmount * invoiceRate) * 100) / 100;
             await dbRun(db,
                 `UPDATE suppliers SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`,
-                [totalAmount, supplier_id]
+                [supplierBaseAmount, supplier_id]
             );
 
             // 10. Handle optional initial payment
@@ -200,9 +208,10 @@ class PurchaseInvoiceController {
                 );
 
                 // Reduce supplier balance by payment amount
+                const payBaseAmount = Math.round((payAmount * invoiceRate) * 100) / 100;
                 await dbRun(db,
                     `UPDATE suppliers SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`,
-                    [payAmount, supplier_id]
+                    [payBaseAmount, supplier_id]
                 );
 
                 finalPaid = payAmount;

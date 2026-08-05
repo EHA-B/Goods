@@ -34,6 +34,8 @@ class SaleInvoiceController {
             notes,
             items,
             initial_payment,
+            currency,
+            exchange_rate,
         } = input ?? {};
 
         if (!Array.isArray(items) || items.length === 0) throw { code: 'SALE_ITEM_INVALID', message: 'يجب إضافة صنف واحد على الأقل' };
@@ -108,14 +110,19 @@ class SaleInvoiceController {
             }
 
             // 7. Insert sale invoice
+            const invoiceCurrency = currency?.trim() || 'SYP';
+            const invoiceRate = Number(exchange_rate) || 1;
+            
             const { lastID: invoiceId } = await dbRun(db,
                 `INSERT INTO sale_invoices
                    (invoice_number, customer_id, sale_type_id, invoice_date,
                     subtotal, discount, discount_amount, total, paid_amount, remaining_amount, status, notes,
+                    currency, exchange_rate,
                     created_at, updated_at)
-                 VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 0, ?, 'confirmed', ?, datetime('now'), datetime('now'))`,
+                 VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 0, ?, 'confirmed', ?, ?, ?, datetime('now'), datetime('now'))`,
                 [invNumber, customer_id ?? null, validatedDate,
-                 subtotal, discountAmount, discountAmount, totalAmount, totalAmount, notes ?? null]
+                 subtotal, discountAmount, discountAmount, totalAmount, totalAmount, notes ?? null,
+                 invoiceCurrency, invoiceRate]
             );
 
             // 8. Insert items + deduct stock + create stock movements
@@ -154,9 +161,10 @@ class SaleInvoiceController {
 
             // 9. Increase customer receivable balance (if customer)
             if (customer_id) {
+                const customerBaseAmount = Math.round((totalAmount * invoiceRate) * 100) / 100;
                 await dbRun(db,
                     `UPDATE customers SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`,
-                    [totalAmount, customer_id]
+                    [customerBaseAmount, customer_id]
                 );
             }
 
@@ -196,9 +204,10 @@ class SaleInvoiceController {
 
                 // Reduce customer balance by payment
                 if (customer_id) {
+                    const payBaseAmount = Math.round((payAmount * invoiceRate) * 100) / 100;
                     await dbRun(db,
                         `UPDATE customers SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`,
-                        [payAmount, customer_id]
+                        [payBaseAmount, customer_id]
                     );
                 }
 

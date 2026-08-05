@@ -42,6 +42,8 @@ export default function SaleFormPage() {
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentCashboxId, setPaymentCashboxId] = useState(0);
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [currency, setCurrency] = useState("SYP");
+  const [exchangeRate, setExchangeRate] = useState(1);
   const [lookups, setLookups] = useState<{ customers: PartyApiRecord[]; cashboxes: CashboxApiRecord[]; products: ProductApiRecord[] } | null>(null);
 
   useEffect(() => {
@@ -112,6 +114,8 @@ export default function SaleFormPage() {
       initial_payment: paymentAmount > 0 && paymentCashboxId
         ? { cashbox_id: paymentCashboxId, amount: paymentAmount, payment_date: paymentDate }
         : undefined,
+      currency: currency,
+      exchange_rate: exchangeRate,
     };
 
     setLoading(true);
@@ -145,6 +149,19 @@ export default function SaleFormPage() {
           <FormField label="العميل" htmlFor="customer">
             <Select id="customer" value={String(customerId)} options={[{ value: "0", label: "بيع نقدي (بدون عميل)" }, ...(lookups?.customers ?? []).map((c) => ({ value: String(c.id), label: c.name }))]} onChange={(e) => setCustomerId(Number(e.target.value))} />
           </FormField>
+          <FormField label="العملة" required>
+            <Select value={currency} options={[{ value: "SYP", label: "ل.س (SYP)" }, { value: "USD", label: "دولار (USD)" }]} onChange={(e) => {
+              const newCur = e.target.value;
+              setCurrency(newCur);
+              const defaultBox = lookups?.cashboxes.find(c => c.currency === newCur);
+              if (defaultBox) setPaymentCashboxId(defaultBox.id);
+            }} />
+          </FormField>
+          {currency !== "SYP" && (
+            <FormField label="سعر الصرف" required>
+              <Input type="number" min="0" step="any" value={exchangeRate} onChange={(e) => setExchangeRate(Number(e.target.value))} />
+            </FormField>
+          )}
           <FormField label="ملاحظات" htmlFor="notes" className="md:col-span-2 xl:col-span-4">
             <Textarea id="notes" value={notes} placeholder="ملاحظات عامة..." onChange={(e) => setNotes(e.target.value)} />
           </FormField>

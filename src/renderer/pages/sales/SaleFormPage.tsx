@@ -154,7 +154,8 @@ export default function SaleFormPage() {
       <Card padding={false} header="أصناف الفاتورة" description="أضف المنتجات وحدد الدفعة والكمية وسعر البيع.">
         <div className="space-y-4 p-4">
           {items.map((item, index) => (
-            <div key={index} className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
+            <div key={index} className="relative rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4 pt-14">
+              <Button size="sm" variant="ghost" className="absolute left-3 top-3 h-8 border border-[var(--danger)]/30 px-2.5 text-[var(--danger)] hover:bg-[var(--danger-subtle)] hover:text-[var(--danger)]" startIcon={<Trash2 size={15} />} disabled={items.length === 1} onClick={() => setItems((curr) => curr.filter((_, i) => i !== index))}>حذف الصنف</Button>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <FormField label="المنتج" required>
                   <Select value={String(item.product_id)} options={[{ value: "0", label: "اختر المنتج" }, ...(lookups?.products ?? []).map((p) => ({ value: String(p.id), label: p.name }))]} onChange={(e) => selectProduct(index, Number(e.target.value))} />
@@ -185,9 +186,7 @@ export default function SaleFormPage() {
                 <FormField label="تكلفة الوحدة">
                   <Input readOnly value={money(item.cost_price)} />
                 </FormField>
-                <div className="flex items-end">
-                  <Button variant="danger" startIcon={<Trash2 size={16} />} disabled={items.length === 1} onClick={() => setItems((curr) => curr.filter((_, i) => i !== index))}>حذف</Button>
-                </div>
+
               </div>
             </div>
           ))}

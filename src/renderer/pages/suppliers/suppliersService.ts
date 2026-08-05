@@ -11,6 +11,55 @@ export type Supplier = {
   updatedAt: string;
 };
 
+
+export type SupplierPayment = {
+  id: number;
+  invoiceId: number;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: string;
+  referenceNumber: string;
+  notes: string;
+  status: string;
+  cashboxName: string;
+};
+
+export type SupplierPurchase = {
+  id: number;
+  invoiceNumber: string;
+  invoiceDate: string;
+  invoiceType: string;
+  total: number;
+  paidAmount: number;
+  remainingAmount: number;
+  status: string;
+};
+
+export type SupplierStockBatch = {
+  id: number;
+  productId: number;
+  productName: string;
+  batchCode: string;
+  quantity: number;
+  remainingQuantity: number;
+  purchasePrice: number;
+  receivedDate: string;
+  expiryDate: string;
+  isActive: boolean;
+};
+
+export type SupplierTransactions = {
+  payments: SupplierPayment[];
+  purchases: SupplierPurchase[];
+  stockBatches: SupplierStockBatch[];
+};
+
+type SupplierTransactionsApi = {
+  payments?: Array<Record<string, unknown>>;
+  purchases?: Array<Record<string, unknown>>;
+  stockBatches?: Array<Record<string, unknown>>;
+};
+
 export type SupplierInput = {
   name: string;
   phone?: string;
@@ -96,6 +145,46 @@ export const suppliersService = {
 
   async remove(id: number) {
     return getApi().remove(id);
+  },
+
+  async getTransactions(id: number): Promise<SupplierTransactions> {
+    const result = (await getApi().getTransactions(id)) as SupplierTransactionsApi;
+
+    return {
+      payments: (result.payments ?? []).map((row) => ({
+        id: Number(row.id ?? 0),
+        invoiceId: Number(row.invoice_id ?? 0),
+        amount: Number(row.amount ?? 0),
+        paymentDate: String(row.payment_date ?? ""),
+        paymentMethod: String(row.payment_method ?? "cash"),
+        referenceNumber: String(row.reference_number ?? ""),
+        notes: String(row.notes ?? ""),
+        status: String(row.status ?? "active"),
+        cashboxName: String(row.cashbox_name ?? ""),
+      })),
+      purchases: (result.purchases ?? []).map((row) => ({
+        id: Number(row.id ?? 0),
+        invoiceNumber: String(row.invoice_number ?? ""),
+        invoiceDate: String(row.invoice_date ?? ""),
+        invoiceType: String(row.invoice_type ?? "standard"),
+        total: Number(row.total ?? 0),
+        paidAmount: Number(row.paid_amount ?? 0),
+        remainingAmount: Number(row.remaining_amount ?? 0),
+        status: String(row.status ?? "confirmed"),
+      })),
+      stockBatches: (result.stockBatches ?? []).map((row) => ({
+        id: Number(row.id ?? 0),
+        productId: Number(row.product_id ?? 0),
+        productName: String(row.product_name ?? ""),
+        batchCode: String(row.batch_code ?? ""),
+        quantity: Number(row.quantity ?? 0),
+        remainingQuantity: Number(row.remaining_quantity ?? 0),
+        purchasePrice: Number(row.purchase_price ?? 0),
+        receivedDate: String(row.received_date ?? ""),
+        expiryDate: String(row.expiry_date ?? ""),
+        isActive: Boolean(row.isActive),
+      })),
+    };
   },
 };
 

@@ -124,7 +124,11 @@ class SupplierController {
         
         const payments = await new Promise((resolve, reject) => {
             db.all(
-                `SELECT * FROM payments WHERE party_type = 'supplier' AND party_id = ? ORDER BY payment_date DESC`,
+                `SELECT pay.*, cb.name AS cashbox_name
+                 FROM payments pay
+                 LEFT JOIN cashboxes cb ON cb.id = pay.cashbox_id
+                 WHERE pay.party_type = 'supplier' AND pay.party_id = ?
+                 ORDER BY pay.payment_date DESC, pay.id DESC`,
                 [id],
                 (err, rows) => {
                     if (err) return reject(err);
@@ -135,7 +139,11 @@ class SupplierController {
 
         const purchases = await new Promise((resolve, reject) => {
             db.all(
-                `SELECT * FROM purchase_invoices WHERE supplier_id = ? ORDER BY invoice_date DESC`,
+                `SELECT id, invoice_number, invoice_date, invoice_type, total,
+                        paid_amount, remaining_amount, status, notes
+                 FROM purchase_invoices
+                 WHERE supplier_id = ?
+                 ORDER BY invoice_date DESC, id DESC`,
                 [id],
                 (err, rows) => {
                     if (err) return reject(err);
@@ -146,11 +154,11 @@ class SupplierController {
 
         const stockBatches = await new Promise((resolve, reject) => {
             db.all(
-                `SELECT sb.*, p.name as product_name 
-                 FROM stock_batches sb 
-                 LEFT JOIN products p ON sb.product_id = p.id 
-                 WHERE sb.supplier_id = ? 
-                 ORDER BY sb.received_date DESC`,
+                `SELECT sb.*, p.name AS product_name
+                 FROM stock_batches sb
+                 LEFT JOIN products p ON sb.product_id = p.id
+                 WHERE sb.supplier_id = ?
+                 ORDER BY sb.received_date DESC, sb.id DESC`,
                 [id],
                 (err, rows) => {
                     if (err) return reject(err);

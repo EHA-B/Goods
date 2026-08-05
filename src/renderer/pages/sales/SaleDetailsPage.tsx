@@ -1,3 +1,4 @@
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { Banknote, Plus, Printer, ReceiptText, RotateCcw, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -12,7 +13,8 @@ import { BackButton, Button, Card, ConfirmDialog, EmptyState, PageHeader } from 
 import { PATHS } from "../../routes/path";
 import { salesService } from "./salesService";
 
-const money = (value: number) => value.toLocaleString("en-US");
+const money = (value: number, currency = "SYP") =>
+  `${value.toLocaleString("en-US")} ${currency === "SYP" ? "ل.س" : currency}`;
 
 export default function SaleDetailsPage() {
   const navigate = useNavigate();
@@ -30,7 +32,7 @@ export default function SaleDetailsPage() {
     setError("");
     salesService.getDetails(id)
       .then((data) => setDetails(data))
-      .catch((err: Error) => setError(err.message || "خطأ في تحميل الفاتورة"))
+      .catch((err: Error) => setError(getArabicErrorMessage(err, "خطأ في تحميل الفاتورة")))
       .finally(() => setLoading(false));
   }, [saleId]);
 
@@ -52,7 +54,7 @@ export default function SaleDetailsPage() {
       setCancelOpen(false);
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || "تعذر إلغاء الفاتورة");
+      setError(getArabicErrorMessage(e, "تعذر إلغاء الفاتورة"));
     } finally {
       setCancelling(false);
     }
@@ -84,6 +86,7 @@ export default function SaleDetailsPage() {
               ["رقم الفاتورة", invoice.invoice_number],
               ["التاريخ", invoice.invoice_date],
               ["العميل", customer?.name ?? "بيع نقدي"],
+              ["العملة", invoice.currency || "SYP"],
               ["الحالة", <SaleStatusBadge status={invoice.status as never} />],
             ].map(([label, value]) => (
               <div key={String(label)}>
@@ -113,10 +116,10 @@ export default function SaleDetailsPage() {
                   <DataTableCell className="font-bold text-[var(--text-primary)]">{String(item.product_name ?? "-")}</DataTableCell>
                   <DataTableCell>{String(item.batch_code ?? "-")}</DataTableCell>
                   <DataTableCell>{String(item.quantity ?? "-")}</DataTableCell>
-                  <DataTableCell>{money(Number(item.unit_price ?? 0))}</DataTableCell>
-                  <DataTableCell>{money(Number(item.cost_price ?? 0))}</DataTableCell>
-                  <DataTableCell>{money(Number(item.line_total ?? 0))}</DataTableCell>
-                  <DataTableCell>{money(Number(item.profit ?? 0))}</DataTableCell>
+                  <DataTableCell>{money(Number(item.unit_price ?? 0), invoice.currency)}</DataTableCell>
+                  <DataTableCell>{money(Number(item.cost_price ?? 0), "SYP")}</DataTableCell>
+                  <DataTableCell>{money(Number(item.line_total ?? 0), invoice.currency)}</DataTableCell>
+                  <DataTableCell>{money(Number(item.profit ?? 0), "SYP")}</DataTableCell>
                 </DataTableRow>
               ))}
             </DataTableBody>
@@ -136,10 +139,10 @@ export default function SaleDetailsPage() {
                   <DataTableRow key={payment.id}>
                     <DataTableCell>{payment.payment_date}</DataTableCell>
                     <DataTableCell>{payment.cashbox_name ?? "-"}</DataTableCell>
-                    <DataTableCell className="font-bold">{money(payment.amount)}</DataTableCell>
+                    <DataTableCell className="font-bold">{money(payment.amount, payment.currency || invoice.currency)}</DataTableCell>
                     <DataTableCell>{payment.status === "reversed" ? "ملغي" : "نشط"}</DataTableCell>
                     <DataTableCell>{payment.notes ?? "-"}</DataTableCell>
-                    <DataTableCell>{payment.status === "active" ? <Button size="sm" variant="secondary" startIcon={<RotateCcw size={15} />} onClick={async () => { const reason = window.prompt("سبب عكس الدفعة:", "تصحيح دفعة"); if (!reason?.trim()) return; try { await salesService.reversePayment(payment.id, reason.trim()); setDetails(await salesService.getDetails(invoice.id)); } catch (err: unknown) { setError((err as Error).message || "تعذر عكس الدفعة"); } }}>عكس الدفعة</Button> : "-"}</DataTableCell>
+                    <DataTableCell><div className="flex flex-wrap gap-2"><Button size="sm" variant="secondary" startIcon={<Printer size={15} />} onClick={() => navigate(`/print/payments/${payment.id}`)}>طباعة</Button>{payment.status === "active" ? <Button size="sm" variant="secondary" startIcon={<RotateCcw size={15} />} onClick={async () => { const reason = window.prompt("سبب عكس الدفعة:", "تصحيح دفعة"); if (!reason?.trim()) return; try { await salesService.reversePayment(payment.id, reason.trim()); setDetails(await salesService.getDetails(invoice.id)); } catch (err: unknown) { setError(getArabicErrorMessage(err, "تعذر عكس الدفعة")); } }}>عكس الدفعة</Button> : null}</div></DataTableCell>
                   </DataTableRow>
                 ))}
               </DataTableBody>
@@ -162,15 +165,24 @@ export default function SaleDetailsPage() {
           ].map(([label, value]) => (
             <div key={String(label)} className="flex justify-between">
               <span className="text-[var(--text-muted)]">{label}</span>
-              <strong>{money(Number(value))}</strong>
+              <strong>{money(
+                Number(value),
+                label === "إجمالي التكلفة" || label === "صافي الربح" ? "SYP" : invoice.currency,
+              )}</strong>
             </div>
           ))}
           <div className="border-t border-[var(--border)] pt-3">
             <div className="flex justify-between text-base">
               <strong>الإجمالي النهائي</strong>
-              <strong className="text-[var(--primary)]">{money(financial_summary.total_amount)}</strong>
+              <strong className="text-[var(--primary)]">{money(financial_summary.total_amount, invoice.currency)}</strong>
             </div>
           </div>
+          {invoice.currency !== "SYP" && (
+            <div className="mt-3 border-t border-[var(--border)] pt-3 text-xs text-[var(--text-muted)]">
+              1 {invoice.currency} = {Number(invoice.exchange_rate).toLocaleString("en-US")} SYP ·
+              القيمة الأساسية: {money(financial_summary.total_base, "SYP")}
+            </div>
+          )}
         </div>
       </Card>
     </div>

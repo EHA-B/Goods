@@ -24,6 +24,15 @@ const crudApi = (entity, methodNames) => ({
   remove: (id) => invokeApi(`api:${entity}:${methodNames.remove}`, id)
 });
 const stockliteApi = {
+  printDocuments: {
+    payment: (id) => invokeApi("api:print:payment", id),
+    transaction: (id) => invokeApi("api:print:transaction", id),
+    transfer: (id) => invokeApi("api:print:transfer", id),
+    customerStatement: (id) => invokeApi("api:print:customerStatement", id),
+    supplierStatement: (id) => invokeApi("api:print:supplierStatement", id),
+    cashboxStatement: (id) => invokeApi("api:print:cashboxStatement", id),
+    consignment: (id) => invokeApi("api:print:consignment", id)
+  },
   dashboard: { get: () => invokeApi("api:dashboard:get") },
   auth: {
     login: (input) => invokeApi("api:auth:login", input),
@@ -175,12 +184,17 @@ const stockliteApi = {
     cancel: (id, reason) => invokeApi("api:transaction:cancel", id, reason),
     summary: (filters) => invokeApi("api:transaction:getSummary", filters)
   },
-  activityLogs: crudApi("activityLog", {
-    create: "createActivityLog",
-    get: "getActivityLog",
-    list: "getAllActivityLogs",
-    update: "updateActivityLog",
-    remove: "deleteActivityLog"
-  })
+  activityLogs: {
+    list: (filters, pagination) => invokeApi("api:activityLog:list", filters, pagination),
+    get: (id) => invokeApi("api:activityLog:get", id),
+    options: () => invokeApi("api:activityLog:options")
+  },
+  notifications: {
+    list: (input) => invokeApi("api:notification:list", input),
+    count: () => invokeApi("api:notification:count"),
+    markRead: (id) => invokeApi("api:notification:markRead", id),
+    markAllRead: () => invokeApi("api:notification:markAllRead"),
+    dismiss: (id) => invokeApi("api:notification:dismiss", id)
+  }
 };
 electron.contextBridge.exposeInMainWorld("stockliteApi", stockliteApi);

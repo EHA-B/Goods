@@ -1,5 +1,5 @@
+import { notifySuccess } from "../../lib/notifications";
 import { Moon, Palette, RotateCcw, Type } from "lucide-react";
-import { toast } from "sonner";
 
 import { BackButton, Button, Card, PageHeader } from "../../components/ui";
 import { PATHS } from "../../routes/path";
@@ -41,7 +41,7 @@ export default function AppearanceSettingsPage() {
 
   function handleReset() {
     resetAppearance();
-    toast.success("تمت إعادة إعدادات الواجهة إلى القيم الافتراضية.");
+    notifySuccess("تمت إعادة إعدادات الواجهة إلى القيم الافتراضية.");
   }
 
   return (

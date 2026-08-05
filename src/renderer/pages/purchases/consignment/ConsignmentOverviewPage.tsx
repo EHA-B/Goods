@@ -1,3 +1,4 @@
+import { getArabicErrorMessage } from "../../../lib/errorNormalizer";
 import { ArrowLeft, HandCoins, PackageOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -15,7 +16,7 @@ export default function ConsignmentOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const id = Number(purchaseId);
-  const load = async () => { try { setLoading(true); setError(""); setSummary(await consignmentService.getSummary(id)); } catch (e) { setError(e instanceof Error ? e.message : "تعذر تحميل بيانات الأمانة."); } finally { setLoading(false); } };
+  const load = async () => { try { setLoading(true); setError(""); setSummary(await consignmentService.getSummary(id)); } catch (e) { setError(getArabicErrorMessage(e, "تعذر تحميل بيانات الأمانة.")); } finally { setLoading(false); } };
   useEffect(() => { void load(); }, [id]);
   if (loading) return <div className="flex min-h-72 items-center justify-center"><LoadingSpinner /></div>;
   if (error || !summary) return <EmptyState icon={<PackageOpen size={32} />} title="تعذر تحميل بيانات الأمانة" description={error || "الفاتورة غير موجودة."} action={<Button onClick={() => void load()}>إعادة المحاولة</Button>} />;

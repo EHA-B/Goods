@@ -1,3 +1,5 @@
+import { notifyValidation } from "../../lib/notifications";
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BackButton, Button, Card, FormField, Input, PageHeader, Select, Switch, Textarea } from "../../components/ui";
@@ -51,7 +53,7 @@ export default function CashboxFormPage() {
           }
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : "تعذر تحميل البيانات");
+        setError(getArabicErrorMessage(e, "تعذر تحميل البيانات"));
       } finally {
         setLoading(false);
       }
@@ -80,8 +82,7 @@ export default function CashboxFormPage() {
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      setError("اسم الصندوق مطلوب");
-      return;
+      setError("اسم الصندوق مطلوب"); notifyValidation("اسم الصندوق مطلوب"); return;
     }
     setSaving(true);
     setError(null);

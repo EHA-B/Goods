@@ -1,3 +1,4 @@
+import { getArabicErrorMessage } from "../../../lib/errorNormalizer";
 import { Printer, ReceiptText, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -18,7 +19,7 @@ export default function ConsignmentSettlementDetailsPage() {
 
   const load = async () => {
     try { setError(""); setSettlement(await consignmentService.getSettlement(id)); }
-    catch (e) { setError(e instanceof Error ? e.message : "تعذر تحميل التسوية."); }
+    catch (e) { setError(getArabicErrorMessage(e, "تعذر تحميل التسوية.")); }
     finally { setLoading(false); }
   };
 
@@ -33,7 +34,7 @@ export default function ConsignmentSettlementDetailsPage() {
       setError("");
       setSettlement(await consignmentService.reverseSettlement(settlement.id, reason.trim()));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذر عكس التسوية.");
+      setError(getArabicErrorMessage(e, "تعذر عكس التسوية."));
     } finally {
       setReversing(false);
     }
@@ -43,7 +44,7 @@ export default function ConsignmentSettlementDetailsPage() {
   if (!settlement) return <EmptyState icon={<ReceiptText size={32} />} title="لا توجد تسوية مسجلة" description={error || "لم يتم إغلاق فاتورة الأمانة بعد."} action={<Button onClick={() => navigate(`/purchases/${id}/close-consignment`)}>بدء التسوية</Button>} />;
 
   return <div className="print:bg-white">
-    <PageHeader title={`تسوية الأمانة ${settlement.settlement_number}`} description="تفاصيل نتيجة إغلاق وتسوية فاتورة الأمانة." actions={<div className="flex flex-wrap gap-2 print:hidden"><BackButton to={`/purchases/${id}`} /><Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => window.print()}>طباعة</Button>{settlement.status === "completed" && <Button variant="danger" startIcon={<RotateCcw size={17} />} loading={reversing} onClick={() => void reverse()}>عكس التسوية</Button>}</div>} />
+    <PageHeader title={`تسوية الأمانة ${settlement.settlement_number}`} description="تفاصيل نتيجة إغلاق وتسوية فاتورة الأمانة." actions={<div className="flex flex-wrap gap-2 print:hidden"><BackButton to={`/purchases/${id}`} /><Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/print/consignment/${id}`)}>طباعة</Button>{settlement.status === "completed" && <Button variant="danger" startIcon={<RotateCcw size={17} />} loading={reversing} onClick={() => void reverse()}>عكس التسوية</Button>}</div>} />
     {error && <div className="mb-4 rounded-lg border border-[var(--danger)] bg-[var(--danger-subtle)] p-3 text-sm font-bold text-[var(--danger)]">{error}</div>}
     <ConsignmentSettlementResult settlement={settlement} />
   </div>;

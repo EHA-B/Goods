@@ -20,6 +20,12 @@ const {
     dbGet,
     dbAll,
 } = require('./utils/invoiceUtils');
+const {
+    normalizeCurrency,
+    normalizeExchangeRate,
+    toBaseAmount,
+    assertCashboxCurrency,
+} = require('./utils/currencyUtils');
 
 class SaleInvoiceController {
 
@@ -83,7 +89,7 @@ class SaleInvoiceController {
                 if (!product) throw { code: 'PRODUCT_NOT_FOUND', message: `الصنف رقم ${i + 1}: المنتج غير موجود` };
                 if (!product.isActive) throw { code: 'INACTIVE_PRODUCT', message: `الصنف رقم ${i + 1}: المنتج غير نشط` };
                 // Cost is always authoritative from the selected stock batch.
-                mappedItems[i].cost_price = batch.purchase_price;
+                mappedItems[i].cost_price = normalizeAmount(batch.purchase_price_base ?? batch.purchase_price);
                 mappedItems[i]._batch = batch;
             }
 
@@ -110,8 +116,8 @@ class SaleInvoiceController {
             }
 
             // 7. Insert sale invoice
-            const invoiceCurrency = currency?.trim() || 'SYP';
-            const invoiceRate = Number(exchange_rate) || 1;
+            const invoiceCurrency = normalizeCurrency(currency);
+            const invoiceRate = normalizeExchangeRate(invoiceCurrency, exchange_rate);
             
             const { lastID: invoiceId } = await dbRun(db,
                 `INSERT INTO sale_invoices
@@ -130,7 +136,8 @@ class SaleInvoiceController {
                 const item = normalizedItems[i];
                 const batch = item._batch;
                 const costPrice = normalizeAmount(item.cost_price);
-                const profit    = Math.round((item.price - costPrice) * item.quantity * 100) / 100;
+                const revenueBase = toBaseAmount(item.price * item.quantity, invoiceRate);
+                const profit = Math.round((revenueBase - (costPrice * item.quantity)) * 100) / 100;
 
                 // Insert sale item (product_id is stored via batch)
                 await dbRun(db,
@@ -161,7 +168,7 @@ class SaleInvoiceController {
 
             // 9. Increase customer receivable balance (if customer)
             if (customer_id) {
-                const customerBaseAmount = Math.round((totalAmount * invoiceRate) * 100) / 100;
+                const customerBaseAmount = toBaseAmount(totalAmount, invoiceRate);
                 await dbRun(db,
                     `UPDATE customers SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`,
                     [customerBaseAmount, customer_id]
@@ -181,6 +188,7 @@ class SaleInvoiceController {
                 const cashbox = await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [payBox]);
                 if (!cashbox)          throw { code: 'NOT_FOUND', message: 'الصندوق غير موجود' };
                 if (!cashbox.isActive)  throw { code: 'VALIDATION_ERROR', message: 'الصندوق غير نشط' };
+                assertCashboxCurrency(cashbox, invoiceCurrency);
 
                 // Increase cashbox
                 const balBefore = normalizeAmount(cashbox.balance);
@@ -196,15 +204,16 @@ class SaleInvoiceController {
                 // Create payment record
                 await dbRun(db,
                     `INSERT INTO payments
-                       (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, payment_date,
+                       (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
                         status, cashbox_transaction_id, notes, created_at, updated_at)
-                     VALUES ('customer', ?, 'sale', ?, ?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now'))`,
-                    [customer_id ?? null, invoiceId, payBox, payAmount, payDate, cbtId, initial_payment.notes ?? null]
+                     VALUES ('customer', ?, 'sale', ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now'))`,
+                    [customer_id ?? null, invoiceId, payBox, payAmount, invoiceCurrency, invoiceRate,
+                     toBaseAmount(payAmount, invoiceRate), payDate, cbtId, initial_payment.notes ?? null]
                 );
 
                 // Reduce customer balance by payment
                 if (customer_id) {
-                    const payBaseAmount = Math.round((payAmount * invoiceRate) * 100) / 100;
+                    const payBaseAmount = toBaseAmount(payAmount, invoiceRate);
                     await dbRun(db,
                         `UPDATE customers SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`,
                         [payBaseAmount, customer_id]
@@ -275,12 +284,18 @@ class SaleInvoiceController {
             [id]
         );
 
+        const invoiceRate = normalizeExchangeRate(invoice.currency, invoice.exchange_rate);
         const financial_summary = {
             subtotal: normalizeAmount(invoice.subtotal),
             discount_amount: normalizeAmount(invoice.discount_amount ?? invoice.discount),
             total_amount: normalizeAmount(invoice.total),
             paid_amount: normalizeAmount(invoice.paid_amount),
             remaining_amount: normalizeAmount(invoice.remaining_amount),
+            total_base: toBaseAmount(invoice.total, invoiceRate),
+            paid_base: toBaseAmount(invoice.paid_amount, invoiceRate),
+            remaining_base: toBaseAmount(invoice.remaining_amount, invoiceRate),
+            currency: normalizeCurrency(invoice.currency),
+            exchange_rate: invoiceRate,
             status: invoice.status,
         };
 
@@ -379,7 +394,7 @@ class SaleInvoiceController {
             if (invoice.customer_id) {
                 const totalAmount = normalizeAmount(invoice.total);
                 const totalPaid   = normalizeAmount(invoice.paid_amount);
-                const remainingBalance = Math.max(0, totalAmount - totalPaid);
+                const remainingBalance = toBaseAmount(Math.max(0, totalAmount - totalPaid), normalizeExchangeRate(invoice.currency, invoice.exchange_rate));
                 if (remainingBalance > 0) {
                     await dbRun(db,
                         `UPDATE customers SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`,

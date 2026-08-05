@@ -1,3 +1,4 @@
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeftRight,
@@ -56,7 +57,7 @@ export default function CashboxesPage() {
       setCashboxes(list);
       setSummary(sum);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذر تحميل بيانات الصناديق");
+      setError(getArabicErrorMessage(e, "تعذر تحميل بيانات الصناديق"));
     } finally {
       setLoading(false);
     }

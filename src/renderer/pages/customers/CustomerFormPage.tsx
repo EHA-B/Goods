@@ -1,7 +1,7 @@
+import { notifyError, notifySuccess } from "../../lib/notifications";
 import { Save } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { toast } from "sonner";
 import { BackButton, Button, Card, FormField, Input, LoadingSpinner, NumberInput, PageHeader, Switch, Textarea } from "../../components/ui";
 import { PATHS } from "../../routes/path";
 import { customersService, getCustomerErrorMessage, type CustomerInput } from "./customersService";
@@ -48,12 +48,12 @@ export default function CustomerFormPage() {
     try {
       setIsSaving(true);
       const customer = isEditing && id ? await customersService.update(id, input) : await customersService.create(input);
-      toast.success(isEditing ? "تم تعديل بيانات العميل بنجاح" : "تمت إضافة العميل بنجاح");
+      notifySuccess(isEditing ? "تم تعديل بيانات العميل بنجاح" : "تمت إضافة العميل بنجاح");
       navigate(`/customers/${customer.id}`);
     } catch (saveError) {
       const message = getCustomerErrorMessage(saveError);
       setError(message);
-      toast.error(message);
+      notifyError(message);
     } finally { setIsSaving(false); }
   }
 

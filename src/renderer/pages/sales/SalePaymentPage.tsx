@@ -1,3 +1,5 @@
+import { notifyValidation } from "../../lib/notifications";
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useState } from "react";
 import { Banknote, Save } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -24,11 +26,16 @@ export default function SalePaymentPage() {
     Promise.all([salesService.getDetails(id), salesService.getLookups()])
       .then(([data, lookups]) => {
         setDetails(data);
-        setCashboxes(lookups.cashboxes.filter((item) => Boolean(item.isActive)));
-        setAmount(data.financial_summary.remaining_amount);
-        if (lookups.cashboxes.length > 0) setCashboxId(lookups.cashboxes[0].id);
+        const invoiceCurrency = data.invoice.currency || "SYP";
+        const matching = lookups.cashboxes.filter(
+          (item) => Boolean(item.isActive) && item.currency === invoiceCurrency,
+        );
+        setCashboxes(matching);
+        const remaining = data.financial_summary.remaining_amount;
+        setAmount(remaining);
+        setCashboxId(matching[0]?.id ?? 0);
       })
-      .catch((err: Error) => setError(err.message || "خطأ في التحميل"))
+      .catch((err: Error) => setError(getArabicErrorMessage(err, "خطأ في التحميل")))
       .finally(() => setLoading(false));
   }, [saleId]);
 
@@ -36,9 +43,9 @@ export default function SalePaymentPage() {
 
   const submit = async () => {
     setError("");
-    if (amount <= 0) { setError("المبلغ يجب أن يكون موجبًا"); return; }
-    if (amount > remaining + 0.001) { setError("المبلغ أكبر من المتبقي"); return; }
-    if (!cashboxId) { setError("اختر الصندوق"); return; }
+    if (amount <= 0) { setError("المبلغ يجب أن يكون موجبًا"); notifyValidation("المبلغ يجب أن يكون موجبًا"); return; }
+    if (amount > remaining + 0.001) { setError("المبلغ أكبر من المتبقي"); notifyValidation("المبلغ أكبر من المتبقي"); return; }
+    if (!cashboxId) { setError("اختر الصندوق"); notifyValidation("اختر الصندوق"); return; }
 
     setSubmitting(true);
     try {
@@ -52,7 +59,7 @@ export default function SalePaymentPage() {
       navigate(`/sales/${saleId}`);
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || "تعذر تسجيل الدفعة");
+      setError(getArabicErrorMessage(e, "تعذر تسجيل الدفعة"));
     } finally {
       setSubmitting(false);
     }
@@ -93,9 +100,9 @@ export default function SalePaymentPage() {
           {[
             ["رقم الفاتورة", invoice.invoice_number],
             ["العميل", details.customer?.name ?? "بيع نقدي"],
-            ["الإجمالي", details.financial_summary.total_amount.toLocaleString("en-US")],
-            ["المدفوع سابقًا", details.financial_summary.paid_amount.toLocaleString("en-US")],
-            ["المتبقي", remaining.toLocaleString("en-US")],
+            ["الإجمالي", `${details.financial_summary.total_amount.toLocaleString("en-US")} ${invoice.currency || "SYP"}`],
+            ["المدفوع سابقًا", `${details.financial_summary.paid_amount.toLocaleString("en-US")} ${invoice.currency || "SYP"}`],
+            ["المتبقي", `${remaining.toLocaleString("en-US")} ${invoice.currency || "SYP"}`],
           ].map(([label, value]) => (
             <div key={String(label)} className="flex justify-between">
               <span className="text-[var(--text-muted)]">{label}</span>

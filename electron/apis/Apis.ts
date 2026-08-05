@@ -37,6 +37,8 @@ const transactionController = require(path.join(__dirname, '../../src/controller
 const userController = require(path.join(__dirname, '../../src/controllers', 'userController.js'));
 const backupController = require(path.join(__dirname, '../../src/controllers', 'backupController.js'));
 const dashboardController = require(path.join(__dirname, '../../src/controllers', 'dashboardController.js'));
+const printController = require(path.join(__dirname, '../../src/controllers', 'printController.js'));
+const notificationController = require(path.join(__dirname, '../../src/controllers', 'notificationController.js'));
 
 
 /**
@@ -47,6 +49,8 @@ ipcMain.handle('api:auth:login', async (_event, input) => {
   try {
     const user = await authController.login(input);
     setCurrentUser(user);
+    global.__stockliteCurrentUserId = user.id;
+    await activityLogController.recordActivity({ user_id: user.id, action: 'auth_login', table_name: 'users', record_id: user.id, new_data: { username: user.username } }).catch(() => undefined);
     return success(user);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
@@ -58,7 +62,10 @@ ipcMain.handle('api:auth:login', async (_event, input) => {
  * Description: Clears the current Electron session.
  */
 ipcMain.handle('api:auth:logout', async () => {
+  const user = getCurrentUser();
+  if (user) await activityLogController.recordActivity({ user_id: user.id, action: 'auth_logout', table_name: 'users', record_id: user.id }).catch(() => undefined);
   clearCurrentUser();
+  global.__stockliteCurrentUserId = null;
   return success({ success: true });
 });
 
@@ -79,22 +86,68 @@ ipcMain.handle('api:auth:changePassword', async (_event, input) => {
     const user = getCurrentUser();
     if (!user) return failure('UNAUTHENTICATED', 'Authentication is required');
     const result = await authController.changePassword(user.id, input);
+    await activityLogController.recordActivity({ user_id: user.id, action: 'password_changed', table_name: 'users', record_id: user.id }).catch(() => undefined);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
   }
 });
 
+
+const internallyAuditedChannels = new Set([
+  'api:saleInvoice:createSaleProcess','api:saleInvoice:cancelSaleInvoice','api:payment:recordSalePayment','api:payment:reverseSalePayment',
+  'api:purchase:createFull','api:purchase:cancel','api:payment:recordPurchasePayment','api:payment:reversePurchasePayment',
+  'api:purchase:closeCommission','api:purchase:reverseCommissionSettlement',
+]);
+function auditInfoForChannel(channel, args, data) {
+  if (internallyAuditedChannels.has(channel) || channel.startsWith('api:activityLog:') || channel.includes(':get') || channel.includes(':list') || channel.includes(':summary')) return null;
+  const operation = channel.split(':').pop() || 'operation';
+  const entity = channel.split(':')[1] || 'system';
+  const mutation = /(create|update|delete|remove|cancel|transfer|adjust|backup|restore|save|set)/i.test(operation);
+  if (!mutation) return null;
+  const tableMap = { product:'products', customer:'customers', supplier:'suppliers', cashbox:'cashboxes', transaction:'transactions', transactionCategory:'transaction_categories', stockAdjustment:'stock_adjustments', stockBatch:'stock_batches', setting:'settings', backup:'backups', saleType:'sale_types' };
+  const action = `${entity}_${operation}`.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
+  const recordId = Number(data?.id ?? data?.transaction?.id ?? args?.[0]?.id ?? args?.[0] ?? 0) || 0;
+  return { action, table_name: tableMap[entity] || entity, record_id: recordId, new_data: { input: args?.[0] ?? null, result_id: data?.id ?? null } };
+}
+
 // All API handlers registered after this point require an authenticated session.
 // Authentication endpoints above remain public so the user can sign in.
 const registerProtectedHandler = ipcMain.handle.bind(ipcMain);
 ipcMain.handle = ((channel, listener) =>
   registerProtectedHandler(channel, async (...args) => {
-    if (!getCurrentUser()) {
-      return failure('UNAUTHENTICATED', 'Authentication is required');
+    const user = getCurrentUser();
+    if (!user) return failure('UNAUTHENTICATED', 'Authentication is required');
+    global.__stockliteCurrentUserId = user.id;
+    const eventArgs = args.slice(1);
+    const pendingAudit = auditInfoForChannel(channel, eventArgs, null);
+    const oldData = pendingAudit?.record_id ? await activityLogController.getEntitySnapshot(pendingAudit.table_name, pendingAudit.record_id).catch(() => null) : null;
+    const response = await listener(...args);
+    if (response?.success) {
+      const audit = auditInfoForChannel(channel, eventArgs, response.data);
+      if (audit) {
+        const inputData = typeof eventArgs[1] === 'object' ? eventArgs[1] : typeof eventArgs[0] === 'object' ? eventArgs[0] : null;
+        await activityLogController.recordActivity({ user_id: user.id, ...audit, old_data: oldData, new_data: inputData || response.data }).catch(() => undefined);
+      }
     }
-    return listener(...args);
+    return response;
   })) as typeof ipcMain.handle;
+
+/** Read-only printable document endpoints. */
+ipcMain.handle('api:print:payment', async (_event,id)=>{ try{return success(await printController.getPaymentDocument(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
+ipcMain.handle('api:print:transaction', async (_event,id)=>{ try{return success(await printController.getTransactionDocument(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
+ipcMain.handle('api:print:transfer', async (_event,id)=>{ try{return success(await printController.getTransferDocument(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
+ipcMain.handle('api:print:customerStatement', async (_event,id)=>{ try{return success(await printController.getCustomerStatement(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
+ipcMain.handle('api:print:supplierStatement', async (_event,id)=>{ try{return success(await printController.getSupplierStatement(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
+ipcMain.handle('api:print:cashboxStatement', async (_event,id)=>{ try{return success(await printController.getCashboxStatement(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
+ipcMain.handle('api:print:consignment', async (_event,id)=>{ try{return success(await printController.getConsignmentDocument(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
+
+/** Notification center endpoints. */
+ipcMain.handle('api:notification:list', async (_event,input) => { try { return success(await notificationController.list(input)); } catch(e) { return failure(e.code||'NOTIFICATIONS_LOAD_FAILED',e.message||'Failed to load notifications',e.details); } });
+ipcMain.handle('api:notification:count', async () => { try { return success(await notificationController.unreadCount()); } catch(e) { return failure(e.code||'NOTIFICATIONS_LOAD_FAILED',e.message||'Failed to load notifications',e.details); } });
+ipcMain.handle('api:notification:markRead', async (_event,id) => { try { return success(await notificationController.markRead(id)); } catch(e) { return failure(e.code||'NOTIFICATION_UPDATE_FAILED',e.message,e.details); } });
+ipcMain.handle('api:notification:markAllRead', async () => { try { return success(await notificationController.markAllRead()); } catch(e) { return failure(e.code||'NOTIFICATION_UPDATE_FAILED',e.message,e.details); } });
+ipcMain.handle('api:notification:dismiss', async (_event,id) => { try { return success(await notificationController.dismiss(id)); } catch(e) { return failure(e.code||'NOTIFICATION_UPDATE_FAILED',e.message,e.details); } });
 
 /** Dashboard: consolidated read-only overview. */
 ipcMain.handle('api:dashboard:get', async () => {
@@ -127,74 +180,18 @@ ipcMain.handle('api:system:getAppInfo', async () => {
   }
 });
 
-/**
- * Endpoint: api:activityLog:createActivityLog
- * Description: Executes createActivityLog on activityLogController.
- * Usage: Invoked by frontend to perform createActivityLog operation.
- */
-ipcMain.handle('api:activityLog:createActivityLog', async (_event, input) => {
-  try {
-    const result = await activityLogController.createActivityLog(input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
+/** Activity log read-only endpoints. */
+ipcMain.handle('api:activityLog:list', async (_event, filters, pagination) => {
+  try { return success(await activityLogController.listActivityLogs(filters, pagination)); }
+  catch (e) { return failure(e.code || 'ACTIVITY_LOG_LOAD_FAILED', e.message || 'Failed to load activity log', e.details); }
 });
-
-/**
- * Endpoint: api:activityLog:getActivityLog
- * Description: Executes getActivityLog on activityLogController.
- * Usage: Invoked by frontend to perform getActivityLog operation.
- */
-ipcMain.handle('api:activityLog:getActivityLog', async (_event, id) => {
-  try {
-    const result = await activityLogController.getActivityLog(id);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
+ipcMain.handle('api:activityLog:get', async (_event, id) => {
+  try { return success(await activityLogController.getActivityLog(id)); }
+  catch (e) { return failure(e.code || 'ACTIVITY_LOG_LOAD_FAILED', e.message || 'Failed to load activity log', e.details); }
 });
-
-/**
- * Endpoint: api:activityLog:getAllActivityLogs
- * Description: Executes getAllActivityLogs on activityLogController.
- * Usage: Invoked by frontend to perform getAllActivityLogs operation.
- */
-ipcMain.handle('api:activityLog:getAllActivityLogs', async (_event) => {
-  try {
-    const result = await activityLogController.getAllActivityLogs();
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
- * Endpoint: api:activityLog:updateActivityLog
- * Description: Executes updateActivityLog on activityLogController.
- * Usage: Invoked by frontend to perform updateActivityLog operation.
- */
-ipcMain.handle('api:activityLog:updateActivityLog', async (_event, id, input) => {
-  try {
-    const result = await activityLogController.updateActivityLog(id, input);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
- * Endpoint: api:activityLog:deleteActivityLog
- * Description: Executes deleteActivityLog on activityLogController.
- * Usage: Invoked by frontend to perform deleteActivityLog operation.
- */
-ipcMain.handle('api:activityLog:deleteActivityLog', async (_event, id) => {
-  try {
-    const result = await activityLogController.deleteActivityLog(id);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
+ipcMain.handle('api:activityLog:options', async () => {
+  try { return success(await activityLogController.getActivityLogOptions()); }
+  catch (e) { return failure(e.code || 'ACTIVITY_LOG_LOAD_FAILED', e.message || 'Failed to load activity log options', e.details); }
 });
 
 /**

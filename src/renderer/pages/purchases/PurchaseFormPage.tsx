@@ -1,3 +1,5 @@
+import { notifyValidation } from "../../lib/notifications";
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useMemo, useState } from "react";
 import { Calculator, PackagePlus, Plus, Save, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -64,13 +66,19 @@ export default function PurchaseFormPage() {
         setLookups({ ...data, products });
         if (data.suppliers.length === 1) setSupplierId(data.suppliers[0].id);
       })
-      .catch((err: Error) => setError(err.message || "تعذر تحميل الموردين والمنتجات والصناديق"))
+      .catch((err: Error) => setError(getArabicErrorMessage(err, "تعذر تحميل الموردين والمنتجات والصناديق")))
       .finally(() => setLookupsLoading(false));
   }, []);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.quantity * item.purchase_price, 0), [items]);
   const total = Math.max(0, subtotal - discount);
   const remaining = Math.max(0, total - paymentAmount);
+  const matchingCashboxes = useMemo(
+    () => (lookups?.cashboxes ?? []).filter((cashbox) => Boolean(cashbox.isActive) && cashbox.currency === currency),
+    [lookups, currency],
+  );
+  const totalBase = currency === "SYP" ? total : total * exchangeRate;
+
 
   const updateItem = (index: number, patch: Partial<PurchaseItemForm>) =>
     setItems((curr) => curr.map((item, i) => i === index ? { ...item, ...patch } : item));
@@ -129,16 +137,17 @@ export default function PurchaseFormPage() {
 
   const submit = async () => {
     setError("");
-    if (!supplierId) { setError("اختر المورد"); return; }
-    if (!invoiceDate) { setError("تاريخ الفاتورة مطلوب"); return; }
-    if (discount < 0 || discount > subtotal) { setError("الخصم غير صالح أو يتجاوز المجموع الفرعي"); return; }
-    if (paymentAmount < 0 || paymentAmount > total) { setError("المبلغ المدفوع غير صالح أو يتجاوز إجمالي الفاتورة"); return; }
-    if (paymentAmount > 0 && !paymentCashboxId) { setError("اختر الصندوق عند تسجيل دفعة أولية"); return; }
+    if (!supplierId) { setError("اختر المورد"); notifyValidation("اختر المورد"); return; }
+    if (!invoiceDate) { setError("تاريخ الفاتورة مطلوب"); notifyValidation("تاريخ الفاتورة مطلوب"); return; }
+    if (discount < 0 || discount > subtotal) { setError("الخصم غير صالح أو يتجاوز المجموع الفرعي"); notifyValidation("الخصم غير صالح أو يتجاوز المجموع الفرعي"); return; }
+    if (paymentAmount < 0 || paymentAmount > total) { setError("المبلغ المدفوع غير صالح أو يتجاوز إجمالي الفاتورة"); notifyValidation("المبلغ المدفوع غير صالح أو يتجاوز إجمالي الفاتورة"); return; }
+    if (currency !== "SYP" && (!Number.isFinite(exchangeRate) || exchangeRate <= 0)) { setError("سعر الصرف مطلوب ويجب أن يكون أكبر من صفر"); notifyValidation("سعر الصرف مطلوب ويجب أن يكون أكبر من صفر"); return; }
+    if (paymentAmount > 0 && !paymentCashboxId) { setError("اختر الصندوق عند تسجيل دفعة أولية"); notifyValidation("اختر الصندوق عند تسجيل دفعة أولية"); return; }
+    if (paymentAmount > 0 && !matchingCashboxes.some((cashbox) => cashbox.id === paymentCashboxId)) { setError("يجب اختيار صندوق بنفس عملة الفاتورة"); notifyValidation("يجب اختيار صندوق بنفس عملة الفاتورة"); return; }
     const productIds = items.map((item) => item.product_id).filter(Boolean);
-    if (new Set(productIds).size !== productIds.length) { setError("لا يمكن تكرار المنتج في أكثر من سطر. اجمع الكمية في سطر واحد"); return; }
+    if (new Set(productIds).size !== productIds.length) { setError("لا يمكن تكرار المنتج في أكثر من سطر. اجمع الكمية في سطر واحد"); notifyValidation("لا يمكن تكرار المنتج في أكثر من سطر. اجمع الكمية في سطر واحد"); return; }
     if (items.some((item) => !item.product_id || item.quantity <= 0 || item.purchase_price < 0 || !item.received_date || (item.expiry_date && item.expiry_date < item.received_date))) {
-      setError("راجع الأصناف — المنتج والكمية والسعر مطلوبة");
-      return;
+      setError("راجع الأصناف — المنتج والكمية والسعر مطلوبة"); notifyValidation("راجع الأصناف — المنتج والكمية والسعر مطلوبة"); return;
     }
 
     const input: CreatePurchaseInvoiceInput = {
@@ -160,7 +169,7 @@ export default function PurchaseFormPage() {
         ? { cashbox_id: paymentCashboxId, amount: paymentAmount, payment_date: paymentDate }
         : undefined,
       currency: currency,
-      exchange_rate: exchangeRate,
+      exchange_rate: currency === "SYP" ? 1 : exchangeRate,
     };
 
     setLoading(true);
@@ -170,7 +179,7 @@ export default function PurchaseFormPage() {
       navigate(`/purchases/${result.invoice.id}`);
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || "حدث خطأ أثناء الحفظ");
+      setError(getArabicErrorMessage(e, "حدث خطأ أثناء الحفظ"));
     } finally {
       setLoading(false);
     }
@@ -196,19 +205,31 @@ export default function PurchaseFormPage() {
             <Select id="supplier" value={String(supplierId)} disabled={lookupsLoading} options={[{ value: "0", label: lookupsLoading ? "جاري تحميل الموردين..." : "اختر المورد" }, ...(lookups?.suppliers ?? []).map((s) => ({ value: String(s.id), label: s.name }))]} onChange={(e) => setSupplierId(Number(e.target.value))} />
           </FormField>
           <FormField label="نوع الفاتورة" htmlFor="purchaseType">
-            <Select id="purchaseType" value={invoiceType} options={[{ value: "standard", label: "فاتورة عادية" }, { value: "consignment", label: "فاتورة أمانة" }]} onChange={(e) => setInvoiceType(e.target.value as "standard" | "consignment")} />
+            <Select id="purchaseType" value={invoiceType} options={[{ value: "standard", label: "فاتورة عادية" }, { value: "consignment", label: "فاتورة أمانة" }]} onChange={(e) => {
+              const nextType = e.target.value as "standard" | "consignment";
+              setInvoiceType(nextType);
+              if (nextType === "consignment") {
+                setCurrency("SYP");
+                setExchangeRate(1);
+                const sypBox = lookups?.cashboxes.find((c) => Boolean(c.isActive) && c.currency === "SYP");
+                setPaymentCashboxId(sypBox?.id ?? 0);
+              }
+            }} />
           </FormField>
           <FormField label="العملة" required>
-            <Select value={currency} options={[{ value: "SYP", label: "ل.س (SYP)" }, { value: "USD", label: "دولار (USD)" }]} onChange={(e) => {
+            <Select value={currency} disabled={invoiceType === "consignment"} options={invoiceType === "consignment"
+              ? [{ value: "SYP", label: "ل.س (SYP) — الأمانة" }]
+              : [{ value: "SYP", label: "ل.س (SYP)" }, { value: "USD", label: "دولار (USD)" }]} onChange={(e) => {
               const newCur = e.target.value;
               setCurrency(newCur);
-              const defaultBox = lookups?.cashboxes.find(c => c.currency === newCur);
-              if (defaultBox) setPaymentCashboxId(defaultBox.id);
+              setExchangeRate(newCur === "SYP" ? 1 : 0);
+              const defaultBox = lookups?.cashboxes.find((c) => Boolean(c.isActive) && c.currency === newCur);
+              setPaymentCashboxId(defaultBox?.id ?? 0);
             }} />
           </FormField>
           {currency !== "SYP" && (
-            <FormField label="سعر الصرف" required>
-              <Input type="number" min="0" step="any" value={exchangeRate} onChange={(e) => setExchangeRate(Number(e.target.value))} />
+            <FormField label={`سعر 1 ${currency} بالليرة السورية`} required>
+              <Input type="number" min="0.000001" step="any" value={exchangeRate} onChange={(e) => setExchangeRate(Number(e.target.value))} />
             </FormField>
           )}
           <FormField label="ملاحظات" htmlFor="notes" className="md:col-span-2 xl:col-span-4">
@@ -275,7 +296,7 @@ export default function PurchaseFormPage() {
               <Input type="number" min="0" max={total} value={paymentAmount} onChange={(e) => setPaymentAmount(Number(e.target.value))} />
             </FormField>
             <FormField label="الصندوق">
-              <Select value={String(paymentCashboxId)} disabled={lookupsLoading || paymentAmount <= 0} options={[{ value: "0", label: paymentAmount <= 0 ? "لا توجد دفعة أولية" : lookupsLoading ? "جاري تحميل الصناديق..." : "اختر الصندوق" }, ...(lookups?.cashboxes ?? []).map((c) => ({ value: String(c.id), label: `${c.name} — ${Number(c.balance).toLocaleString("en-US")} ${c.currency}` }))]} onChange={(e) => setPaymentCashboxId(Number(e.target.value))} />
+              <Select value={String(paymentCashboxId)} disabled={lookupsLoading || paymentAmount <= 0} options={[{ value: "0", label: paymentAmount <= 0 ? "لا توجد دفعة أولية" : lookupsLoading ? "جاري تحميل الصناديق..." : "اختر الصندوق" }, ...matchingCashboxes.map((c) => ({ value: String(c.id), label: `${c.name} — ${Number(c.balance).toLocaleString("en-US")} ${c.currency}` }))]} onChange={(e) => setPaymentCashboxId(Number(e.target.value))} />
             </FormField>
             <FormField label="تاريخ الدفع">
               <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
@@ -294,8 +315,17 @@ export default function PurchaseFormPage() {
             <div className="border-t border-[var(--border)] pt-3">
               <div className="flex justify-between text-base">
                 <strong>الإجمالي النهائي</strong>
-                <strong className="text-[var(--primary)]">{money(total)}</strong>
+                <strong className="text-[var(--primary)]">{money(total)} {currency}</strong>
               </div>
+              {currency !== "SYP" && (
+                <div className="mt-2 flex justify-between text-sm">
+                  <span className="text-[var(--text-muted)]">القيمة بالعملة الأساسية</span>
+                  <strong>{money(totalBase)} SYP</strong>
+                </div>
+              )}
+              {currency !== "SYP" && (
+                <p className="mt-2 text-xs text-[var(--text-muted)]">1 {currency} = {money(exchangeRate)} SYP</p>
+              )}
             </div>
           </div>
           <div className="mt-4 grid grid-cols-1 gap-3">

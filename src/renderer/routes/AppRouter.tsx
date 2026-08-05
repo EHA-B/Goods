@@ -45,8 +45,11 @@ import AboutSettingsPage from "../pages/settings/AboutSettingsPage";
 import AppearanceSettingsPage from "../pages/settings/AppearanceSettingsPage";
 import SecuritySettingsPage from "../pages/settings/SecuritySettingsPage";
 import InvoicePrintPage from "../pages/invoices/InvoicePrintPage";
+import DocumentPrintPage from "../pages/invoices/DocumentPrintPage";
 import ActivityLogsPage from "../pages/activity-logs/ActivityLogsPage";
 import ActivityLogDetailsPage from "../pages/activity-logs/ActivityLogDetailsPage";
+import NotificationsPage from "../pages/notifications/NotificationsPage";
+import NotificationSettingsPage from "../pages/settings/NotificationSettingsPage";
 import { PATHS } from "./path";
 
 function AppRouter() {
@@ -83,6 +86,13 @@ function AppRouter() {
                     <Route path={PATHS.PURCHASE_DETAILS} element={<PurchaseDetailsPage />} />
                     <Route path={PATHS.PURCHASE_PAYMENT_NEW} element={<PurchasePaymentPage />} />
                     <Route path={PATHS.PURCHASE_PRINT} element={<InvoicePrintPage type="purchase" />} />
+                    <Route path={PATHS.PRINT_PAYMENT} element={<DocumentPrintPage kind="payment" />} />
+                    <Route path={PATHS.PRINT_TRANSACTION} element={<DocumentPrintPage kind="transaction" />} />
+                    <Route path={PATHS.PRINT_TRANSFER} element={<DocumentPrintPage kind="transfer" />} />
+                    <Route path={PATHS.PRINT_CUSTOMER_STATEMENT} element={<DocumentPrintPage kind="customer" />} />
+                    <Route path={PATHS.PRINT_SUPPLIER_STATEMENT} element={<DocumentPrintPage kind="supplier" />} />
+                    <Route path={PATHS.PRINT_CASHBOX_STATEMENT} element={<DocumentPrintPage kind="cashbox" />} />
+                    <Route path={PATHS.PRINT_CONSIGNMENT} element={<DocumentPrintPage kind="consignment" />} />
                     <Route path={PATHS.PURCHASE_CONSIGNMENT} element={<ConsignmentOverviewPage />} />
                     <Route path={PATHS.PURCHASE_CLOSE_CONSIGNMENT} element={<CloseConsignmentPage />} />
                     <Route path={PATHS.PURCHASE_CONSIGNMENT_SETTLEMENT} element={<ConsignmentSettlementDetailsPage />} />
@@ -102,12 +112,14 @@ function AppRouter() {
                     <Route path={PATHS.TRANSACTION_CATEGORY_EDIT} element={<TransactionCategoryFormPage />} />
                     <Route path={PATHS.ACTIVITY_LOGS} element={<ActivityLogsPage />} />
                     <Route path={PATHS.ACTIVITY_LOG_DETAILS} element={<ActivityLogDetailsPage />} />
+                    <Route path={PATHS.NOTIFICATIONS} element={<NotificationsPage />} />
                     <Route path={PATHS.SETTINGS} element={<SettingsPage />} />
                     <Route path={PATHS.SETTINGS_COMPANY} element={<CompanySettingsPage />} />
                     <Route path={PATHS.SETTINGS_BACKUP} element={<BackupSettingsPage />} />
                     <Route path={PATHS.SETTINGS_ABOUT} element={<AboutSettingsPage />} />
                     <Route path={PATHS.SETTINGS_APPEARANCE} element={<AppearanceSettingsPage />} />
                     <Route path={PATHS.SETTINGS_SECURITY} element={<SecuritySettingsPage />} />
+                    <Route path={PATHS.SETTINGS_NOTIFICATIONS} element={<NotificationSettingsPage />} />
                     <Route path="*" element={<Navigate to={PATHS.DASHBOARD} replace />} />
                   </Route>
                 </Route>

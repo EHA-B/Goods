@@ -1,3 +1,4 @@
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useState } from "react";
 import { FileDown, LoaderCircle, Printer } from "lucide-react";
 import { useParams } from "react-router-dom";
@@ -56,7 +57,7 @@ export default function InvoicePrintPage({ type }: { type: "sale" | "purchase" }
         }
       } catch (err: unknown) {
         const e = err as Error;
-        if (!cancelled) setError(e.message || "تعذر تحميل تفاصيل الفاتورة");
+        if (!cancelled) setError(getArabicErrorMessage(e, "تعذر تحميل تفاصيل الفاتورة"));
       } finally {
         if (!cancelled) setIsLoadingInvoice(false);
       }
@@ -123,6 +124,9 @@ export default function InvoicePrintPage({ type }: { type: "sale" | "purchase" }
           tax={saleDetails.invoice.tax}
           total={saleDetails.financial_summary.total_amount}
           paidAmount={saleDetails.financial_summary.paid_amount}
+          currency={saleDetails.invoice.currency}
+          exchangeRate={saleDetails.invoice.exchange_rate}
+          totalBase={saleDetails.financial_summary.total_base}
           extraAmount={{ label: "العمولة", value: saleDetails.invoice.commission_amount }}
           notes={saleDetails.invoice.notes || undefined}
         />
@@ -147,6 +151,9 @@ export default function InvoicePrintPage({ type }: { type: "sale" | "purchase" }
           tax={purchaseDetails.invoice.tax}
           total={purchaseDetails.financial_summary.total_amount}
           paidAmount={purchaseDetails.financial_summary.paid_amount}
+          currency={purchaseDetails.invoice.currency}
+          exchangeRate={purchaseDetails.invoice.exchange_rate}
+          totalBase={purchaseDetails.financial_summary.total_base}
           notes={purchaseDetails.invoice.notes || undefined}
         />
       ) : null}

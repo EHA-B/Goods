@@ -1,6 +1,6 @@
+import { notifyError, notifyWarning } from "../../lib/notifications";
 import { FormEvent, useState } from "react";
 import { Eye, EyeOff, LockKeyhole, LogIn, UserRound } from "lucide-react";
-import { toast } from "sonner";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import StockLiteLogo from "../../components/brand/StockLiteLogo";
 import Button from "../../components/ui/Button";
@@ -33,7 +33,7 @@ export default function LoginPage() {
     setErrors(nextErrors);
 
     if (nextErrors.username || nextErrors.password) {
-      toast.warning("يرجى إكمال بيانات تسجيل الدخول", { duration: 2600 });
+      notifyWarning("يرجى إكمال بيانات تسجيل الدخول");
       return;
     }
 
@@ -45,7 +45,7 @@ export default function LoginPage() {
         (location.state as { from?: string } | null)?.from ?? PATHS.DASHBOARD;
       navigate(from, { replace: true });
     } catch {
-      toast.error("اسم المستخدم أو كلمة المرور غير صحيحة", { duration: 3200 });
+      notifyError({ code: "INVALID_CREDENTIALS" }, { title: "تعذر تسجيل الدخول" });
       setErrors({ password: "تحقق من بيانات الدخول" });
     } finally {
       setIsLoading(false);

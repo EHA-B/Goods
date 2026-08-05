@@ -202,6 +202,9 @@ type PaymentRecord = {
   cashbox_id: number;
   cashbox_name?: string | null;
   amount: number;
+  currency: string;
+  exchange_rate: number;
+  amount_base: number;
   payment_date: string;
   status: PaymentStatus;
   reversed_payment_id: number | null;
@@ -249,6 +252,9 @@ type StockBatchRecord = {
   quantity: number;
   remaining_quantity: number;
   purchase_price: number;
+  purchase_currency?: string;
+  purchase_exchange_rate?: number;
+  purchase_price_base?: number;
   received_date: string | null;
   expiry_date: string | null;
   isActive: number | boolean;
@@ -262,6 +268,11 @@ type InvoiceFinancialSummary = {
   total_amount: number;
   paid_amount: number;
   remaining_amount: number;
+  total_base: number;
+  paid_base: number;
+  remaining_base: number;
+  currency: string;
+  exchange_rate: number;
   status: InvoiceStatus;
 };
 
@@ -280,6 +291,8 @@ type PurchaseInvoiceRecord = {
   paid_amount: number;
   remaining_amount: number;
   status: InvoiceStatus;
+  currency: string;
+  exchange_rate: number;
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -336,6 +349,8 @@ type SaleInvoiceRecord = {
   paid_amount: number;
   remaining_amount: number;
   status: InvoiceStatus;
+  currency: string;
+  exchange_rate: number;
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -401,16 +416,26 @@ type DashboardApiData = {
     customerDebt: number; supplierDebt: number; inventoryValue: number;
     lowStockCount: number; outOfStockCount: number; productsCount: number; customersCount: number; suppliersCount: number;
   };
+  cashByCurrency: Array<{ currency: string; balance: number }>;
   trend: DashboardTrendPoint[];
   topProducts: Array<{ id: number; name: string; quantity: number; revenue: number }>;
-  recentSales: Array<{ id: number; invoice_number: string; invoice_date: string; total: number; status: string; customer_name: string }>;
-  recentPurchases: Array<{ id: number; invoice_number: string; invoice_date: string; total: number; status: string; supplier_name: string }>;
-  recentTransactions: Array<{ id: number; transaction_date: string; amount: number; type: string; description?: string; category_name?: string; cashbox_name?: string }>;
+  recentSales: Array<{ id: number; invoice_number: string; invoice_date: string; total: number; currency: string; exchange_rate: number; status: string; customer_name: string }>;
+  recentPurchases: Array<{ id: number; invoice_number: string; invoice_date: string; total: number; currency: string; exchange_rate: number; status: string; supplier_name: string }>;
+  recentTransactions: Array<{ id: number; transaction_date: string; amount: number; currency: string; type: string; description?: string; category_name?: string; cashbox_name?: string }>;
   alerts: Array<{ id: number; name: string; quantity: number }>;
 };
 
 interface Window {
   stockliteApi: {
+    printDocuments: {
+      payment(id: number): Promise<unknown>;
+      transaction(id: number): Promise<unknown>;
+      transfer(id: string): Promise<unknown>;
+      customerStatement(id: number): Promise<unknown>;
+      supplierStatement(id: number): Promise<unknown>;
+      cashboxStatement(id: number): Promise<unknown>;
+      consignment(id: number): Promise<unknown>;
+    };
     dashboard: {
       get(): Promise<DashboardApiData>;
     };
@@ -550,6 +575,17 @@ interface Window {
       cancel(id: number, reason: string): Promise<any>;
       summary(filters?: any): Promise<any>;
     };
-    activityLogs: GenericCrudApi;
+    activityLogs: {
+      list: (filters?: unknown, pagination?: unknown) => Promise<unknown>;
+      get: (id: number) => Promise<unknown>;
+      options: () => Promise<unknown>;
+    };
+    notifications: {
+      list: (input?: unknown) => Promise<any>;
+      count: () => Promise<{ count: number }>;
+      markRead: (id: number) => Promise<any>;
+      markAllRead: () => Promise<any>;
+      dismiss: (id: number) => Promise<any>;
+    };
   };
 }

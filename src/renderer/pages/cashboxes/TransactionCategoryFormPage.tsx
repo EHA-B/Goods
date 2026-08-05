@@ -1,6 +1,7 @@
+import { notifyError, notifySuccess, notifyValidation } from "../../lib/notifications";
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { toast } from "sonner";
 import { BackButton, Button, Card, FormField, Input, PageHeader, Select, Switch, Textarea } from "../../components/ui";
 import { PATHS } from "../../routes/path";
 import { transactionsService } from "../transactions/transactionsService";
@@ -27,7 +28,7 @@ export default function TransactionCategoryFormPage() {
         setDescription(existing.description ?? "");
         setActive(existing.isActive === true || existing.isActive === 1);
       } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : "تعذر تحميل الفئة.");
+        setError(getArabicErrorMessage(loadError, "تعذر تحميل الفئة."));
       } finally {
         setLoading(false);
       }
@@ -36,8 +37,7 @@ export default function TransactionCategoryFormPage() {
 
   async function handleSave() {
     if (!name.trim()) {
-      setError("اسم الفئة مطلوب.");
-      return;
+      setError("اسم الفئة مطلوب."); notifyValidation("اسم الفئة مطلوب."); return;
     }
     try {
       setSaving(true);
@@ -45,12 +45,12 @@ export default function TransactionCategoryFormPage() {
       const input = { name: name.trim(), type, description: description.trim(), isActive: active };
       if (categoryId) await transactionsService.updateCategory(categoryId, input);
       else await transactionsService.createCategory(input);
-      toast.success(categoryId ? "تم تحديث الفئة بنجاح." : "تمت إضافة الفئة بنجاح.");
+      notifySuccess(categoryId ? "تم تحديث الفئة بنجاح." : "تمت إضافة الفئة بنجاح.");
       navigate(PATHS.TRANSACTION_CATEGORIES);
     } catch (saveError) {
-      const message = saveError instanceof Error ? saveError.message : "تعذر حفظ الفئة.";
+      const message = getArabicErrorMessage(saveError, "تعذر حفظ الفئة.");
       setError(message);
-      toast.error(message);
+      notifyError(message);
     } finally {
       setSaving(false);
     }

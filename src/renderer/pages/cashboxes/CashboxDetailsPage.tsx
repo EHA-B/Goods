@@ -1,5 +1,6 @@
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, History, Pencil, Plus, RefreshCw, RotateCcw } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, History, Pencil, Plus, Printer, RefreshCw, RotateCcw } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BackButton, Button, Card, EmptyState, PageHeader, StatusBadge } from "../../components/ui";
 import {
@@ -56,7 +57,7 @@ export default function CashboxDetailsPage() {
       const data = await cashboxesService.getDetails(Number(id));
       setDetails(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذر تحميل بيانات الصندوق");
+      setError(getArabicErrorMessage(e, "تعذر تحميل بيانات الصندوق"));
     } finally {
       setLoading(false);
     }
@@ -118,6 +119,7 @@ export default function CashboxDetailsPage() {
         description="تفاصيل الصندوق وسجل الحركات المالية."
         actions={
           <div className="flex gap-2">
+            <Button variant="secondary" startIcon={<Printer size={16} />} onClick={() => nav(`/print/cashboxes/${details.id}/statement`)}>كشف حركة</Button>
             <Button
               variant="secondary"
               startIcon={<History size={16} />}

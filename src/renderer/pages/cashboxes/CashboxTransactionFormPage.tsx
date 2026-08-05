@@ -1,3 +1,5 @@
+import { notifyValidation } from "../../lib/notifications";
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -50,7 +52,7 @@ export default function CashboxTransactionFormPage() {
         setCashboxes(active);
         if (!boxId && active.length) setBoxId(String(active[0].id));
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "تعذر تحميل الصناديق"))
+      .catch((e) => setError(getArabicErrorMessage(e, "تعذر تحميل الصناديق")))
       .finally(() => setLoadingBoxes(false));
   }, []);
 
@@ -60,12 +62,10 @@ export default function CashboxTransactionFormPage() {
 
   const handleSave = async () => {
     if (!boxId || amount <= 0) {
-      setError("يرجى اختيار الصندوق وإدخال مبلغ صحيح");
-      return;
+      setError("يرجى اختيار الصندوق وإدخال مبلغ صحيح"); notifyValidation("يرجى اختيار الصندوق وإدخال مبلغ صحيح"); return;
     }
     if (!date) {
-      setError("التاريخ مطلوب");
-      return;
+      setError("التاريخ مطلوب"); notifyValidation("التاريخ مطلوب"); return;
     }
     setSaving(true);
     setError(null);

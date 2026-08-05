@@ -16,6 +16,10 @@ import * as financialTransactionsHardening from './migrations/20260804140000_fin
 import * as purchaseRuntimeCompatibility from './migrations/20260804170000_purchase_runtime_compatibility';
 import * as saleRuntimeCompatibility from './migrations/20260804200000_sale_runtime_compatibility';
 import * as paymentPartyOptionalMigration from './migrations/20260804210000_make_payment_party_optional';
+import * as invoiceCurrencyMigration from './migrations/20260805144600_add_currency_to_invoices';
+import * as multiCurrencyHardeningMigration from './migrations/20260805160000_multi_currency_hardening';
+import * as notificationsCenterMigration from './migrations/20260805203000_notifications_center';
+import * as notificationsLifecycleHardeningMigration from './migrations/20260805214500_notifications_lifecycle_hardening';
 import * as cashboxesSeed from './seeds/01_cashboxes';
 import * as usersSeed from './seeds/02_users';
 
@@ -37,6 +41,10 @@ class MigrationSource {
       '20260804170000_purchase_runtime_compatibility.ts',
       '20260804200000_sale_runtime_compatibility.ts',
       '20260804210000_make_payment_party_optional.ts',
+      '20260805144600_add_currency_to_invoices.ts',
+      '20260805160000_multi_currency_hardening.ts',
+      '20260805203000_notifications_center.ts',
+      '20260805214500_notifications_lifecycle_hardening.ts',
     ]);
   }
   getMigrationName(migration: string) {
@@ -78,6 +86,18 @@ class MigrationSource {
     }
     if (migration === '20260804210000_make_payment_party_optional.ts') {
       return paymentPartyOptionalMigration;
+    }
+    if (migration === '20260805144600_add_currency_to_invoices.ts') {
+      return invoiceCurrencyMigration;
+    }
+    if (migration === '20260805160000_multi_currency_hardening.ts') {
+      return multiCurrencyHardeningMigration;
+    }
+    if (migration === '20260805203000_notifications_center.ts') {
+      return notificationsCenterMigration;
+    }
+    if (migration === '20260805214500_notifications_lifecycle_hardening.ts') {
+      return notificationsLifecycleHardeningMigration;
     }
     if (migration === '20260804_sales_purchases_hardening.ts') {
       return sales_purchases_hardening;

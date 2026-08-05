@@ -1,7 +1,7 @@
+import { notifyError, notifySuccess, notifyValidation } from "../../lib/notifications";
 import { Save } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { toast } from "sonner";
 import { BackButton, Button, Card, FormField, Input, LoadingSpinner, NumberInput, PageHeader, Select, Textarea } from "../../components/ui";
 import { suppliersService, type Supplier } from "../suppliers/suppliersService";
 import { getInventoryErrorMessage, inventoryService, type InventoryItem } from "./inventoryService";
@@ -20,9 +20,9 @@ export default function StockBatchFormPage() {
     if (quantity <= 0) return setError("أدخل كمية صحيحة.");
     if (purchasePrice < 0) return setError("أدخل سعر شراء صحيح.");
     if (!receivedDate) return setError("تاريخ الاستلام مطلوب.");
-    if (expiryDate && expiryDate < receivedDate) { setError("تاريخ الانتهاء يجب أن يكون بعد تاريخ الاستلام."); return; }
-    try { setIsSaving(true); setError(""); await inventoryService.createBatch({ product_id: id, supplier_id: Number(supplierId), batch_code: batchCode || null, quantity, purchase_price: purchasePrice, received_date: receivedDate, expiry_date: expiryDate || null, notes, isActive: 1 }); toast.success("تم إضافة الدفعة بنجاح"); navigate(`/inventory/${id}`); }
-    catch (e) { const message = getInventoryErrorMessage(e); setError(message); toast.error(message); } finally { setIsSaving(false); }
+    if (expiryDate && expiryDate < receivedDate) { setError("تاريخ الانتهاء يجب أن يكون بعد تاريخ الاستلام."); notifyValidation("تاريخ الانتهاء يجب أن يكون بعد تاريخ الاستلام."); return; }
+    try { setIsSaving(true); setError(""); await inventoryService.createBatch({ product_id: id, supplier_id: Number(supplierId), batch_code: batchCode || null, quantity, purchase_price: purchasePrice, received_date: receivedDate, expiry_date: expiryDate || null, notes, isActive: 1 }); notifySuccess("تم إضافة الدفعة بنجاح"); navigate(`/inventory/${id}`); }
+    catch (e) { const message = getInventoryErrorMessage(e); setError(message); notifyError(message); } finally { setIsSaving(false); }
   }
 
   if (isLoading) return <div className="flex min-h-[60vh] items-center justify-center"><LoadingSpinner size="lg" /></div>;

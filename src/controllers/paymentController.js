@@ -22,6 +22,12 @@ const {
     dbGet,
     dbAll,
 } = require('./utils/invoiceUtils');
+const {
+    normalizeCurrency,
+    normalizeExchangeRate,
+    toBaseAmount,
+    assertCashboxCurrency,
+} = require('./utils/currencyUtils');
 
 class PaymentController {
 
@@ -126,7 +132,11 @@ class PaymentController {
             const customerId = invoice.customer_id;
 
             // 3. Load and validate cashbox
-            await this._loadActiveCashbox(db, cashbox_id);
+            const cashbox = await this._loadActiveCashbox(db, cashbox_id);
+            const invoiceCurrency = normalizeCurrency(invoice.currency);
+            const invoiceRate = normalizeExchangeRate(invoiceCurrency, invoice.exchange_rate);
+            assertCashboxCurrency(cashbox, invoiceCurrency);
+            const amountBase = toBaseAmount(validatedAmount, invoiceRate);
 
             // 4. Calculate outstanding
             const outstanding = Math.round((normalizeAmount(invoice.total) - normalizeAmount(invoice.paid_amount)) * 100) / 100;
@@ -137,10 +147,11 @@ class PaymentController {
             // 5. Create payment record
             const { lastID: paymentId } = await dbRun(db,
                 `INSERT INTO payments
-                   (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, payment_date,
+                   (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
                     status, notes, created_at, updated_at)
-                 VALUES ('customer', ?, 'sale', ?, ?, ?, ?, 'active', ?, datetime('now'), datetime('now'))`,
-                [customerId ?? null, sale_invoice_id, cashbox_id, validatedAmount, validatedDate, notes ?? null]
+                 VALUES ('customer', ?, 'sale', ?, ?, ?, ?, ?, ?, ?, 'active', ?, datetime('now'), datetime('now'))`,
+                [customerId ?? null, sale_invoice_id, cashbox_id, validatedAmount, invoiceCurrency,
+                 invoiceRate, amountBase, validatedDate, notes ?? null]
             );
 
             // 6. Increase cashbox balance
@@ -158,7 +169,7 @@ class PaymentController {
             // 8. Reduce customer receivable balance (if customer exists)
             let partyBalance = null;
             if (customerId) {
-                partyBalance = await this._updatePartyBalance(db, 'customer', customerId, -validatedAmount);
+                partyBalance = await this._updatePartyBalance(db, 'customer', customerId, -amountBase);
                 await dbRun(db,
                     `UPDATE payments SET balance_before = ?, balance_after = ? WHERE id = ?`,
                     [partyBalance.balanceBefore, partyBalance.balanceAfter, paymentId]
@@ -210,6 +221,10 @@ class PaymentController {
 
             // 2. Load and validate cashbox
             const cashbox = await this._loadActiveCashbox(db, cashbox_id);
+            const invoiceCurrency = normalizeCurrency(invoice.currency);
+            const invoiceRate = normalizeExchangeRate(invoiceCurrency, invoice.exchange_rate);
+            assertCashboxCurrency(cashbox, invoiceCurrency);
+            const amountBase = toBaseAmount(validatedAmount, invoiceRate);
 
             // 3. Check cashbox balance sufficient
             const cashboxBalance = normalizeAmount(cashbox.balance);
@@ -226,10 +241,11 @@ class PaymentController {
             // 5. Create payment record
             const { lastID: paymentId } = await dbRun(db,
                 `INSERT INTO payments
-                   (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, payment_date,
+                   (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
                     status, notes, created_at, updated_at)
-                 VALUES ('supplier', ?, 'purchase', ?, ?, ?, ?, 'active', ?, datetime('now'), datetime('now'))`,
-                [supplierId, purchase_invoice_id, cashbox_id, validatedAmount, validatedDate, notes ?? null]
+                 VALUES ('supplier', ?, 'purchase', ?, ?, ?, ?, ?, ?, ?, 'active', ?, datetime('now'), datetime('now'))`,
+                [supplierId, purchase_invoice_id, cashbox_id, validatedAmount, invoiceCurrency,
+                 invoiceRate, amountBase, validatedDate, notes ?? null]
             );
 
             // 6. Deduct cashbox balance (negative delta)
@@ -245,7 +261,7 @@ class PaymentController {
             );
 
             // 8. Reduce supplier payable balance
-            const partyBalance = await this._updatePartyBalance(db, 'supplier', supplierId, -validatedAmount);
+            const partyBalance = await this._updatePartyBalance(db, 'supplier', supplierId, -amountBase);
             await dbRun(db,
                 `UPDATE payments SET balance_before = ?, balance_after = ? WHERE id = ?`,
                 [partyBalance.balanceBefore, partyBalance.balanceAfter, paymentId]
@@ -301,11 +317,12 @@ class PaymentController {
             // Create reversal payment record
             const { lastID: reversalId } = await dbRun(db,
                 `INSERT INTO payments
-                   (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, payment_date,
+                   (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
                     status, reversed_payment_id, reversal_reason, notes, created_at, updated_at)
-                 VALUES (?, ?, 'sale', ?, ?, ?, ?, 'reversed', ?, ?, ?, datetime('now'), datetime('now'))`,
+                 VALUES (?, ?, 'sale', ?, ?, ?, ?, ?, ?, ?, 'reversed', ?, ?, ?, datetime('now'), datetime('now'))`,
                 [payment.party_type, payment.party_id, payment.invoice_id, payment.cashbox_id,
-                 amount, payment.payment_date, paymentId, reason, `إلغاء دفعة #${paymentId}`]
+                 amount, payment.currency || 'SYP', payment.exchange_rate || 1,
+                 payment.amount_base || amount, payment.payment_date, paymentId, reason, `إلغاء دفعة #${paymentId}`]
             );
 
             // Link original to reversal
@@ -328,7 +345,7 @@ class PaymentController {
 
             // Restore customer receivable balance (increase balance back)
             if (payment.party_id) {
-                await this._updatePartyBalance(db, 'customer', payment.party_id, amount);
+                await this._updatePartyBalance(db, 'customer', payment.party_id, normalizeAmount(payment.amount_base ?? amount));
             }
 
             // Recalculate invoice
@@ -377,11 +394,12 @@ class PaymentController {
             // Create reversal record
             const { lastID: reversalId } = await dbRun(db,
                 `INSERT INTO payments
-                   (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, payment_date,
+                   (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
                     status, reversed_payment_id, reversal_reason, notes, created_at, updated_at)
-                 VALUES (?, ?, 'purchase', ?, ?, ?, ?, 'reversed', ?, ?, ?, datetime('now'), datetime('now'))`,
+                 VALUES (?, ?, 'purchase', ?, ?, ?, ?, ?, ?, ?, 'reversed', ?, ?, ?, datetime('now'), datetime('now'))`,
                 [payment.party_type, payment.party_id, payment.invoice_id, payment.cashbox_id,
-                 amount, payment.payment_date, paymentId, reason, `إلغاء دفعة #${paymentId}`]
+                 amount, payment.currency || 'SYP', payment.exchange_rate || 1,
+                 payment.amount_base || amount, payment.payment_date, paymentId, reason, `إلغاء دفعة #${paymentId}`]
             );
 
             await dbRun(db, `UPDATE payments SET reversed_payment_id = ? WHERE id = ?`, [reversalId, paymentId]);
@@ -400,7 +418,7 @@ class PaymentController {
 
             // Restore supplier payable balance (increase balance back)
             if (payment.party_id) {
-                await this._updatePartyBalance(db, 'supplier', payment.party_id, amount);
+                await this._updatePartyBalance(db, 'supplier', payment.party_id, normalizeAmount(payment.amount_base ?? amount));
             }
 
             // Recalculate invoice

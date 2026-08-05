@@ -19,6 +19,12 @@ const {
     dbGet,
     dbAll,
 } = require('./utils/invoiceUtils');
+const {
+    normalizeCurrency,
+    normalizeExchangeRate,
+    toBaseAmount,
+    assertCashboxCurrency,
+} = require('./utils/currencyUtils');
 
 class PurchaseInvoiceController {
 
@@ -98,8 +104,14 @@ class PurchaseInvoiceController {
             if (invoice_type === 'consignment') status = 'confirmed'; // consignment stays confirmed until closed
 
             // 7. Insert purchase invoice
-            const invoiceCurrency = currency?.trim() || 'SYP';
-            const invoiceRate = Number(exchange_rate) || 1;
+            const invoiceCurrency = normalizeCurrency(currency);
+            const invoiceRate = normalizeExchangeRate(invoiceCurrency, exchange_rate);
+            if (invoice_type === 'consignment' && invoiceCurrency !== 'SYP') {
+                throw {
+                    code: 'CONSIGNMENT_CURRENCY_NOT_SUPPORTED',
+                    message: 'فواتير الأمانة متعددة العملات غير مدعومة حاليًا. استخدم SYP لفاتورة الأمانة.',
+                };
+            }
             
             const { lastID: invoiceId } = await dbRun(db,
                 `INSERT INTO purchase_invoices
@@ -144,11 +156,13 @@ class PurchaseInvoiceController {
                 const { lastID: batchId } = await dbRun(db,
                     `INSERT INTO stock_batches
                        (product_id, supplier_id, purchase_invoice_id, batch_code,
-                        quantity, remaining_quantity, purchase_price, received_date,
+                        quantity, remaining_quantity, purchase_price, purchase_currency,
+                        purchase_exchange_rate, purchase_price_base, received_date,
                         expiry_date, notes, isActive, created_at, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
                     [item.product_id, supplier_id, invoiceId, batchCode,
-                     item.quantity, item.quantity, item.purchase_price, receivedDate,
+                     item.quantity, item.quantity, item.purchase_price, invoiceCurrency,
+                     invoiceRate, toBaseAmount(item.purchase_price, invoiceRate), receivedDate,
                      expiryDate, item.batch_notes ?? null]
                 );
 
@@ -163,7 +177,7 @@ class PurchaseInvoiceController {
             }
 
             // 9. Increase supplier payable balance by invoice total
-            const supplierBaseAmount = Math.round((totalAmount * invoiceRate) * 100) / 100;
+            const supplierBaseAmount = toBaseAmount(totalAmount, invoiceRate);
             await dbRun(db,
                 `UPDATE suppliers SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`,
                 [supplierBaseAmount, supplier_id]
@@ -185,6 +199,7 @@ class PurchaseInvoiceController {
                 const cashbox = await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [payBox]);
                 if (!cashbox)          throw { code: 'CASHBOX_NOT_FOUND', message: 'الصندوق غير موجود' };
                 if (!cashbox.isActive)  throw { code: 'INACTIVE_CASHBOX', message: 'الصندوق غير نشط' };
+                assertCashboxCurrency(cashbox, invoiceCurrency);
                 if (cashbox.balance < payAmount - 0.001) throw { code: 'INSUFFICIENT_BALANCE', message: `رصيد الصندوق (${cashbox.balance}) غير كافٍ` };
 
                 // Deduct cashbox
@@ -201,14 +216,15 @@ class PurchaseInvoiceController {
                 // Create payment record
                 await dbRun(db,
                     `INSERT INTO payments
-                       (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, payment_date,
+                       (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
                         status, cashbox_transaction_id, notes, created_at, updated_at)
-                     VALUES ('supplier', ?, 'purchase', ?, ?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now'))`,
-                    [supplier_id, invoiceId, payBox, payAmount, payDate, cbtId, initial_payment.notes ?? null]
+                     VALUES ('supplier', ?, 'purchase', ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now'))`,
+                    [supplier_id, invoiceId, payBox, payAmount, invoiceCurrency, invoiceRate,
+                     toBaseAmount(payAmount, invoiceRate), payDate, cbtId, initial_payment.notes ?? null]
                 );
 
                 // Reduce supplier balance by payment amount
-                const payBaseAmount = Math.round((payAmount * invoiceRate) * 100) / 100;
+                const payBaseAmount = toBaseAmount(payAmount, invoiceRate);
                 await dbRun(db,
                     `UPDATE suppliers SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`,
                     [payBaseAmount, supplier_id]
@@ -275,12 +291,18 @@ class PurchaseInvoiceController {
             [id]
         );
 
+        const invoiceRate = normalizeExchangeRate(invoice.currency, invoice.exchange_rate);
         const financial_summary = {
             subtotal: normalizeAmount(invoice.subtotal),
             discount_amount: normalizeAmount(invoice.discount_amount ?? invoice.discount),
             total_amount: normalizeAmount(invoice.total),
             paid_amount: normalizeAmount(invoice.paid_amount),
             remaining_amount: normalizeAmount(invoice.remaining_amount),
+            total_base: toBaseAmount(invoice.total, invoiceRate),
+            paid_base: toBaseAmount(invoice.paid_amount, invoiceRate),
+            remaining_base: toBaseAmount(invoice.remaining_amount, invoiceRate),
+            currency: normalizeCurrency(invoice.currency),
+            exchange_rate: invoiceRate,
             status: invoice.status,
         };
 
@@ -392,7 +414,10 @@ class PurchaseInvoiceController {
             const totalAmount = normalizeAmount(invoice.total);
             // Supplier balance was increased by total, decreased by each payment.
             // Net supplier effect = total - paid = remaining_amount
-            const remainingBalance = Math.max(0, totalAmount - totalPaid);
+            const remainingBalance = toBaseAmount(
+                Math.max(0, totalAmount - totalPaid),
+                normalizeExchangeRate(invoice.currency, invoice.exchange_rate)
+            );
             if (remainingBalance > 0) {
                 await dbRun(db,
                     `UPDATE suppliers SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`,

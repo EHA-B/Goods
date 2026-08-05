@@ -1,7 +1,7 @@
+import { notifyError, notifySuccess } from "../../lib/notifications";
 import { AlertCircle, Plus, RefreshCw, Truck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 
 import TableFooter from "../../components/common/TableFooter";
 import SuppliersTable from "../../components/suppliers/SuppliersTable";
@@ -85,10 +85,10 @@ export default function SuppliersPage() {
       setSuppliers((current) =>
         current.filter((supplier) => supplier.id !== supplierToDelete.id),
       );
-      toast.success("تم حذف المورد بنجاح");
+      notifySuccess("تم حذف المورد بنجاح");
       setSupplierToDelete(undefined);
     } catch (error) {
-      toast.error(getSupplierErrorMessage(error));
+      notifyError(getSupplierErrorMessage(error));
     } finally {
       setIsDeleting(false);
     }

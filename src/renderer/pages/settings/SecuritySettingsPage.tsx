@@ -1,6 +1,6 @@
+import { notifyError, notifySuccess } from "../../lib/notifications";
 import { FormEvent, useState } from "react";
 import { Eye, EyeOff, Save, ShieldCheck } from "lucide-react";
-import { toast } from "sonner";
 import { useAuth } from "../../auth/AuthContext";
 import { BackButton, Button, Card, FormField, Input, PageHeader } from "../../components/ui";
 import { PATHS } from "../../routes/path";
@@ -62,7 +62,7 @@ export default function SecuritySettingsPage() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      toast.success("تم تغيير كلمة المرور بنجاح.");
+      notifySuccess("تم تغيير كلمة المرور بنجاح.");
     } catch (error) {
       const code = (error as Error & { code?: string }).code;
       if (code === "INVALID_CURRENT_PASSWORD") {
@@ -70,7 +70,7 @@ export default function SecuritySettingsPage() {
       } else if (code === "PASSWORD_UNCHANGED") {
         setErrors((current) => ({ ...current, next: "اختر كلمة مرور مختلفة عن الحالية." }));
       } else {
-        toast.error("تعذر تغيير كلمة المرور. حاول مرة أخرى.");
+        notifyError("تعذر تغيير كلمة المرور. حاول مرة أخرى.");
       }
     } finally {
       setIsSaving(false);

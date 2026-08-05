@@ -3,7 +3,7 @@ import {
   Boxes,
   CreditCard,
   Eye,
-  PencilLine,
+  PencilLine, Printer,
   ReceiptText,
   RefreshCw,
   WalletCards,
@@ -126,6 +126,7 @@ export default function SupplierDetailsPage() {
         actions={
           <div className="flex gap-2">
             <BackButton to={PATHS.SUPPLIERS} label="العودة إلى الموردين" />
+            <Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/print/suppliers/${supplier.id}/statement`)}>كشف حساب</Button>
             <Button
               variant="secondary"
               startIcon={<PencilLine size={17} />}

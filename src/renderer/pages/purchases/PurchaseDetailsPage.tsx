@@ -1,3 +1,4 @@
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { Banknote, HandCoins, Plus, Printer, ReceiptText, RotateCcw, Trash2, XCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -12,7 +13,8 @@ import { BackButton, Button, Card, ConfirmDialog, EmptyState, PageHeader } from 
 import { PATHS } from "../../routes/path";
 import { purchasesService } from "./purchasesService";
 
-const money = (value: number) => value.toLocaleString("en-US");
+const money = (value: number, currency = "SYP") =>
+  `${value.toLocaleString("en-US")} ${currency === "SYP" ? "ل.س" : currency}`;
 const typeLabels: Record<string, string> = { standard: "فاتورة عادية", consignment: "فاتورة أمانة" };
 
 export default function PurchaseDetailsPage() {
@@ -33,7 +35,7 @@ export default function PurchaseDetailsPage() {
     setError("");
     purchasesService.getDetails(id)
       .then((data) => setDetails(data))
-      .catch((err: Error) => setError(err.message || "خطأ في تحميل الفاتورة"))
+      .catch((err: Error) => setError(getArabicErrorMessage(err, "خطأ في تحميل الفاتورة")))
       .finally(() => setLoading(false));
   }, [purchaseId]);
 
@@ -54,7 +56,7 @@ export default function PurchaseDetailsPage() {
       setCancelOpen(false);
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || "تعذر إلغاء الفاتورة");
+      setError(getArabicErrorMessage(e, "تعذر إلغاء الفاتورة"));
     } finally {
       setCancelling(false);
     }
@@ -67,7 +69,7 @@ export default function PurchaseDetailsPage() {
       navigate(PATHS.PURCHASES);
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || "تعذر حذف الفاتورة");
+      setError(getArabicErrorMessage(e, "تعذر حذف الفاتورة"));
     } finally {
       setDeleting(false);
     }
@@ -85,6 +87,7 @@ export default function PurchaseDetailsPage() {
               ["التاريخ", invoice.invoice_date],
               ["المورد", supplier?.name ?? "-"],
               ["نوع الفاتورة", typeLabels[invoice.invoice_type] ?? "-"],
+              ["العملة", invoice.currency || "SYP"],
               ["الحالة", <PurchaseStatusBadge status={invoice.status as never} />],
             ].map(([label, value]) => (
               <div key={String(label)}>
@@ -113,8 +116,8 @@ export default function PurchaseDetailsPage() {
                 <DataTableRow key={idx}>
                   <DataTableCell className="font-bold text-[var(--text-primary)]">{String(item.product_name ?? "-")}</DataTableCell>
                   <DataTableCell>{String(item.quantity ?? "-")}</DataTableCell>
-                  <DataTableCell>{money(Number(item.unit_price ?? 0))}</DataTableCell>
-                  <DataTableCell>{money(Number(item.line_total ?? 0))}</DataTableCell>
+                  <DataTableCell>{money(Number(item.unit_price ?? 0), invoice.currency)}</DataTableCell>
+                  <DataTableCell>{money(Number(item.line_total ?? 0), invoice.currency)}</DataTableCell>
                   <DataTableCell>{String(item.batch_code ?? "-")}</DataTableCell>
                   <DataTableCell>{String(item.batch_received_date ?? item.received_date ?? "-")}</DataTableCell>
                   <DataTableCell>{String(item.batch_expiry_date ?? item.expiry_date ?? "-")}</DataTableCell>
@@ -137,17 +140,17 @@ export default function PurchaseDetailsPage() {
                   <DataTableRow key={payment.id}>
                     <DataTableCell>{payment.payment_date}</DataTableCell>
                     <DataTableCell>{payment.cashbox_name ?? "-"}</DataTableCell>
-                    <DataTableCell className="font-bold">{money(payment.amount)}</DataTableCell>
+                    <DataTableCell className="font-bold">{money(payment.amount, payment.currency || invoice.currency)}</DataTableCell>
                     <DataTableCell>{payment.status === "reversed" ? "ملغي" : "نشط"}</DataTableCell>
                     <DataTableCell>{payment.notes ?? "-"}</DataTableCell>
-                    <DataTableCell>{payment.status === "active" ? <Button size="sm" variant="secondary" startIcon={<RotateCcw size={15} />} onClick={async () => {
+                    <DataTableCell><div className="flex flex-wrap gap-2"><Button size="sm" variant="secondary" startIcon={<Printer size={15} />} onClick={() => navigate(`/print/payments/${payment.id}`)}>طباعة</Button>{payment.status === "active" ? <Button size="sm" variant="secondary" startIcon={<RotateCcw size={15} />} onClick={async () => {
                       const reason = window.prompt("سبب عكس الدفعة:", "تصحيح دفعة");
                       if (!reason?.trim()) return;
                       try {
                         await purchasesService.reversePayment(payment.id, reason.trim());
                         setDetails(await purchasesService.getDetails(invoice.id));
-                      } catch (err: unknown) { setError((err as Error).message || "تعذر عكس الدفعة"); }
-                    }}>عكس الدفعة</Button> : "-"}</DataTableCell>
+                      } catch (err: unknown) { setError(getArabicErrorMessage(err, "تعذر عكس الدفعة")); }
+                    }}>عكس الدفعة</Button> : null}</div></DataTableCell>
                   </DataTableRow>
                 ))}
               </DataTableBody>
@@ -168,15 +171,21 @@ export default function PurchaseDetailsPage() {
           ].map(([label, value]) => (
             <div key={String(label)} className="flex justify-between">
               <span className="text-[var(--text-muted)]">{label}</span>
-              <strong>{money(Number(value))}</strong>
+              <strong>{money(Number(value), invoice.currency)}</strong>
             </div>
           ))}
           <div className="border-t border-[var(--border)] pt-3">
             <div className="flex justify-between text-base">
               <strong>الإجمالي النهائي</strong>
-              <strong className="text-[var(--primary)]">{money(financial_summary.total_amount)}</strong>
+              <strong className="text-[var(--primary)]">{money(financial_summary.total_amount, invoice.currency)}</strong>
             </div>
           </div>
+          {invoice.currency !== "SYP" && (
+            <div className="mt-3 border-t border-[var(--border)] pt-3 text-xs text-[var(--text-muted)]">
+              1 {invoice.currency} = {Number(invoice.exchange_rate).toLocaleString("en-US")} SYP ·
+              القيمة الأساسية: {money(financial_summary.total_base, "SYP")}
+            </div>
+          )}
         </div>
       </Card>
     </div>

@@ -1,4 +1,4 @@
-import { Building2, DatabaseBackup, Info, ArrowLeft, Palette, ShieldCheck } from "lucide-react";
+import { Building2, DatabaseBackup, Info, ArrowLeft, Palette, ShieldCheck, BellRing } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, PageHeader } from "../../components/ui";
 import { PATHS } from "../../routes/path";
@@ -27,6 +27,12 @@ const items = [
     description: "تغيير كلمة مرور حساب النظام وحماية الدخول إلى التطبيق.",
     path: PATHS.SETTINGS_SECURITY,
     icon: ShieldCheck,
+  },
+  {
+    title: "الإشعارات والأصوات",
+    description: "التحكم برنة التنبيهات ومستوى صوت الإشعارات.",
+    path: PATHS.SETTINGS_NOTIFICATIONS,
+    icon: BellRing,
   },
   {
     title: "حول البرنامج",

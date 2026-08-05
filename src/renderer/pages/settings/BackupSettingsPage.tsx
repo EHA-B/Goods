@@ -1,3 +1,4 @@
+import { dismissNotification, notifyError, notifyInfo, notifyLoading, notifySuccess } from "../../lib/notifications";
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
@@ -6,7 +7,6 @@ import {
   RotateCcw,
   Save,
 } from "lucide-react";
-import { toast } from "sonner";
 import {
   BackButton,
   Button,
@@ -33,11 +33,6 @@ const DEFAULT_CONFIG: AutoBackupConfig = {
   lastBackup: null,
 };
 
-function readableError(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return "حدث خطأ غير متوقع";
-}
-
 export default function BackupSettingsPage() {
   const [config, setConfig] = useState<AutoBackupConfig>(DEFAULT_CONFIG);
   const [loadingConfig, setLoadingConfig] = useState(true);
@@ -54,7 +49,7 @@ export default function BackupSettingsPage() {
         if (active) setConfig(result as AutoBackupConfig);
       })
       .catch((error) => {
-        toast.error(`فشل تحميل إعدادات النسخ الاحتياطي: ${readableError(error)}`);
+        notifyError(error, { title: "تعذر تحميل إعدادات النسخ الاحتياطي" });
       })
       .finally(() => {
         if (active) setLoadingConfig(false);
@@ -75,13 +70,13 @@ export default function BackupSettingsPage() {
         destination?: string;
       };
 
-      toast.success(
+      notifySuccess(
         result.destination
           ? `تم إنشاء النسخة الاحتياطية بنجاح في: ${result.destination}`
           : "تم إنشاء النسخة الاحتياطية بنجاح.",
       );
     } catch (error) {
-      toast.error(`فشل النسخ الاحتياطي: ${readableError(error)}`);
+      notifyError(error, { title: "تعذر إنشاء النسخة الاحتياطية" });
     } finally {
       setCreatingBackup(false);
     }
@@ -101,25 +96,23 @@ export default function BackupSettingsPage() {
         'للتأكيد النهائي اكتب كلمة "استعادة" ثم اضغط موافق:',
       );
       if (typedConfirmation?.trim() !== "استعادة") {
-        toast.info("تم إلغاء عملية الاستعادة.");
+        notifyInfo("تم إلغاء عملية الاستعادة.");
         return;
       }
 
       setRestoringBackup(true);
-      toast.loading("جارٍ فحص النسخة واستعادة البيانات...", {
-        id: "database-restore",
-      });
+      notifyLoading("جارٍ فحص النسخة واستعادة البيانات...", "database-restore");
       await window.stockliteApi.system.restore(selection.path);
     } catch (error) {
-      toast.dismiss("database-restore");
-      toast.error(`فشل استعادة البيانات: ${readableError(error)}`);
+      dismissNotification("database-restore");
+      notifyError(error, { title: "تعذر استعادة البيانات" });
       setRestoringBackup(false);
     }
   }
 
   async function saveAutoBackupConfig() {
     if (config.enabled && !config.directory.trim()) {
-      toast.error("الرجاء اختيار مجلد الحفظ للنسخ التلقائي.");
+      notifyError("الرجاء اختيار مجلد الحفظ للنسخ التلقائي.");
       return;
     }
 
@@ -130,9 +123,9 @@ export default function BackupSettingsPage() {
         directory: config.directory.trim(),
       });
       setConfig(result as AutoBackupConfig);
-      toast.success("تم حفظ إعدادات النسخ التلقائي بنجاح.");
+      notifySuccess("تم حفظ إعدادات النسخ التلقائي بنجاح.");
     } catch (error) {
-      toast.error(`فشل حفظ الإعدادات: ${readableError(error)}`);
+      notifyError(error, { title: "تعذر حفظ إعدادات النسخ الاحتياطي" });
     } finally {
       setSavingConfig(false);
     }
@@ -148,7 +141,7 @@ export default function BackupSettingsPage() {
         }));
       }
     } catch (error) {
-      toast.error(readableError(error));
+      notifyError(readableError(error));
     }
   }
 

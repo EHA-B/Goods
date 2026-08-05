@@ -1,6 +1,7 @@
+import { notifyError, notifySuccess, notifyValidation } from "../../lib/notifications";
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { toast } from "sonner";
 import { BackButton, Button, Card, FormField, Input, PageHeader, Select, Textarea } from "../../components/ui";
 import { PATHS } from "../../routes/path";
 import type { TransactionCategory } from "../../components/transactions/types";
@@ -43,7 +44,7 @@ export default function TransactionFormPage() {
           setBoxId(String(activeBoxes[0].id));
         }
       } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : "تعذر تحميل بيانات المعاملة.");
+        setError(getArabicErrorMessage(loadError, "تعذر تحميل بيانات المعاملة."));
       } finally {
         setLoading(false);
       }
@@ -75,8 +76,7 @@ export default function TransactionFormPage() {
     setFieldErrors(nextErrors);
     
     if (Object.keys(nextErrors).length) {
-      setError("راجع الحقول المطلوبة قبل الحفظ.");
-      return;
+      setError("راجع الحقول المطلوبة قبل الحفظ."); notifyValidation("راجع الحقول المطلوبة قبل الحفظ."); return;
     }
     
     try {
@@ -94,12 +94,12 @@ export default function TransactionFormPage() {
         notes: notes.trim(),
       });
       
-      toast.success("تم حفظ المعاملة وتحديث الصندوق بنجاح.");
+      notifySuccess("تم حفظ المعاملة وتحديث الصندوق بنجاح.");
       navigate(PATHS.TRANSACTIONS);
     } catch (saveError) {
-      const message = saveError instanceof Error ? saveError.message : "تعذر حفظ المعاملة.";
+      const message = getArabicErrorMessage(saveError, "تعذر حفظ المعاملة.");
       setError(message);
-      toast.error(message);
+      notifyError(message);
     } finally {
       setSaving(false);
     }

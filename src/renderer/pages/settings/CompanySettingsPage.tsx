@@ -1,6 +1,7 @@
+import { notifyError, notifySuccess } from "../../lib/notifications";
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useState } from "react";
 import { Building2, LoaderCircle, Save } from "lucide-react";
-import { toast } from "sonner";
 import {
   BackButton,
   Button,
@@ -36,7 +37,7 @@ export default function CompanySettingsPage() {
         if (!cancelled) setForm(company);
       } catch (error) {
         if (!cancelled) {
-          setLoadError(error instanceof Error ? error.message : "تعذر تحميل معلومات الشركة.");
+          setLoadError(getArabicErrorMessage(error, "تعذر تحميل معلومات الشركة."));
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -66,7 +67,7 @@ export default function CompanySettingsPage() {
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      toast.error("أدخل اسم الشركة قبل الحفظ.");
+      notifyError("أدخل اسم الشركة قبل الحفظ.");
       return;
     }
 
@@ -74,9 +75,9 @@ export default function CompanySettingsPage() {
     try {
       const saved = await settingsService.saveCompany(form);
       setForm(saved);
-      toast.success("تم حفظ معلومات الشركة في قاعدة البيانات.");
+      notifySuccess("تم حفظ معلومات الشركة في قاعدة البيانات.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "تعذر حفظ معلومات الشركة.");
+      notifyError(getArabicErrorMessage(error, "تعذر حفظ معلومات الشركة."));
     } finally {
       setIsSaving(false);
     }

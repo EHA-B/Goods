@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import DashboardClock from "../../components/dashboard/DashboardClock";
+import NotificationBell from "../../components/notifications/NotificationBell";
 import QuickActionsCard from "../../components/dashboard/QuickActionsCard";
 import StatCard from "../../components/dashboard/StatCard";
 import StatsGrid from "../../components/dashboard/StatsGrid";
@@ -144,7 +145,7 @@ function ActivityCard({
                 </div>
                 <div className="shrink-0 text-left">
                   <p dir="ltr" className="text-sm font-bold tabular-nums">
-                    {money(item.total)} ل.س
+                    {money(item.total)} {item.currency === "SYP" ? "ل.س" : item.currency}
                   </p>
                   <p dir="ltr" className="mt-1 text-xs text-[var(--text-muted)]">
                     {item.invoice_date}
@@ -180,7 +181,7 @@ function ActivityCard({
                 </div>
                 <div className="shrink-0 text-left">
                   <p dir="ltr" className="text-sm font-bold tabular-nums">
-                    {money(item.total)} ل.س
+                    {money(item.total)} {item.currency === "SYP" ? "ل.س" : item.currency}
                   </p>
                   <p dir="ltr" className="mt-1 text-xs text-[var(--text-muted)]">
                     {item.invoice_date}
@@ -228,7 +229,7 @@ function ActivityCard({
                   </div>
                   <div className="shrink-0 text-left">
                     <p dir="ltr" className="text-sm font-bold tabular-nums">
-                      {money(item.amount)} ل.س
+                      {money(item.amount)} {item.currency === "SYP" ? "ل.س" : item.currency}
                     </p>
                     <p dir="ltr" className="mt-1 text-xs text-[var(--text-muted)]">
                       {item.transaction_date}
@@ -370,14 +371,16 @@ function DashboardPage() {
         title: "أرصدة الصناديق",
         value: loading ? "—" : money(summary?.cashBalance || 0),
         suffix: "ل.س",
-        description: `${count(summary?.cashboxesCount || 0)} صندوق نشط · ${count(
-          summary?.lowStockCount || 0,
-        )} مخزون منخفض`,
+        description: data?.cashByCurrency?.length
+          ? data.cashByCurrency
+              .map((item) => `${money(item.balance)} ${item.currency === "SYP" ? "ل.س" : item.currency}`)
+              .join(" · ")
+          : `${count(summary?.cashboxesCount || 0)} صندوق نشط`,
         icon: WalletCards,
         to: PATHS.CASHBOXES,
       },
     ],
-    [loading, summary],
+    [data, loading, summary],
   );
 
   return (
@@ -385,7 +388,12 @@ function DashboardPage() {
       <PageHeader
         title="لوحة التحكم"
         description="نظرة سريعة على أهم مؤشرات العمل والعمليات الأخيرة."
-        actions={<DashboardClock />}
+        actions={
+          <div dir="rtl" className="flex items-center gap-2">
+            <NotificationBell />
+            <DashboardClock />
+          </div>
+        }
       />
 
       {error && !data && (

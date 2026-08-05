@@ -1,7 +1,7 @@
+import { notifyError, notifySuccess } from "../../lib/notifications";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, PackageOpen, Plus, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 
 import TableFooter from "../../components/common/TableFooter";
 import ProductsTable from "../../components/products/ProductsTable";
@@ -90,10 +90,10 @@ export default function ProductsPage() {
       setProducts((current) =>
         current.filter((product) => product.id !== pendingDelete.id),
       );
-      toast.success("تم حذف المنتج بنجاح");
+      notifySuccess("تم حذف المنتج بنجاح");
       setPendingDelete(undefined);
     } catch (error) {
-      toast.error(getProductErrorMessage(error));
+      notifyError(getProductErrorMessage(error));
     } finally {
       setIsDeleting(false);
     }

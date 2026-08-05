@@ -1,4 +1,4 @@
-import { AlertCircle, PencilLine, RefreshCw, WalletCards } from "lucide-react";
+import { AlertCircle, PencilLine, Printer, RefreshCw, WalletCards } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BackButton, Button, Card, EmptyState, LoadingSpinner, PageHeader, StatusBadge } from "../../components/ui";
@@ -39,7 +39,7 @@ export default function CustomerDetailsPage() {
   if (loadError || !customer) return <EmptyState icon={<AlertCircle size={26} />} title="تعذر تحميل العميل" description={loadError || "تعذر العثور على بيانات العميل المطلوبة."} action={<div className="flex gap-2"><Button variant="secondary" onClick={() => navigate(PATHS.CUSTOMERS)}>العودة إلى العملاء</Button><Button startIcon={<RefreshCw size={16} />} onClick={() => void loadCustomer()}>إعادة المحاولة</Button></div>} />;
 
   return <>
-    <PageHeader title={customer.name} description="بيانات العميل الأساسية وحالته ورصيده الحالي." actions={<div className="flex gap-2"><BackButton to={PATHS.CUSTOMERS} label="العودة إلى العملاء" /><Button variant="secondary" startIcon={<PencilLine size={17} />} onClick={() => navigate(`/customers/${customer.id}/edit`)}>تعديل</Button></div>} />
+    <PageHeader title={customer.name} description="بيانات العميل الأساسية وحالته ورصيده الحالي." actions={<div className="flex gap-2"><BackButton to={PATHS.CUSTOMERS} label="العودة إلى العملاء" /><Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/print/customers/${customer.id}/statement`)}>كشف حساب</Button><Button variant="secondary" startIcon={<PencilLine size={17} />} onClick={() => navigate(`/customers/${customer.id}/edit`)}>تعديل</Button></div>} />
     <div className="grid gap-4 md:grid-cols-2">
       <Card><div className="flex items-start justify-between"><div><p className="text-xs text-[var(--text-muted)]">الرصيد الحالي</p><p className="mt-2 text-xl font-bold text-[var(--text-primary)]">{money(customer.balance)} ل.س</p><p className="mt-1 text-xs text-[var(--text-muted)]">{customer.balance > 0 ? "مبلغ مستحق على العميل" : customer.balance < 0 ? "مبلغ مستحق للعميل" : "الحساب متوازن"}</p></div><WalletCards size={21} className="text-[var(--primary)]" /></div></Card>
       <Card><p className="text-xs text-[var(--text-muted)]">حالة العميل</p><div className="mt-3"><StatusBadge variant={customer.isActive ? "success" : "danger"}>{customer.isActive ? "نشط" : "غير نشط"}</StatusBadge></div></Card>

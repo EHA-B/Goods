@@ -1,3 +1,4 @@
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -26,7 +27,7 @@ export default function CashboxTransferPage() {
     cashboxesService
       .list()
       .then((list) => setCashboxes(list.filter((c) => c.isActive)))
-      .catch((e) => setError(e instanceof Error ? e.message : "تعذر تحميل الصناديق"))
+      .catch((e) => setError(getArabicErrorMessage(e, "تعذر تحميل الصناديق")))
       .finally(() => setLoadingBoxes(false));
   }, []);
 

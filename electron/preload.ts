@@ -56,6 +56,15 @@ const crudApi = (entity: string, methodNames: {
 });
 
 const stockliteApi = {
+  printDocuments: {
+    payment: (id: number) => invokeApi("api:print:payment", id),
+    transaction: (id: number) => invokeApi("api:print:transaction", id),
+    transfer: (id: string) => invokeApi("api:print:transfer", id),
+    customerStatement: (id: number) => invokeApi("api:print:customerStatement", id),
+    supplierStatement: (id: number) => invokeApi("api:print:supplierStatement", id),
+    cashboxStatement: (id: number) => invokeApi("api:print:cashboxStatement", id),
+    consignment: (id: number) => invokeApi("api:print:consignment", id),
+  },
   dashboard: { get: () => invokeApi("api:dashboard:get") },
   auth: {
     login: (input: { username: string; password: string }) =>
@@ -287,13 +296,19 @@ const stockliteApi = {
       invokeApi("api:transaction:getSummary", filters),
   },
 
-  activityLogs: crudApi("activityLog", {
-    create: "createActivityLog",
-    get: "getActivityLog",
-    list: "getAllActivityLogs",
-    update: "updateActivityLog",
-    remove: "deleteActivityLog",
-  }),
+  activityLogs: {
+    list: (filters?: unknown, pagination?: unknown) => invokeApi("api:activityLog:list", filters, pagination),
+    get: (id: number) => invokeApi("api:activityLog:get", id),
+    options: () => invokeApi("api:activityLog:options"),
+  },
+
+  notifications: {
+    list: (input?: unknown) => invokeApi("api:notification:list", input),
+    count: () => invokeApi("api:notification:count"),
+    markRead: (id: number) => invokeApi("api:notification:markRead", id),
+    markAllRead: () => invokeApi("api:notification:markAllRead"),
+    dismiss: (id: number) => invokeApi("api:notification:dismiss", id),
+  },
 };
 
 contextBridge.exposeInMainWorld("stockliteApi", stockliteApi);

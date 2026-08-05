@@ -1,7 +1,7 @@
+import { notifyError, notifySuccess, notifyValidation } from "../../lib/notifications";
 import { Save } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { toast } from "sonner";
 
 import {
   BackButton,
@@ -96,14 +96,12 @@ export default function SupplierFormPage() {
     event.preventDefault();
 
     if (!form.name.trim()) {
-      setError("اسم المورد مطلوب.");
-      return;
+      setError("اسم المورد مطلوب."); notifyValidation("اسم المورد مطلوب."); return;
     }
 
     const balance = Number(form.balance || 0);
     if (!Number.isFinite(balance)) {
-      setError("الرصيد الافتتاحي غير صالح.");
-      return;
+      setError("الرصيد الافتتاحي غير صالح."); notifyValidation("الرصيد الافتتاحي غير صالح."); return;
     }
 
     const input: SupplierInput = {
@@ -125,14 +123,14 @@ export default function SupplierFormPage() {
           ? await suppliersService.update(id, input)
           : await suppliersService.create(input);
 
-      toast.success(
+      notifySuccess(
         isEditing ? "تم تعديل بيانات المورد بنجاح" : "تمت إضافة المورد بنجاح",
       );
       navigate(`/suppliers/${supplier.id}`);
     } catch (saveError) {
       const message = getSupplierErrorMessage(saveError);
       setError(message);
-      toast.error(message);
+      notifyError(message);
     } finally {
       setIsSaving(false);
     }

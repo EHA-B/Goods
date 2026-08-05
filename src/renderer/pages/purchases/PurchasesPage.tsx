@@ -1,3 +1,4 @@
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useState } from "react";
 import { Plus, ReceiptText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -31,7 +32,7 @@ export default function PurchasesPage() {
       setPurchases(result.items);
       setPagination(result.pagination);
     } catch (err: unknown) {
-      setError((err as Error).message || "خطأ في تحميل الفواتير");
+      setError(getArabicErrorMessage(err, "خطأ في تحميل الفواتير"));
       setPurchases([]);
     } finally { setLoading(false); }
   };
@@ -56,7 +57,7 @@ export default function PurchasesPage() {
         await purchasesService.cancel(pendingDelete.id, reason.trim());
       }
       setPendingDelete(null); await load(pagination.page);
-    } catch (err: unknown) { setError((err as Error).message || "تعذر تنفيذ العملية"); setPendingDelete(null); }
+    } catch (err: unknown) { setError(getArabicErrorMessage(err, "تعذر تنفيذ العملية")); setPendingDelete(null); }
     finally { setDeleting(false); }
   };
 

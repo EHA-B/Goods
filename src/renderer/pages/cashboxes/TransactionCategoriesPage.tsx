@@ -1,7 +1,8 @@
+import { notifyError, notifySuccess } from "../../lib/notifications";
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { Pencil, Plus, Tags, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import DataTable from "../../components/common/DataTable";
 import DataTableBody from "../../components/common/DataTableBody";
 import DataTableCell from "../../components/common/DataTableCell";
@@ -28,7 +29,7 @@ export default function TransactionCategoriesPage() {
       const data = await transactionsService.loadCategories();
       setItems(data);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "تعذر تحميل الفئات المالية.");
+      setError(getArabicErrorMessage(loadError, "تعذر تحميل الفئات المالية."));
     } finally {
       setLoading(false);
     }
@@ -42,12 +43,12 @@ export default function TransactionCategoriesPage() {
       await transactionsService.removeCategory(pending.id);
       setPending(null);
       await loadData();
-      toast.success("تم حذف الفئة بنجاح.");
+      notifySuccess("تم حذف الفئة بنجاح.");
     } catch (deleteError) {
-      const message = deleteError instanceof Error ? deleteError.message : "تعذر حذف الفئة.";
+      const message = getArabicErrorMessage(deleteError, "تعذر حذف الفئة.");
       const friendly = message.includes("used") || message.includes("CATEGORY_IN_USE") ? "لا يمكن حذف فئة مستخدمة في معاملات سابقة. عطّلها بدلًا من ذلك." : message;
       setError(friendly);
-      toast.error(friendly);
+      notifyError(friendly);
       setPending(null);
     }
   }

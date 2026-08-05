@@ -1,7 +1,7 @@
+import { notifyError, notifySuccess, notifyValidation } from "../../lib/notifications";
 import { Save } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { toast } from "sonner";
 
 import {
   BackButton,
@@ -97,8 +97,7 @@ export default function ProductFormPage() {
     event.preventDefault();
 
     if (!form.name.trim() || !form.unit.trim()) {
-      setError("أكمل اسم المنتج والوحدة.");
-      return;
+      setError("أكمل اسم المنتج والوحدة."); notifyValidation("أكمل اسم المنتج والوحدة."); return;
     }
 
     const input: ProductInput = {
@@ -116,17 +115,17 @@ export default function ProductFormPage() {
 
       if (isEditing && id) {
         await productsService.update(id, input);
-        toast.success("تم تعديل المنتج بنجاح");
+        notifySuccess("تم تعديل المنتج بنجاح");
       } else {
         await productsService.create(input);
-        toast.success("تمت إضافة المنتج بنجاح");
+        notifySuccess("تمت إضافة المنتج بنجاح");
       }
 
       navigate(PATHS.PRODUCTS);
     } catch (saveError) {
       const message = getProductErrorMessage(saveError);
       setError(message);
-      toast.error(message);
+      notifyError(message);
     } finally {
       setIsSaving(false);
     }

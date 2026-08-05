@@ -1,17 +1,19 @@
-import { Undo2 } from "lucide-react";
+import { notifyError, notifySuccess } from "../../lib/notifications";
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
+import { Printer, Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import TransactionTypeBadge from "../../components/transactions/TransactionTypeBadge";
 import { BackButton, Button, Card, PageHeader, Input, Dialog } from "../../components/ui";
 import { PATHS } from "../../routes/path";
 import { transactionsService } from "./transactionsService";
 import Badge from "../../components/ui/Badge";
-import { toast } from "sonner";
 
 const money = (value: number) => new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 const Row = ({ label, value }: { label: string; value: React.ReactNode }) => <div className="flex justify-between gap-4 border-b border-[var(--border)] py-3 last:border-0"><span className="text-sm text-[var(--text-muted)]">{label}</span><span className="text-sm font-medium text-[var(--text-primary)]">{value}</span></div>;
 
 export default function TransactionDetailsPage() {
+  const navigate = useNavigate();
   const { id } = useParams();
   const transactionId = Number(id);
   const [data, setData] = useState<any>(null);
@@ -32,7 +34,7 @@ export default function TransactionDetailsPage() {
       if (!result || !result.transaction) throw new Error("المعاملة غير موجودة.");
       setData(result);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "تعذر تحميل المعاملة.");
+      setError(getArabicErrorMessage(loadError, "تعذر تحميل المعاملة."));
     } finally {
       setLoading(false);
     }
@@ -41,7 +43,7 @@ export default function TransactionDetailsPage() {
   async function handleCancel() {
     if (!data?.transaction) return;
     if (!cancelReason.trim()) {
-      toast.error("يرجى إدخال سبب الإلغاء.");
+      notifyError("يرجى إدخال سبب الإلغاء.");
       return;
     }
 
@@ -49,10 +51,10 @@ export default function TransactionDetailsPage() {
       setCancelling(true);
       await transactionsService.cancel(data.transaction.id, cancelReason);
       setCancelDialog(false);
-      toast.success("تم إلغاء المعاملة المالية وعكس أثرها على الصندوق بنجاح.");
+      notifySuccess("تم إلغاء المعاملة المالية وعكس أثرها على الصندوق بنجاح.");
       void loadData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "تعذر إلغاء المعاملة.");
+      notifyError(getArabicErrorMessage(err, "تعذر إلغاء المعاملة."));
     } finally {
       setCancelling(false);
     }
@@ -71,6 +73,7 @@ export default function TransactionDetailsPage() {
         actions={
           <div className="flex gap-2">
             <BackButton to={PATHS.TRANSACTIONS} />
+            <Button variant="secondary" startIcon={<Printer size={16} />} onClick={() => navigate(`/print/transactions/${transaction.id}`)}>طباعة المستند</Button>
             {transaction.status === "active" && (
               <Button variant="danger" startIcon={<Undo2 size={16} />} onClick={() => setCancelDialog(true)}>
                 إلغاء وعكس العملية

@@ -930,3 +930,15 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
   tr, td, th { break-inside: avoid; page-break-inside: avoid; }
   a { color: inherit !important; text-decoration: none !important; }
 }
+
+/* Unified Arabic floating notifications */
+.stocklite-toast {
+  direction: rtl !important;
+  text-align: right !important;
+  min-width: min(420px, calc(100vw - 32px)) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.2) !important;
+  font-family: "Tajawal", sans-serif !important;
+}
+.stocklite-toast [data-title] { font-weight: 700 !important; }
+.stocklite-toast [data-description] { line-height: 1.65 !important; }

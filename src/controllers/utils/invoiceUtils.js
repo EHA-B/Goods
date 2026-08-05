@@ -177,8 +177,8 @@ async function logActivity(db, action, tableName, recordId, data = {}) {
         await new Promise((resolve, reject) => {
             db.run(
                 `INSERT INTO activity_logs (user_id, action, table_name, record_id, old_data, new_data, created_at, updated_at)
-                 VALUES (NULL, ?, ?, ?, NULL, ?, datetime('now'), datetime('now'))`,
-                [action, tableName, recordId, JSON.stringify(data)],
+                 VALUES (?, ?, ?, ?, NULL, ?, datetime('now'), datetime('now'))`,
+                [global.__stockliteCurrentUserId ?? null, action, tableName, recordId, JSON.stringify(data)],
                 function (err) {
                     if (err) return reject(err);
                     resolve(this.lastID);

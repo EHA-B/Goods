@@ -1,7 +1,7 @@
+import { notifyError, notifySuccess } from "../../lib/notifications";
 import { AlertCircle, Plus, RefreshCw, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 
 import TableFooter from "../../components/common/TableFooter";
 import CustomersTable from "../../components/customers/CustomersTable";
@@ -78,10 +78,10 @@ export default function CustomersPage() {
       setCustomers((current) =>
         current.filter((customer) => customer.id !== customerToDelete.id),
       );
-      toast.success("تم حذف العميل بنجاح");
+      notifySuccess("تم حذف العميل بنجاح");
       setCustomerToDelete(undefined);
     } catch (error) {
-      toast.error(getCustomerErrorMessage(error));
+      notifyError(getCustomerErrorMessage(error));
     } finally {
       setIsDeleting(false);
     }

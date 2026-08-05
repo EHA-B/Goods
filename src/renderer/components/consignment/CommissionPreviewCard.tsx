@@ -1,9 +1,122 @@
-import { AlertCircle } from "lucide-react";
-import { Card } from "../ui";
+import { AlertCircle, Building2, Calculator, HandCoins, Landmark, WalletCards } from "lucide-react";
+import type { ReactNode } from "react";
 import type { ConsignmentClosingPreview } from "../../pages/purchases/consignment/consignmentTypes";
 import { money } from "../../pages/purchases/consignment/consignmentUtils";
 
-export default function CommissionPreviewCard({ preview }: { preview: ConsignmentClosingPreview }) {
-  const rows = [["إجمالي المبيعات", preview.total_sales_amount], ["قيمة العمولة", preview.commission_amount], ["حصة المورد", preview.supplier_share], ["رصيد الصندوق", preview.cashbox_balance], ["الرصيد بعد التسوية", preview.balance_after_settlement]] as const;
-  return <Card header="معاينة التسوية" description="القيم الظاهرة تقديرية حتى يؤكدها الباك."><div className="space-y-3">{rows.map(([label, value]) => <div key={label} className="flex items-center justify-between text-sm"><span className="text-[var(--text-muted)]">{label}</span><strong className={label === "الرصيد بعد التسوية" && value < 0 ? "text-[var(--danger)]" : "text-[var(--text-primary)]"}>{money(value, preview.currency)}</strong></div>)}{preview.warnings.length > 0 && <div className="mt-4 rounded-lg border border-[var(--danger)] bg-[var(--danger-subtle)] p-3">{preview.warnings.map((warning) => <p key={warning} className="flex gap-2 text-xs font-bold text-[var(--danger)]"><AlertCircle size={16} />{warning}</p>)}</div>}</div></Card>;
+type Props = {
+  preview: ConsignmentClosingPreview | null;
+  loading?: boolean;
+  policyLabel?: string;
+};
+
+type RowProps = {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  emphasis?: boolean;
+  danger?: boolean;
+};
+
+function SummaryRow({ icon, label, value, emphasis, danger }: RowProps) {
+  return (
+    <div
+      className={[
+        "flex items-center justify-between gap-4 rounded-lg px-3 py-3",
+        emphasis ? "bg-[var(--primary-subtle)]" : "bg-[var(--surface-subtle)]",
+      ].join(" ")}
+    >
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="shrink-0 text-[var(--text-muted)]">{icon}</span>
+        <span className="truncate text-xs font-bold text-[var(--text-muted)]">{label}</span>
+      </div>
+      <strong
+        className={[
+          "shrink-0 text-sm font-black",
+          danger ? "text-[var(--danger)]" : "text-[var(--text-primary)]",
+        ].join(" ")}
+      >
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+export default function CommissionPreviewCard({ preview, loading = false, policyLabel }: Props) {
+  return (
+    <aside className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)]">
+      <div className="border-b border-[var(--border)] px-5 py-4">
+        <div className="flex items-center gap-2">
+          <Calculator size={18} className="text-[var(--primary)]" />
+          <h2 className="text-sm font-black text-[var(--text-primary)]">ملخص العملية</h2>
+        </div>
+        <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+          يتم تحديث القيم تلقائيًا بعد اكتمال البيانات.
+        </p>
+      </div>
+
+      <div className="space-y-2.5 p-4">
+        {loading ? (
+          <div className="space-y-2.5" aria-label="جارٍ حساب المعاينة">
+            {[0, 1, 2, 3, 4].map((item) => (
+              <div key={item} className="h-11 animate-pulse rounded-lg bg-[var(--surface-subtle)]" />
+            ))}
+          </div>
+        ) : preview ? (
+          <>
+            <SummaryRow
+              icon={<WalletCards size={16} />}
+              label="إجمالي المبيعات"
+              value={money(preview.total_sales_amount, preview.currency)}
+            />
+            <SummaryRow
+              icon={<Calculator size={16} />}
+              label="قيمة العمولة"
+              value={money(preview.commission_amount, preview.currency)}
+            />
+            <SummaryRow
+              icon={<HandCoins size={16} />}
+              label="حصة المورد"
+              value={money(preview.supplier_share, preview.currency)}
+              emphasis
+            />
+            <SummaryRow
+              icon={<Landmark size={16} />}
+              label="رصيد الصندوق الحالي"
+              value={money(preview.cashbox_balance, preview.currency)}
+            />
+            <SummaryRow
+              icon={<Building2 size={16} />}
+              label="الرصيد بعد التسوية"
+              value={money(preview.balance_after_settlement, preview.currency)}
+              danger={preview.balance_after_settlement < 0}
+            />
+            {policyLabel && (
+              <div className="rounded-lg border border-[var(--border)] px-3 py-3">
+                <p className="text-xs font-bold text-[var(--text-muted)]">معالجة الكمية المتبقية</p>
+                <p className="mt-1 text-sm font-black text-[var(--text-primary)]">{policyLabel}</p>
+              </div>
+            )}
+            {preview.warnings.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-[var(--warning)] bg-[var(--warning-subtle)] p-3">
+                {preview.warnings.map((warning) => (
+                  <p key={warning} className="flex items-start gap-2 text-xs font-bold leading-5 text-[var(--warning)]">
+                    <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                    <span>{warning}</span>
+                  </p>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="rounded-lg border border-dashed border-[var(--border-strong)] px-4 py-8 text-center">
+            <Calculator size={28} className="mx-auto text-[var(--text-muted)]" />
+            <p className="mt-3 text-sm font-bold text-[var(--text-primary)]">أكمل بيانات التسوية</p>
+            <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+              اختر الصندوق وأدخل نسبة عمولة صحيحة لعرض الملخص.
+            </p>
+          </div>
+        )}
+      </div>
+    </aside>
+  );
 }

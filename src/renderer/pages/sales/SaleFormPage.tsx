@@ -1,3 +1,5 @@
+import { notifyValidation } from "../../lib/notifications";
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useMemo, useState } from "react";
 import { Calculator, Plus, Save, ShoppingCart, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -50,20 +52,26 @@ export default function SaleFormPage() {
     let active = true;
     Promise.all([salesService.getLookups(), salesService.getProducts()])
       .then(([data, products]) => { if (active) setLookups({ ...data, products }); })
-      .catch((err: Error) => { if (active) setError(err.message || "تعذر تحميل بيانات النموذج"); });
+      .catch((err: Error) => { if (active) setError(getArabicErrorMessage(err, "تعذر تحميل بيانات النموذج")); });
     return () => { active = false; };
   }, []);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.quantity * item.sale_price, 0), [items]);
   const total = Math.max(0, subtotal - discount);
   const remaining = Math.max(0, total - paymentAmount);
+  const matchingCashboxes = useMemo(
+    () => (lookups?.cashboxes ?? []).filter((cashbox) => Boolean(cashbox.isActive) && cashbox.currency === currency),
+    [lookups, currency],
+  );
+  const totalBase = currency === "SYP" ? total : total * exchangeRate;
+
 
   const updateItem = (index: number, patch: Partial<SaleItemForm>) =>
     setItems((curr) => curr.map((item, i) => i === index ? { ...item, ...patch } : item));
 
   const selectProduct = async (index: number, productId: number) => {
     const product = lookups?.products.find((p) => p.id === productId);
-    updateItem(index, { product_id: productId, productName: product?.name ?? "", stock_batch_id: 0, batchCode: "", availableBatches: [], sale_price: 0 });
+    updateItem(index, { product_id: productId, productName: product?.name ?? "", stock_batch_id: 0, batchCode: "", availableBatches: [], sale_price: 0, cost_price: 0 });
     if (!productId) return;
     try {
       const batches = await salesService.getAvailableBatches(productId);
@@ -76,27 +84,36 @@ export default function SaleFormPage() {
   const selectBatch = (index: number, batchId: number) => {
     const item = items[index];
     const batch = item.availableBatches.find((b) => b.id === batchId);
-    if (!batch) return;
+
+    if (!batch) {
+      updateItem(index, {
+        stock_batch_id: 0,
+        batchCode: "",
+        cost_price: 0,
+      });
+      return;
+    }
+
     updateItem(index, {
-      stock_batch_id: batchId,
+      stock_batch_id: batch.id,
       batchCode: batch.batch_code ?? "",
-      cost_price: batch.purchase_price,
+      cost_price: Number(batch.purchase_price_base ?? batch.purchase_price ?? 0),
     });
   };
 
   const submit = async () => {
     setError("");
     if (items.some((item) => !item.product_id || !item.stock_batch_id || item.quantity <= 0 || item.sale_price < 0)) {
-      setError("راجع الأصناف — المنتج والدفعة والكمية وسعر البيع الصحيح مطلوبة");
-      return;
+      setError("راجع الأصناف — المنتج والدفعة والكمية وسعر البيع الصحيح مطلوبة"); notifyValidation("راجع الأصناف — المنتج والدفعة والكمية وسعر البيع الصحيح مطلوبة"); return;
     }
-    if (items.some((item) => { const batch = item.availableBatches.find((b) => b.id === item.stock_batch_id); return batch && item.quantity > Number(batch.remaining_quantity) + 0.001; })) { setError("إحدى الكميات أكبر من المتوفر في الدفعة"); return; }
-    if (discount < 0 || discount > subtotal) { setError("قيمة الخصم غير صحيحة"); return; }
-    if (paymentAmount < 0 || paymentAmount > total + 0.001) { setError("قيمة الدفعة الأولية غير صحيحة"); return; }
-    if (paymentAmount > 0 && !paymentCashboxId) { setError("اختر صندوق الدفعة الأولية"); return; }
+    if (items.some((item) => { const batch = item.availableBatches.find((b) => b.id === item.stock_batch_id); return batch && item.quantity > Number(batch.remaining_quantity) + 0.001; })) { setError("إحدى الكميات أكبر من المتوفر في الدفعة"); notifyValidation("إحدى الكميات أكبر من المتوفر في الدفعة"); return; }
+    if (discount < 0 || discount > subtotal) { setError("قيمة الخصم غير صحيحة"); notifyValidation("قيمة الخصم غير صحيحة"); return; }
+    if (paymentAmount < 0 || paymentAmount > total + 0.001) { setError("قيمة الدفعة الأولية غير صحيحة"); notifyValidation("قيمة الدفعة الأولية غير صحيحة"); return; }
+    if (currency !== "SYP" && (!Number.isFinite(exchangeRate) || exchangeRate <= 0)) { setError("سعر الصرف مطلوب ويجب أن يكون أكبر من صفر"); notifyValidation("سعر الصرف مطلوب ويجب أن يكون أكبر من صفر"); return; }
+    if (paymentAmount > 0 && !paymentCashboxId) { setError("اختر صندوق الدفعة الأولية"); notifyValidation("اختر صندوق الدفعة الأولية"); return; }
+    if (paymentAmount > 0 && !matchingCashboxes.some((cashbox) => cashbox.id === paymentCashboxId)) { setError("يجب اختيار صندوق بنفس عملة الفاتورة"); notifyValidation("يجب اختيار صندوق بنفس عملة الفاتورة"); return; }
     if (!customerId && paymentAmount < total - 0.001) {
-      setError("يجب تحديد عميل للبيع الآجل. البيع النقدي يتطلب دفع المبلغ كاملًا.");
-      return;
+      setError("يجب تحديد عميل للبيع الآجل. البيع النقدي يتطلب دفع المبلغ كاملًا."); notifyValidation("يجب تحديد عميل للبيع الآجل. البيع النقدي يتطلب دفع المبلغ كاملًا."); return;
     }
 
     const input: CreateSaleInvoiceInput = {
@@ -115,7 +132,7 @@ export default function SaleFormPage() {
         ? { cashbox_id: paymentCashboxId, amount: paymentAmount, payment_date: paymentDate }
         : undefined,
       currency: currency,
-      exchange_rate: exchangeRate,
+      exchange_rate: currency === "SYP" ? 1 : exchangeRate,
     };
 
     setLoading(true);
@@ -124,7 +141,7 @@ export default function SaleFormPage() {
       navigate(`/sales/${result.invoice.id}`);
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || "حدث خطأ أثناء الحفظ");
+      setError(getArabicErrorMessage(e, "حدث خطأ أثناء الحفظ"));
     } finally {
       setLoading(false);
     }
@@ -153,13 +170,14 @@ export default function SaleFormPage() {
             <Select value={currency} options={[{ value: "SYP", label: "ل.س (SYP)" }, { value: "USD", label: "دولار (USD)" }]} onChange={(e) => {
               const newCur = e.target.value;
               setCurrency(newCur);
-              const defaultBox = lookups?.cashboxes.find(c => c.currency === newCur);
-              if (defaultBox) setPaymentCashboxId(defaultBox.id);
+              setExchangeRate(newCur === "SYP" ? 1 : 0);
+              const defaultBox = lookups?.cashboxes.find((c) => Boolean(c.isActive) && c.currency === newCur);
+              setPaymentCashboxId(defaultBox?.id ?? 0);
             }} />
           </FormField>
           {currency !== "SYP" && (
-            <FormField label="سعر الصرف" required>
-              <Input type="number" min="0" step="any" value={exchangeRate} onChange={(e) => setExchangeRate(Number(e.target.value))} />
+            <FormField label={`سعر 1 ${currency} بالليرة السورية`} required>
+              <Input type="number" min="0.000001" step="any" value={exchangeRate} onChange={(e) => setExchangeRate(Number(e.target.value))} />
             </FormField>
           )}
           <FormField label="ملاحظات" htmlFor="notes" className="md:col-span-2 xl:col-span-4">
@@ -200,8 +218,20 @@ export default function SaleFormPage() {
                 <FormField label="إجمالي السطر">
                   <Input readOnly value={money(item.quantity * item.sale_price)} />
                 </FormField>
-                <FormField label="تكلفة الوحدة">
-                  <Input readOnly value={money(item.cost_price)} />
+                <FormField label="تكلفة الوحدة الأساسية (SYP)">
+                  <Input readOnly value={`${money(item.cost_price)} SYP`} />
+                  {(() => {
+                    const selectedBatch = item.availableBatches.find((batch) => batch.id === item.stock_batch_id);
+                    if (!selectedBatch || !selectedBatch.purchase_currency || selectedBatch.purchase_currency === "SYP") return null;
+                    return (
+                      <p className="mt-1 text-xs text-[var(--text-muted)]">
+                        سعر الشراء الأصلي: {money(Number(selectedBatch.purchase_price ?? 0))} {selectedBatch.purchase_currency}
+                        {Number(selectedBatch.purchase_exchange_rate ?? 0) > 0
+                          ? ` — سعر الصرف: ${money(Number(selectedBatch.purchase_exchange_rate))}`
+                          : ""}
+                      </p>
+                    );
+                  })()}
                 </FormField>
 
               </div>
@@ -220,7 +250,7 @@ export default function SaleFormPage() {
               <Input type="number" min="0" max={total} value={paymentAmount} onChange={(e) => setPaymentAmount(Number(e.target.value))} />
             </FormField>
             <FormField label="الصندوق">
-              <Select value={String(paymentCashboxId)} options={[{ value: "0", label: "اختر الصندوق" }, ...(lookups?.cashboxes ?? []).map((c) => ({ value: String(c.id), label: `${c.name} — ${Number(c.balance ?? 0).toLocaleString("en-US")} ${c.currency}` }))]} onChange={(e) => setPaymentCashboxId(Number(e.target.value))} />
+              <Select value={String(paymentCashboxId)} options={[{ value: "0", label: "اختر الصندوق" }, ...matchingCashboxes.map((c) => ({ value: String(c.id), label: `${c.name} — ${Number(c.balance ?? 0).toLocaleString("en-US")} ${c.currency}` }))]} onChange={(e) => setPaymentCashboxId(Number(e.target.value))} />
             </FormField>
             <FormField label="تاريخ الدفع">
               <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
@@ -239,8 +269,17 @@ export default function SaleFormPage() {
             <div className="border-t border-[var(--border)] pt-3">
               <div className="flex justify-between text-base">
                 <strong>الإجمالي النهائي</strong>
-                <strong className="text-[var(--primary)]">{money(total)}</strong>
+                <strong className="text-[var(--primary)]">{money(total)} {currency}</strong>
               </div>
+              {currency !== "SYP" && (
+                <div className="mt-2 flex justify-between text-sm">
+                  <span className="text-[var(--text-muted)]">القيمة بالعملة الأساسية</span>
+                  <strong>{money(totalBase)} SYP</strong>
+                </div>
+              )}
+              {currency !== "SYP" && (
+                <p className="mt-2 text-xs text-[var(--text-muted)]">1 {currency} = {money(exchangeRate)} SYP</p>
+              )}
             </div>
           </div>
           <div className="mt-4 grid grid-cols-1 gap-3">

@@ -1,3 +1,4 @@
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useState, useCallback } from "react";
 import { Plus, ReceiptText, Tags } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -58,7 +59,7 @@ export default function TransactionsPage() {
       setSummary(summaryData);
       setCashboxes(cashboxesData.map((item) => ({ id: item.id, name: item.name })));
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "تعذر تحميل المعاملات المالية.");
+      setError(getArabicErrorMessage(loadError, "تعذر تحميل المعاملات المالية."));
     } finally {
       setLoading(false);
     }

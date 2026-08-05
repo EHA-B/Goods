@@ -94,14 +94,14 @@ type CashboxMovementRecord = {
   id: number;
   cashbox_id: number;
   reference_type:
-    | 'opening_balance'
-    | 'sale'
-    | 'purchase'
-    | 'expense'
-    | 'income'
-    | 'transfer'
-    | 'adjustment'
-    | 'reversal';
+  | 'opening_balance'
+  | 'sale'
+  | 'purchase'
+  | 'expense'
+  | 'income'
+  | 'transfer'
+  | 'adjustment'
+  | 'reversal';
   reference_id: number | null;
   amount: number;
   direction: 'in' | 'out';

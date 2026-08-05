@@ -138,6 +138,7 @@ vite.config.ts.timestamp-*
 
 # Additional build outputs
 dist-ssr
+dist-electron
 *.local
 
 # Editor directories and files

@@ -547,7 +547,7 @@ ipcMain.handle("api:system:restore", async (_event, sourcePath) => {
   try {
     if (!getCurrentUser()) return failure("UNAUTHENTICATED", "Authentication is required");
     const prepared = await backupController.prepareRestore(sourcePath);
-    const { closeDatabase } = await import("./dbmanager-CpGSQrLx.js");
+    const { closeDatabase } = await import("./dbmanager-sWBh7ax0.js");
     await closeDatabase();
     try {
       const result = await backupController.applyRestore(prepared.sourcePath);
@@ -1080,13 +1080,24 @@ app.on("activate", () => {
 });
 app.whenReady().then(async () => {
   try {
-    const { initDatabase } = await import("./dbmanager-CpGSQrLx.js");
+    const { initDatabase } = await import("./dbmanager-sWBh7ax0.js");
     await initDatabase();
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {
     console.error("Failed to initialize database:", error);
     app.quit();
     return;
+  }
+  try {
+    const { createRequire: createRequire2 } = await import("node:module");
+    const require2 = createRequire2(import.meta.url);
+    const backupController2 = require2(path.join(__dirname$1, "../../src/controllers/backupController.js"));
+    setInterval(() => {
+      backupController2.runAutoBackupCycle().catch(console.error);
+    }, 60 * 60 * 1e3);
+    backupController2.runAutoBackupCycle().catch(console.error);
+  } catch (error) {
+    console.error("Failed to start auto-backup service:", error);
   }
   try {
     const { createRequire: createRequire2 } = await import("node:module");

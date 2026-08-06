@@ -11,7 +11,7 @@ const money=(v:unknown,c="SYP")=>`${fmt(v)} ${c==="SYP"?"ل.س":c}`;
 
 export default function DocumentPrintPage({kind}:{kind:Kind}){
  const params=useParams(); const raw=params.id||params.customerId||params.supplierId||params.purchaseId||params.groupId||"";
- const id=kind==="transfer"?raw:Number(raw); const [data,setData]=useState<any>(); const [company,setCompany]=useState<CompanySettings>(defaultCompanySettings); const [error,setError]=useState("");
+ const id=kind==="transfer"?raw:Number(raw); const [data,setData]=useState<any>(); const [company,setCompany]=useState<CompanySettings>(defaultCompanySettings); const [error,setError]=useState(""); const [savingPdf,setSavingPdf]=useState(false);
  useEffect(()=>{let off=false;(async()=>{try{
   const api=window.stockliteApi.printDocuments;
   const loaders: Record<Kind, (documentId: number|string)=>Promise<unknown>> = {
@@ -31,7 +31,8 @@ export default function DocumentPrintPage({kind}:{kind:Kind}){
  const title=useMemo(()=>({payment:"سند مالي",transaction:"مستند معاملة مالية",transfer:"سند تحويل بين الصناديق",customer:"كشف حساب عميل",supplier:"كشف حساب مورد",cashbox:"كشف حركة صندوق",consignment:"تسوية أمانة"}[kind]),[kind]);
  if(error)return <EmptyState title="تعذر تجهيز المستند" description={error}/>; if(!data)return <div className="p-12 text-center">جاري تجهيز الطباعة...</div>;
  const print=()=>window.print();
- return <div className="space-y-5"><div className="no-print"><PageHeader title={title} description="مستند موحّد A4 وRTL من البيانات الفعلية للنظام." actions={<div className="flex gap-2"><BackButton/><Button variant="secondary" startIcon={<Printer size={17}/>} onClick={print}>طباعة</Button><Button startIcon={<FileDown size={17}/>} onClick={print}>حفظ PDF</Button></div>}/></div>
+ const savePdf=async()=>{try{setSavingPdf(true);await window.stockliteApi.system.saveCurrentPageAsPdf({fileName:`${title} ${raw}`})}catch(e:unknown){setError(e instanceof Error?e.message:"تعذر حفظ ملف PDF")}finally{setSavingPdf(false)}};
+ return <div className="space-y-5"><div className="no-print"><PageHeader title={title} description="مستند موحّد A4 وRTL من البيانات الفعلية للنظام." actions={<div className="flex gap-2"><BackButton/><Button variant="secondary" startIcon={<Printer size={17}/>} onClick={print}>طباعة</Button><Button startIcon={<FileDown size={17}/>} disabled={savingPdf} onClick={()=>void savePdf()}>{savingPdf?"جاري الحفظ...":"حفظ PDF"}</Button></div>}/></div>
  <article className="invoice-print-sheet" dir="rtl"><header className="invoice-print-header"><div className="invoice-company-block"><div className="invoice-company-identity">{company.logo&&<img src={company.logo} className="invoice-logo"/>}<div><h1>{company.name||"اسم الشركة"}</h1><p className="invoice-company-subtitle">{company.address||"نظام المبيعات والمخزون"}</p></div></div><div className="invoice-company-contact">{company.phone&&<p>الهاتف: <bdi>{company.phone}</bdi></p>}{company.email&&<p>البريد: <bdi>{company.email}</bdi></p>}</div></div><div className="invoice-title-box"><span className="invoice-document-label">مستند رسمي</span><h2>{title}</h2><p>تاريخ الطباعة: <bdi>{new Date().toLocaleString("en-GB")}</bdi></p></div></header>
  {kind==="payment"&&<Payment d={data}/>} {kind==="transaction"&&<Transaction d={data}/>} {kind==="transfer"&&<Transfer d={data}/>} {(kind==="customer"||kind==="supplier")&&<Statement d={data}/>} {kind==="cashbox"&&<Cashbox d={data}/>} {kind==="consignment"&&<Consignment d={data}/>} 
  <footer className="invoice-print-footer"><div className="invoice-signatures"><div><span>توقيع المستلم</span><i/></div><div><span>المحاسب</span><i/></div><div><span>الختم والتوقيع</span><i/></div></div><p>{company.invoiceFooter||"تم إنشاء هذا المستند إلكترونيًا."}</p></footer></article></div>

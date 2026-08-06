@@ -31,6 +31,7 @@ export default function InvoicePrintPage({ type }: { type: "sale" | "purchase" }
   const [purchaseDetails, setPurchaseDetails] = useState<PurchaseInvoiceDetails | null>(null);
   const [isLoadingInvoice, setIsLoadingInvoice] = useState(true);
   const [error, setError] = useState("");
+  const [isSavingPdf, setIsSavingPdf] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,24 +80,37 @@ export default function InvoicePrintPage({ type }: { type: "sale" | "purchase" }
     return <EmptyState title="الفاتورة غير موجودة" description={error || "تعذر تجهيز معاينة الطباعة لهذه الفاتورة."} />;
   }
 
-  const print = () => window.print();
-
   const invoiceId = saleDetails ? saleDetails.invoice.id : purchaseDetails?.invoice.id;
+
+  const print = () => window.print();
+  const savePdf = async () => {
+    try {
+      setIsSavingPdf(true);
+      const number = saleDetails?.invoice.invoice_number ?? purchaseDetails?.invoice.invoice_number ?? invoiceId;
+      await window.stockliteApi.system.saveCurrentPageAsPdf({
+        fileName: `${type === "sale" ? "فاتورة مبيعات" : "فاتورة مشتريات"} ${number}`,
+      });
+    } catch (err: unknown) {
+      setError(getArabicErrorMessage(err, "تعذر حفظ ملف PDF"));
+    } finally {
+      setIsSavingPdf(false);
+    }
+  };
 
   return (
     <div className="space-y-5">
       <div className="no-print">
         <PageHeader
           title="معاينة الفاتورة"
-          description="راجع التنسيق، ثم اطبع الفاتورة أو اختر حفظ بصيغة PDF من نافذة الطباعة."
+          description="راجع التنسيق، ثم اطبع الفاتورة أو احفظ نسخة PDF مباشرة على جهازك."
           actions={
             <div className="flex gap-2">
               <BackButton to={type === "sale" ? `/sales/${invoiceId}` : `/purchases/${invoiceId}`} />
               <Button variant="secondary" startIcon={<Printer size={17} />} onClick={print} disabled={isLoadingCompany}>
                 طباعة
               </Button>
-              <Button startIcon={isLoadingCompany ? <LoaderCircle size={17} className="animate-spin" /> : <FileDown size={17} />} onClick={print} disabled={isLoadingCompany}>
-                {isLoadingCompany ? "جاري التجهيز..." : "حفظ PDF"}
+              <Button startIcon={isLoadingCompany ? <LoaderCircle size={17} className="animate-spin" /> : <FileDown size={17} />} onClick={() => void savePdf()} disabled={isLoadingCompany || isSavingPdf}>
+                {isLoadingCompany || isSavingPdf ? "جاري الحفظ..." : "حفظ PDF"}
               </Button>
             </div>
           }

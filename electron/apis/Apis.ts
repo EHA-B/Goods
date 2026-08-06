@@ -1,8 +1,9 @@
 // @ts-nocheck
-import { app, ipcMain, dialog } from 'electron';
+import { app, ipcMain, dialog, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { writeFile } from 'node:fs/promises';
 import { clearCurrentUser, getCurrentUser, setCurrentUser } from '../services/sessionService';
 
 const require = createRequire(import.meta.url);
@@ -907,6 +908,37 @@ ipcMain.handle('api:system:setAutoBackupConfig', async (_event, input) => {
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+
+
+ipcMain.handle('api:system:saveCurrentPageAsPdf', async (event, input = {}) => {
+  try {
+    if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return failure('PRINT_FAILED', 'تعذر الوصول إلى نافذة المستند');
+
+    const rawName = String(input?.fileName || 'document').trim() || 'document';
+    const safeName = rawName.replace(/[\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').slice(0, 120);
+    const result = await dialog.showSaveDialog(window, {
+      title: 'حفظ المستند بصيغة PDF',
+      defaultPath: `${safeName}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (result.canceled || !result.filePath) return success({ canceled: true, path: null });
+
+    const pdf = await window.webContents.printToPDF({
+      printBackground: true,
+      pageSize: 'A4',
+      landscape: false,
+      margins: { top: 0.35, bottom: 0.35, left: 0.35, right: 0.35 },
+      preferCSSPageSize: true,
+    });
+    await writeFile(result.filePath, pdf);
+    return success({ canceled: false, path: result.filePath });
+  } catch (e) {
+    return failure(e.code || 'PRINT_FAILED', e.message || 'تعذر حفظ ملف PDF', e.details);
   }
 });
 

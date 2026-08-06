@@ -478,6 +478,7 @@ interface Window {
       selectDirectory(): Promise<{ canceled: boolean; path: string | null }>;
       selectSaveFile(): Promise<{ canceled: boolean; path: string | null }>;
       selectOpenFile(): Promise<{ canceled: boolean; path: string | null }>;
+      saveCurrentPageAsPdf(input?: { fileName?: string }): Promise<{ canceled: boolean; path: string | null }>;
     };
     products: {
       list(): Promise<ProductApiRecord[]>;

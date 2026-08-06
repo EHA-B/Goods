@@ -22,6 +22,7 @@ import {
   LogOut,
   History,
   CircleHelp,
+  BarChart3,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -76,6 +77,11 @@ const navigationItems = [
     label: "المعاملات المالية",
     path: PATHS.TRANSACTIONS,
     icon: ReceiptText,
+  },
+  {
+    label: "التقارير",
+    path: PATHS.REPORTS,
+    icon: BarChart3,
   },
   {
     label: "سجل النشاط",

@@ -3,7 +3,7 @@ import { Outlet } from "react-router-dom";
 import Sidebar from "../components/common/Sidebar";
 import LockScreen from "../components/auth/LockScreen";
 import FirstRunTour from "../components/onboarding/FirstRunTour";
-import ContextTip from "../components/help/ContextTip";
+// import ContextTip from "../components/help/ContextTip";
 
 function MainLayout() {
   return (
@@ -14,7 +14,7 @@ function MainLayout() {
       <Sidebar />
       <LockScreen />
       <FirstRunTour />
-      <ContextTip />
+      {/* <ContextTip /> */}
 
       <main className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[1600px] p-6">

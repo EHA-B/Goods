@@ -13,19 +13,19 @@ type Props = HTMLAttributes<HTMLSpanElement> & {
 
 const variants: Record<Variant, string> = {
   primary:
-    "bg-blue-100 text-blue-700",
+    "bg-[var(--info-subtle)] text-[var(--info)]",
 
   success:
-    "bg-green-100 text-green-700",
+    "bg-[var(--success-subtle)] text-[var(--success)]",
 
   warning:
-    "bg-yellow-100 text-yellow-700",
+    "bg-[var(--warning-subtle)] text-[var(--warning)]",
 
   danger:
-    "bg-red-100 text-red-700",
+    "bg-[var(--danger-subtle)] text-[var(--danger)]",
 
   gray:
-    "bg-gray-100 text-gray-700",
+    "bg-[var(--surface-hover)] text-[var(--text-secondary)]",
 };
 
 export default function Badge({

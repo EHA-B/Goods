@@ -381,8 +381,8 @@ export default function StockAdjustmentPage() {
                 className={[
                   "flex items-center justify-between rounded-[var(--radius-sm)] border p-4",
                   operation === "add"
-                    ? "border-emerald-500/30 bg-emerald-500/5"
-                    : "border-amber-500/30 bg-amber-500/5",
+                    ? "border-[color-mix(in_srgb,var(--success)_30%,transparent)] bg-[var(--success-subtle)]"
+                    : "border-[color-mix(in_srgb,var(--warning)_30%,transparent)] bg-[var(--warning-subtle)]",
                 ].join(" ")}
               >
                 <div className="flex items-center gap-3">
@@ -390,8 +390,8 @@ export default function StockAdjustmentPage() {
                     className={[
                       "flex h-9 w-9 items-center justify-center rounded-full",
                       operation === "add"
-                        ? "bg-emerald-500/10 text-emerald-600"
-                        : "bg-amber-500/10 text-amber-600",
+                        ? "bg-[var(--success-subtle)] text-[var(--success)]"
+                        : "bg-[var(--warning-subtle)] text-[var(--warning)]",
                     ].join(" ")}
                   >
                     {operation === "add" ? (

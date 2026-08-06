@@ -21,6 +21,7 @@ import {
   Warehouse,
   LogOut,
   History,
+  CircleHelp,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -34,11 +35,13 @@ const navigationItems = [
   {
     label: "لوحة التحكم",
     path: PATHS.DASHBOARD,
+    tourKey: "dashboard",
     icon: LayoutDashboard,
   },
   {
     label: "المنتجات",
     path: PATHS.PRODUCTS,
+    tourKey: "products",
     icon: Package,
   },
   {
@@ -59,11 +62,13 @@ const navigationItems = [
   {
     label: "المبيعات",
     path: PATHS.SALES,
+    tourKey: "sales",
     icon: ShoppingCart,
   },
   {
     label: "المشتريات",
     path: PATHS.PURCHASES,
+    tourKey: "purchases",
     icon: Boxes,
   },
   {
@@ -80,6 +85,12 @@ const navigationItems = [
     label: "سجل النشاط",
     path: PATHS.ACTIVITY_LOGS,
     icon: History,
+  },
+  {
+    label: "المساعدة",
+    path: PATHS.HELP,
+    tourKey: "help",
+    icon: CircleHelp,
   },
   {
     label: "الإعدادات",
@@ -287,7 +298,7 @@ function Sidebar() {
 
         <nav
           className={[
-            "min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
+            "min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
             "py-5 transition-[padding] duration-300",
             isCollapsed ? "px-2" : "px-3",
           ].join(" ")}
@@ -312,6 +323,7 @@ function Sidebar() {
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  data-tour-key={item.tourKey}
                   end={item.path === PATHS.DASHBOARD}
                   aria-label={item.label}
                   onMouseEnter={(event) => {

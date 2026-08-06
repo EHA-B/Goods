@@ -190,12 +190,12 @@ export default function BackupSettingsPage() {
               </Button>
             </div>
 
-            <div className="flex min-h-[180px] flex-col items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[#e6cf9a] bg-[#fff9e9] p-5 text-center dark:border-[#705f34] dark:bg-[#2c271a]">
-              <div className="mb-2 flex items-start gap-2 text-sm font-bold text-[#7c6023] dark:text-[#e7cc83]">
+            <div className="flex min-h-[180px] flex-col items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[color-mix(in_srgb,var(--warning)_38%,var(--border))] bg-[var(--warning-subtle)] p-5 text-center ">
+              <div className="mb-2 flex items-start gap-2 text-sm font-bold text-[var(--warning)]">
                 <AlertTriangle size={20} className="shrink-0" />
                 استعادة نسخة سابقة
               </div>
-              <p className="max-w-sm text-xs leading-5 text-[#856f3d] dark:text-[#d7c184]">
+              <p className="max-w-sm text-xs leading-5 text-[var(--text-secondary)]">
                 يفحص النظام سلامة الملف أولًا، وينشئ نسخة طوارئ من البيانات الحالية، ثم يعيد تشغيل التطبيق بعد الاستعادة.
               </p>
               <Button

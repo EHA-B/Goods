@@ -22,12 +22,12 @@ export default function Switch({
       <div
         className={[
           "h-6 w-11 rounded-full",
-          "bg-gray-300",
+          "bg-[var(--border-strong)]",
           "transition",
           "peer-checked:bg-[var(--primary)]",
           "after:absolute after:right-[2px] after:top-[2px]",
           "after:h-5 after:w-5 after:rounded-full",
-          "after:bg-white after:transition",
+          "after:bg-[var(--switch-thumb)] after:shadow-sm after:transition",
           "peer-checked:after:-translate-x-5",
         ].join(" ")}
       />

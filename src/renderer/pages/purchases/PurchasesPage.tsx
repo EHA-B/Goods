@@ -71,7 +71,7 @@ export default function PurchasesPage() {
         <Select value={type} onChange={(e) => setType(e.target.value)} options={[{ value: "", label: "كل الأنواع" }, { value: "standard", label: "فاتورة عادية" }, { value: "consignment", label: "فاتورة أمانة" }]} />
         <Button variant="secondary" onClick={() => { setQuery(""); setStatus(""); setType(""); }}>مسح الفلاتر</Button>
       </div>
-      {error && <div className="m-4 rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
+      {error && <div className="m-4 rounded-[var(--radius-md)] border border-[var(--danger)] bg-[var(--danger-subtle)] px-4 py-3 text-sm font-bold text-[var(--danger)]">{error}</div>}
       {loading ? <div className="px-6 py-12 text-center text-sm text-[var(--text-muted)]">جاري التحميل...</div> : purchases.length ? <>
         <PurchasesTable purchases={purchases} onView={(p) => navigate(`/purchases/${p.id}`)} onDelete={setPendingDelete} />
         <div className="px-5 pb-5"><Pagination page={pagination.page} totalPages={Math.max(1, pagination.totalPages)} onChange={(page) => void load(page)} /></div>

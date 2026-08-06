@@ -45,7 +45,7 @@ export default function Dialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-5"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-soft)] p-5"
       onClick={onClose}
     >
       <div

@@ -50,6 +50,9 @@ import ActivityLogsPage from "../pages/activity-logs/ActivityLogsPage";
 import ActivityLogDetailsPage from "../pages/activity-logs/ActivityLogDetailsPage";
 import NotificationsPage from "../pages/notifications/NotificationsPage";
 import NotificationSettingsPage from "../pages/settings/NotificationSettingsPage";
+import HelpCenterPage from "../pages/help/HelpCenterPage";
+import HelpArticlePage from "../pages/help/HelpArticlePage";
+import HelpFaqPage from "../pages/help/HelpFaqPage";
 import { PATHS } from "./path";
 
 function AppRouter() {
@@ -113,6 +116,9 @@ function AppRouter() {
                     <Route path={PATHS.ACTIVITY_LOGS} element={<ActivityLogsPage />} />
                     <Route path={PATHS.ACTIVITY_LOG_DETAILS} element={<ActivityLogDetailsPage />} />
                     <Route path={PATHS.NOTIFICATIONS} element={<NotificationsPage />} />
+                    <Route path={PATHS.HELP} element={<HelpCenterPage />} />
+                    <Route path={PATHS.HELP_FAQ} element={<HelpFaqPage />} />
+                    <Route path={PATHS.HELP_ARTICLE} element={<HelpArticlePage />} />
                     <Route path={PATHS.SETTINGS} element={<SettingsPage />} />
                     <Route path={PATHS.SETTINGS_COMPANY} element={<CompanySettingsPage />} />
                     <Route path={PATHS.SETTINGS_BACKUP} element={<BackupSettingsPage />} />

@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import ContextHelpButton from "../help/ContextHelpButton";
+
 type Props = {
   title: string;
   description?: string;
@@ -25,11 +27,10 @@ export default function PageHeader({
         )}
       </div>
 
-      {actions && (
-        <div className="flex shrink-0 items-center gap-2">
-          {actions}
-        </div>
-      )}
+      <div className="flex shrink-0 items-center gap-2">
+        <ContextHelpButton />
+        {actions}
+      </div>
     </div>
   );
 }

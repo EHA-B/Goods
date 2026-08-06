@@ -354,10 +354,10 @@ export default function NotificationBell() {
                       <span
                         className={`h-2 w-2 shrink-0 rounded-full ${
                           item.severity === "error"
-                            ? "bg-red-500"
+                            ? "bg-[var(--danger)]"
                             : item.severity === "warning"
-                              ? "bg-amber-500"
-                              : "bg-blue-500"
+                              ? "bg-[var(--warning)]"
+                              : "bg-[var(--info)]"
                         }`}
                       />
                       <strong className="text-sm text-[var(--text-primary)]">
@@ -372,7 +372,7 @@ export default function NotificationBell() {
                     type="button"
                     title="إخفاء حتى تتغير الحالة"
                     onClick={() => void dismiss(item.id)}
-                    className="self-start rounded p-1 text-[var(--text-muted)] hover:text-red-600"
+                    className="self-start rounded p-1 text-[var(--text-muted)] hover:text-[var(--danger)]"
                   >
                     <X size={15} />
                   </button>
@@ -409,7 +409,7 @@ export default function NotificationBell() {
         {count > 0 && (
           <span
             aria-hidden="true"
-            className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[var(--surface)] bg-red-600"
+            className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[var(--surface)] bg-[var(--danger)]"
           />
         )}
       </button>

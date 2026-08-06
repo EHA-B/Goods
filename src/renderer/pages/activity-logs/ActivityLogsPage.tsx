@@ -42,7 +42,7 @@ export default function ActivityLogsPage() {
     <Card padding={false} header="سجل العمليات" description="ابحث وفلتر السجلات ثم افتح التفاصيل لمقارنة البيانات قبل وبعد العملية.">
       <ActivityLogsToolbar filters={filters} onChange={update} onClear={() => { setFilters(initialFilters); setPage(1); }} users={options.users} modules={options.modules} />
       {loading ? <div className="p-10 text-center text-sm text-[var(--text-muted)]">جاري تحميل سجل النشاط...</div>
-        : error ? <div className="p-10 text-center text-sm text-red-600">{error}</div>
+        : error ? <div className="p-10 text-center text-sm text-[var(--danger)]">{error}</div>
         : items.length ? <><ActivityLogsTable items={items} onView={(item) => navigate(PATHS.ACTIVITY_LOG_DETAILS.replace(":activityLogId", String(item.id)))} /><div className="px-5 pb-5"><Pagination page={Math.min(page, totalPages)} totalPages={totalPages} onChange={setPage} /></div></>
         : <EmptyState icon={<History size={34} />} title="لا توجد سجلات مطابقة" description="غيّر الفلاتر أو امسح عبارة البحث لعرض السجلات." />}
     </Card>

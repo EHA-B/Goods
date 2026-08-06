@@ -97,7 +97,7 @@ export default function NotificationSettingsPage() {
             <button
               type="button"
               onClick={save}
-              className="rounded-lg bg-[var(--primary)] px-5 py-2 text-white"
+              className="rounded-lg bg-[var(--primary)] px-5 py-2 text-[var(--text-inverse)]"
             >
               حفظ الإعدادات
             </button>

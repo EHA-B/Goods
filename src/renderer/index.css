@@ -42,6 +42,18 @@
   --info: #3b82f6;
   --info-subtle: #eaf3ff;
 
+  /* Theme-safe utility colors */
+  --switch-thumb: #ffffff;
+  --overlay-soft: rgba(15, 23, 42, 0.35);
+  --overlay-strong: rgba(15, 23, 42, 0.58);
+  --auth-panel: rgba(255, 255, 255, 0.92);
+  --auth-panel-border: rgba(255, 255, 255, 0.8);
+  --auth-input-background: #fbfdfc;
+  --auth-input-border: #dbe9e1;
+  --auth-input-border-hover: #b9d5c5;
+  --tour-highlight: rgba(255, 255, 255, 0.95);
+  --tour-shadow: rgba(2, 6, 23, 0.02);
+
   /* ===========================
      Effects
      =========================== */
@@ -56,6 +68,8 @@
 
   --transition: 150ms ease;
   --focus-ring: rgba(15, 118, 110, 0.25);
+  --scrollbar-thumb: #c7cbc5;
+  --scrollbar-thumb-hover: #aeb4ac;
 
   color: var(--text-primary);
   background: var(--app-background);
@@ -149,12 +163,12 @@ textarea {
 ::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
-  background: #c7cbc5;
+  background: var(--scrollbar-thumb);
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #aeb4ac;
+  background: var(--scrollbar-thumb-hover);
   background-clip: padding-box;
 }
 .invoice-print-sheet{max-width:210mm;margin:0 auto;background:#fff;color:#172033;padding:13mm 14mm;box-sizing:border-box;font-family:"Cairo","Tajawal",Arial,sans-serif;direction:rtl;text-align:right;line-height:1.65}.invoice-print-header{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(230px,.65fr);gap:28px;align-items:start;border-bottom:3px solid #172033;padding-bottom:18px}.invoice-company-identity{display:flex;align-items:center;gap:14px}.invoice-company-identity h1{margin:0;font-size:24px;line-height:1.35}.invoice-company-subtitle{margin:3px 0 0;color:#667085;font-size:12px}.invoice-logo{width:76px;height:76px;object-fit:contain;border:1px solid #e4e7ec;border-radius:10px;padding:5px}.invoice-company-contact{margin-top:12px;display:grid;gap:2px;font-size:12px;color:#475467}.invoice-company-contact p{margin:0}.invoice-company-contact span{font-weight:700;color:#172033}.invoice-title-box{border:1px solid #cfd4dc;border-radius:10px;padding:14px 16px;text-align:right;background:#fafafa}.invoice-document-label{display:block;color:#667085;font-size:11px;font-weight:700}.invoice-title-box h2{margin:2px 0 12px;font-size:22px}.invoice-title-box dl{margin:0;display:grid;gap:7px}.invoice-title-box dl div{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #e4e7ec;padding-top:7px}.invoice-title-box dt{font-size:11px;color:#667085}.invoice-title-box dd{margin:0;font-weight:800;font-size:12px}.invoice-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:18px 0}.invoice-meta>div{border:1px solid #d9dde5;border-radius:7px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:14px;background:#fff}.invoice-meta span{font-size:11px;color:#667085}.invoice-meta strong{font-size:12px;text-align:left}.invoice-party-card{grid-column:span 2;background:#f8fafc!important}.invoice-party-card strong{font-size:15px;text-align:right}.invoice-items{width:100%;border-collapse:separate;border-spacing:0;margin-top:4px;font-size:11px}.invoice-items th,.invoice-items td{border-left:1px solid #d7dce4;border-bottom:1px solid #d7dce4;padding:9px 8px;text-align:right;vertical-align:middle}.invoice-items th:first-child,.invoice-items td:first-child{border-right:1px solid #d7dce4}.invoice-items thead th{background:#172033;color:#fff;font-weight:800;border-color:#172033}.invoice-items thead th:first-child{border-top-right-radius:7px}.invoice-items thead th:last-child{border-top-left-radius:7px}.invoice-items tbody tr:nth-child(even){background:#fafafa}.invoice-index{width:38px;text-align:center!important}.invoice-product-name{font-weight:700}.invoice-number-cell{text-align:left!important;direction:ltr;font-variant-numeric:tabular-nums;white-space:nowrap}.invoice-line-total{font-weight:800}.invoice-bottom-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:24px;align-items:start;margin-top:20px}.invoice-notes{border:1px solid #d9dde5;border-radius:8px;padding:12px;min-height:88px}.invoice-notes strong{display:block;margin-bottom:5px;font-size:12px}.invoice-notes p{margin:0;color:#475467;font-size:11px;white-space:pre-wrap}.invoice-footer-message{margin:14px 0 0;font-size:11px;color:#475467}.invoice-summary{width:100%;border:1px solid #cfd4dc;border-radius:8px;overflow:hidden}.invoice-summary>div{display:flex;justify-content:space-between;gap:12px;padding:7px 11px;border-bottom:1px solid #e4e7ec;font-size:11px}.invoice-summary>div:last-child{border-bottom:0}.invoice-summary strong{direction:ltr;font-variant-numeric:tabular-nums;white-space:nowrap}.invoice-total{background:#172033;color:#fff;font-size:13px!important;padding-block:10px!important}.invoice-remaining{background:#f8fafc;font-weight:800}.invoice-print-footer{margin-top:34px;padding-top:16px;border-top:1px dashed #98a2b3}.invoice-signatures{display:grid;grid-template-columns:repeat(3,1fr);gap:32px}.invoice-signatures div{text-align:center;font-size:11px;font-weight:700}.invoice-signatures i{display:block;height:40px;border-bottom:1px solid #98a2b3}.invoice-print-footer>p{text-align:center;margin:18px 0 0;color:#98a2b3;font-size:9px}
@@ -570,13 +584,24 @@ html[data-theme="dark"] .stocklite-splash__logo-ring {
   animation: stocklite-card-in 560ms cubic-bezier(0.2, 0.85, 0.25, 1) both;
 }
 
+.stocklite-auth-panel {
+  border-color: var(--auth-panel-border);
+  background: var(--auth-panel);
+  box-shadow: 0 20px 65px color-mix(in srgb, var(--primary) 12%, transparent);
+  backdrop-filter: blur(14px);
+}
+
 .stocklite-auth-input {
-  background: #fbfdfc;
-  border-color: #dbe9e1;
+  background: var(--auth-input-background);
+  border-color: var(--auth-input-border);
 }
 
 .stocklite-auth-input:hover {
-  border-color: #b9d5c5;
+  border-color: var(--auth-input-border-hover);
+}
+
+.stocklite-auth-submit {
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--primary) 22%, transparent);
 }
 
 .stocklite-auth-input:focus {
@@ -828,7 +853,17 @@ html[data-theme="dark"] select,
 html[data-theme="dark"] textarea { color: var(--text-primary); }
 html[data-theme="dark"] option { background: var(--surface); color: var(--text-primary); }
 html[data-theme="dark"] .stocklite-auth-page {
-  background: radial-gradient(circle at 20% 18%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 25%), linear-gradient(145deg, #101918, #15221f);
+  background:
+    radial-gradient(circle at 20% 18%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 25%),
+    radial-gradient(circle at 82% 84%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 28%),
+    linear-gradient(145deg, var(--app-background), color-mix(in srgb, var(--surface-subtle) 78%, var(--app-background)));
+}
+html[data-theme="dark"] .stocklite-auth-bubble {
+  border-color: color-mix(in srgb, var(--primary) 20%, transparent);
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+}
+html[data-theme="dark"] .stocklite-auth-panel {
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
 }
 
 .stocklite-lock {
@@ -888,7 +923,22 @@ html[data-theme="dark"][data-accent="violet"] {
 }
 
 html[data-theme="dark"] {
-  --success-subtle: #345443; --warning-subtle: #5b4b31; --danger-subtle: #5a3d3d; --info-subtle: #384d69;
+  --success: #83d3a5; --success-subtle: #345443;
+  --warning: #f0c477; --warning-subtle: #5b4b31;
+  --danger: #f09a9a; --danger-subtle: #5a3d3d;
+  --info: #90b9ff; --info-subtle: #384d69;
+  --switch-thumb: #f8fafc;
+  --overlay-soft: rgba(2, 6, 23, 0.48);
+  --overlay-strong: rgba(2, 6, 23, 0.72);
+  --auth-panel: color-mix(in srgb, var(--surface) 94%, transparent);
+  --auth-panel-border: color-mix(in srgb, var(--border-strong) 82%, transparent);
+  --auth-input-background: var(--surface-subtle);
+  --auth-input-border: var(--border);
+  --auth-input-border-hover: var(--border-strong);
+  --tour-highlight: color-mix(in srgb, var(--primary) 72%, white);
+  --tour-shadow: rgba(2, 6, 23, 0.12);
+  --scrollbar-thumb: color-mix(in srgb, var(--border-strong) 82%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--text-muted) 82%, transparent);
   --shadow-sm: 0 1px 2px rgba(14,20,19,.12); --shadow-md: 0 8px 22px rgba(14,20,19,.16); --shadow-lg: 0 18px 42px rgba(14,20,19,.22);
 }
 html[data-theme="dark"] body, html[data-theme="dark"] #root { background: var(--app-background); color: var(--text-primary); }
@@ -942,3 +992,36 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
 }
 .stocklite-toast [data-title] { font-weight: 700 !important; }
 .stocklite-toast [data-description] { line-height: 1.65 !important; }
+
+/* Help center print layout */
+@media print {
+  .app-sidebar,
+  .help-article-actions,
+  .help-article-toc {
+    display: none !important;
+  }
+
+  main {
+    overflow: visible !important;
+  }
+
+  main > div {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .help-article-print-area {
+    color: #111827 !important;
+    background: #ffffff !important;
+  }
+
+  .help-article-print-area section {
+    break-inside: avoid;
+    box-shadow: none !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+}

@@ -1025,3 +1025,115 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
     margin: 14mm;
   }
 }
+
+/* =========================================================
+   StockLite UI audit — unified application design system
+   ========================================================= */
+:root {
+  --app-background: #f4f7f6;
+  --surface: #ffffff;
+  --surface-subtle: #f7faf9;
+  --surface-hover: #edf4f2;
+  --text-primary: #17211f;
+  --text-secondary: #53615e;
+  --text-muted: #7e8b88;
+  --border: #dce6e3;
+  --border-strong: #c8d6d2;
+  --divider: #e9efed;
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.045);
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.035), 0 8px 24px rgba(15, 23, 42, 0.035);
+  --shadow-md: 0 12px 34px rgba(15, 23, 42, 0.085);
+  --shadow-dialog: 0 28px 80px rgba(2, 6, 23, 0.24);
+  --shadow-button: 0 2px 5px rgba(15, 118, 110, 0.18);
+  --shadow-button-hover: 0 5px 12px rgba(15, 118, 110, 0.22);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-control: 9px;
+  --radius-card: 14px;
+  --radius-dialog: 18px;
+}
+
+:root[data-theme="dark"] {
+  --app-background: #0b1211;
+  --surface: #111a18;
+  --surface-subtle: #151f1d;
+  --surface-hover: #1b2825;
+  --text-primary: #edf5f2;
+  --text-secondary: #b1c0bc;
+  --text-muted: #7f918c;
+  --border: #263632;
+  --border-strong: #344943;
+  --divider: #202e2b;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.22);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24), 0 12px 30px rgba(0, 0, 0, 0.12);
+  --shadow-md: 0 16px 42px rgba(0, 0, 0, 0.28);
+  --shadow-dialog: 0 32px 90px rgba(0, 0, 0, 0.5);
+}
+
+body {
+  background:
+    radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--primary) 4%, transparent), transparent 28rem),
+    var(--app-background);
+}
+
+main { min-width: 0; }
+
+.stocklite-page-header { position: relative; }
+.stocklite-page-header::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  width: 4.5rem;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), transparent);
+  content: "";
+}
+
+.stocklite-table-shell { scrollbar-gutter: stable; }
+.stocklite-table-shell table { font-variant-numeric: tabular-nums; }
+.stocklite-table-shell tbody tr:last-child td { border-bottom: 0; }
+.stocklite-table-shell th:first-child,
+.stocklite-table-shell td:first-child { padding-right: 1.25rem; }
+.stocklite-table-shell th:last-child,
+.stocklite-table-shell td:last-child { padding-left: 1.25rem; }
+
+input::placeholder,
+textarea::placeholder { color: color-mix(in srgb, var(--text-muted) 80%, transparent); }
+
+select { background-position: left 0.8rem center; }
+
+@keyframes stocklite-dialog-enter {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Normalize legacy cards and ad-hoc panels without changing page logic. */
+.stocklite-empty-state { box-shadow: var(--shadow-card); }
+
+@media (max-width: 640px) {
+  .stocklite-page-header { margin-bottom: 1.25rem; padding-bottom: 1rem; }
+  .stocklite-table-shell { border-radius: var(--radius-md); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; }
+}
+
+/* Sidebar and workspace consistency */
+.app-sidebar {
+  box-shadow: -1px 0 0 var(--border), -10px 0 35px rgba(15, 23, 42, 0.025);
+}
+.app-sidebar nav a {
+  border-radius: var(--radius-control);
+}
+
+/* Consistent native controls used by legacy pages */
+button:not(:disabled) { -webkit-tap-highlight-color: transparent; }
+textarea { resize: vertical; }
+
+/* Keep large page grids visually balanced */
+@media (min-width: 1280px) {
+  .stocklite-form-summary { position: sticky; top: 1.5rem; }
+}

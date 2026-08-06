@@ -32,10 +32,10 @@ const Select = forwardRef<HTMLSelectElement, Props>(
         <select
           ref={ref}
           className={[
-            "h-11 w-full appearance-none rounded-[var(--radius-sm)] border bg-[var(--surface)] px-3 pl-10 outline-none",
+            "h-11 w-full appearance-none rounded-[var(--radius-control)] border bg-[var(--surface)] px-3 pl-10 text-sm text-[var(--text-primary)] outline-none transition-[border-color,box-shadow,background-color] duration-150",
             error
-              ? "border-[var(--danger)]"
-              : "border-[var(--border-strong)] hover:border-[var(--text-muted)] focus:border-[var(--primary)]",
+              ? "border-[var(--danger)] focus:ring-3 focus:ring-[var(--danger-subtle)]"
+              : "border-[var(--border-strong)] hover:border-[var(--primary)]/45 focus:border-[var(--primary)] focus:ring-3 focus:ring-[var(--focus-ring)]",
             className,
           ].join(" ")}
           {...props}

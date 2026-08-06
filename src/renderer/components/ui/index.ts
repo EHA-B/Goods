@@ -63,3 +63,6 @@ export { default as TableRow } from "./TableRow";
 
 export { default as Textarea } from "./Textarea";
 export { default as BackButton } from "./BackButton";
+
+export { default as Tabs } from "./Tabs";
+export type { TabItem } from "./Tabs";

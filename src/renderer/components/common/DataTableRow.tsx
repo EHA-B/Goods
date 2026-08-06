@@ -1,26 +1,3 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import { cn } from "../../utils/utils";
-
-type Props = {
-  children: ReactNode;
-  className?: string;
-};
-
-export default function DataTableRow({
-  children,
-  className,
-}: Props) {
-  return (
-    <tr
-      className={cn(
-        "border-b border-[var(--border)]",
-        "transition-colors",
-        "hover:bg-[var(--surface-subtle)]",
-        "last:border-b-0",
-        className
-      )}
-    >
-      {children}
-    </tr>
-  );
-}
+export default function DataTableRow({ children, className }: { children: ReactNode; className?: string }) { return <tr className={cn("group transition-colors hover:bg-[var(--surface-hover)]/70", className)}>{children}</tr>; }

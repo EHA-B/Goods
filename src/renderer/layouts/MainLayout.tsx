@@ -9,7 +9,7 @@ function MainLayout() {
   return (
     <div
       dir="rtl"
-      className="flex h-screen overflow-hidden bg-[var(--background)]"
+      className="flex h-screen overflow-hidden bg-[var(--app-background)]"
     >
       <Sidebar />
       <LockScreen />
@@ -17,7 +17,7 @@ function MainLayout() {
       {/* <ContextTip /> */}
 
       <main className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1600px] p-6">
+        <div className="mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 sm:py-6 xl:px-8">
           <Outlet />
         </div>
       </main>

@@ -26,7 +26,7 @@ export default function DropdownMenuItem({
         "data-[disabled]:pointer-events-none",
         "data-[disabled]:opacity-50",
         danger
-          ? "text-[var(--danger)] hover:bg-[var(--danger-subtle)] focus:bg-[var(--danger-subtle)]"
+          ? "text-[var(--danger)] hover:bg-[color:rgba(220,38,38,.08)] focus:bg-[color:rgba(220,38,38,.08)]"
           : "text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)]"
       )}
     >

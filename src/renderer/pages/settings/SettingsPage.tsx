@@ -1,16 +1,9 @@
-import { Building2, DatabaseBackup, Info, ArrowLeft, Palette, ShieldCheck, BellRing, Compass } from "lucide-react";
+import { Building2, DatabaseBackup, Info, ArrowLeft, Palette, ShieldCheck, BellRing } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, PageHeader } from "../../components/ui";
 import { PATHS } from "../../routes/path";
-import { startFirstRunTour } from "../../components/onboarding/FirstRunTour";
 
 const items = [
-  {
-    title: "الجولة التعريفية",
-    description: "إعادة تشغيل الجولة القصيرة للتعرف على أهم أقسام البرنامج.",
-    path: "#tour",
-    icon: Compass,
-  },
   {
     title: "معلومات الشركة",
     description: "بيانات المنشأة والشعار والمعلومات التي تظهر على الفواتير.",
@@ -60,28 +53,6 @@ export default function SettingsPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {items.map((item) => {
           const Icon = item.icon;
-          if (item.path === "#tour") {
-            return (
-              <button key={item.path} type="button" onClick={startFirstRunTour} className="group block w-full text-right">
-              <Card className="h-full transition-[border-color,box-shadow,transform] duration-150 group-hover:-translate-y-0.5 group-hover:border-[var(--primary)] group-hover:shadow-sm">
-                <div className="flex min-h-[170px] flex-col">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-[var(--radius-md)] bg-[var(--primary-subtle)] text-[var(--primary)]">
-                      <Icon size={23} strokeWidth={1.9} />
-                    </div>
-                    <ArrowLeft size={19} className="mt-1 text-[var(--text-muted)] transition-transform group-hover:-translate-x-1 group-hover:text-[var(--primary)]" />
-                  </div>
-
-                  <div className="mt-auto pt-6">
-                    <h2 className="text-base font-bold text-[var(--text-primary)]">{item.title}</h2>
-                    <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">{item.description}</p>
-                  </div>
-                </div>
-              </Card>
-              </button>
-            );
-          }
-
           return (
             <Link key={item.path} to={item.path} className="group block">
               <Card className="h-full transition-[border-color,box-shadow,transform] duration-150 group-hover:-translate-y-0.5 group-hover:border-[var(--primary)] group-hover:shadow-sm">

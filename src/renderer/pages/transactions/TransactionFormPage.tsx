@@ -108,7 +108,7 @@ export default function TransactionFormPage() {
   return (
     <>
       <PageHeader title={direction === "expense" ? "إضافة مصروف" : "إضافة إيراد"} description="تسجيل معاملة مالية جديدة وتحديث رصيد الصندوق تلقائياً." actions={<BackButton to={PATHS.TRANSACTIONS} />} />
-      <div className="mb-5 rounded-[var(--radius-md)] border border-[var(--success)] bg-[var(--success-subtle)] px-4 py-3 text-sm text-[var(--success)]">
+      <div className="mb-5 rounded-[var(--radius-md)] border border-green-500 bg-green-50 px-4 py-3 text-sm text-green-800">
         هذه المعاملة ستؤثر على رصيد الصندوق المختار فور حفظها، ولا يمكن تعديلها لاحقاً (يمكن إلغاؤها فقط).
       </div>
       <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
@@ -130,11 +130,11 @@ export default function TransactionFormPage() {
           <div className="space-y-4 text-sm">
             <div className="flex justify-between"><span className="text-[var(--text-muted)]">الصندوق</span><strong>{selected?.name || "—"}</strong></div>
             <div className="flex justify-between"><span className="text-[var(--text-muted)]">الرصيد الحالي</span><strong dir="ltr" className="tabular-nums">{money(selected?.balance || 0)} {selectedCurrency}</strong></div>
-            <div className="flex justify-between"><span className="text-[var(--text-muted)]">قيمة الحركة</span><strong dir="ltr" className={`tabular-nums ${direction === 'income' ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>{direction === 'income' ? '+' : '-'}{displayAmount} {selectedCurrency}</strong></div>
+            <div className="flex justify-between"><span className="text-[var(--text-muted)]">قيمة الحركة</span><strong dir="ltr" className={`tabular-nums ${direction === 'income' ? 'text-green-600' : 'text-red-600'}`}>{direction === 'income' ? '+' : '-'}{displayAmount} {selectedCurrency}</strong></div>
             
             <div className="border-t border-[var(--border)] pt-4 flex justify-between font-bold">
               <span className="text-[var(--text-primary)]">الرصيد المتوقع</span>
-              <span dir="ltr" className={`tabular-nums ${expectedBalance < 0 ? 'text-[var(--danger)]' : ''}`}>
+              <span dir="ltr" className={`tabular-nums ${expectedBalance < 0 ? 'text-red-600' : ''}`}>
                 {money(expectedBalance)} {selectedCurrency}
               </span>
             </div>

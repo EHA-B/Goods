@@ -26,7 +26,7 @@ export default function ImageUploader({
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="absolute right-2 top-2 rounded-full bg-[var(--danger)] p-1 text-[var(--text-inverse)]"
+            className="absolute right-2 top-2 rounded-full bg-red-500 p-1 text-white"
           >
             <X size={14} />
           </button>

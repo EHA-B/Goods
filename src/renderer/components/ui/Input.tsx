@@ -42,7 +42,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       <div
         className={[
           "group relative flex w-full items-center",
-          "rounded-[var(--radius-control)] border",
+          "rounded-[var(--radius-sm)] border",
           "bg-[var(--surface)]",
           "transition-[background-color,border-color,box-shadow]",
           "duration-150 ease-out",

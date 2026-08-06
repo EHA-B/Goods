@@ -77,7 +77,7 @@ export default function SaleDetailsPage() {
         </div>
       }
     />
-    {error && <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--danger)] bg-[var(--danger-subtle)] px-4 py-3 text-sm font-bold text-[var(--danger)]">{error}</div>}
+    {error && <div className="mb-4 rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
     <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
       <div className="space-y-5">
         <Card header="بيانات الفاتورة">

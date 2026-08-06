@@ -311,7 +311,7 @@ export default function CashboxDetailsPage() {
 
       {/* ── Reversal dialog ───────────────────────────────────────────── */}
       {isReversalDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-strong)] p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl bg-[var(--surface)] p-6 shadow-xl">
             <h2 className="mb-1 text-lg font-bold">
               {reversal.transferGroupId ? "عكس التحويل" : "إلغاء الحركة"}

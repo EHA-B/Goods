@@ -88,7 +88,7 @@ export default function PurchasePaymentPage() {
             <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </FormField>
         </div>
-        {error && <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--danger)] bg-[var(--danger-subtle)] px-4 py-3 text-sm font-bold text-[var(--danger)]">{error}</div>}
+        {error && <div className="mt-3 rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" onClick={() => navigate(`/purchases/${purchaseId}`)}>إلغاء</Button>
           <Button startIcon={<Save size={17} />} disabled={submitting} onClick={submit}>{submitting ? "جاري الحفظ..." : "حفظ الدفعة"}</Button>

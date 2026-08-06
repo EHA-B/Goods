@@ -222,7 +222,7 @@ export default function SupplierDetailsPage() {
             >
               <Icon size={15} />
               {label}
-              <span className="rounded-full bg-[var(--surface-hover)] px-2 py-0.5 text-xs">{count}</span>
+              <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs">{count}</span>
             </button>
           ))}
         </div>

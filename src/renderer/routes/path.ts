@@ -54,7 +54,6 @@ export const PATHS = {
     NOTIFICATIONS: "/notifications",
     HELP: "/help",
     HELP_ARTICLE: "/help/:articleSlug",
-    HELP_FAQ: "/help/faq",
     SETTINGS: "/settings",
     SETTINGS_COMPANY: "/settings/company",
     SETTINGS_BACKUP: "/settings/backup",

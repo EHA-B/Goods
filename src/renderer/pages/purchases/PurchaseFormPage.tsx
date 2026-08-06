@@ -192,7 +192,7 @@ export default function PurchaseFormPage() {
       actions={<BackButton to={PATHS.PURCHASES} />}
     />
     <div className="space-y-5 pb-24">
-      {error && <div className="rounded-[var(--radius-md)] border border-[var(--danger)] bg-[var(--danger-subtle)] px-4 py-3 text-sm font-bold text-[var(--danger)]">{error}</div>}
+      {error && <div className="rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
       <FormSection title="بيانات الفاتورة" description="المورد ونوع الفاتورة والتاريخ." icon={<PackagePlus size={18} />}>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <FormField label="رقم الفاتورة" htmlFor="invoiceNumber">

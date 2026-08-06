@@ -70,7 +70,7 @@ export default function SalesPage() {
         <Select value={status} onChange={(e) => setStatus(e.target.value)} options={[{ value: "", label: "كل الحالات" }, { value: "draft", label: "مسودة" }, { value: "confirmed", label: "مؤكدة" }, { value: "partially_paid", label: "مدفوعة جزئيًا" }, { value: "paid", label: "مدفوعة" }, { value: "cancelled", label: "ملغاة" }]} />
         <Button variant="secondary" onClick={() => { setQuery(""); setStatus(""); }}>مسح الفلاتر</Button>
       </div>
-      {error && <div className="m-4 rounded-[var(--radius-md)] border border-[var(--danger)] bg-[var(--danger-subtle)] px-4 py-3 text-sm font-bold text-[var(--danger)]">{error}</div>}
+      {error && <div className="m-4 rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
       {loading ? <div className="px-6 py-12 text-center text-sm text-[var(--text-muted)]">جاري التحميل...</div> : sales.length ? <>
         <SalesTable sales={sales} onView={(s) => navigate(`/sales/${s.id}`)} onDelete={setPendingCancel} />
         <div className="px-5 pb-5"><Pagination page={pagination.page} totalPages={Math.max(1, pagination.totalPages)} onChange={(page) => void load(page)} /></div>

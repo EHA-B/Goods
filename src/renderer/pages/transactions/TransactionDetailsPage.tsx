@@ -110,7 +110,7 @@ export default function TransactionDetailsPage() {
             {cashbox_movement ? (
               <>
                 <Row label="رقم حركة الصندوق" value={`#${cashbox_movement.id}`} />
-                <Row label="أثر الحركة" value={cashbox_movement.direction === "in" ? <span className="text-[var(--success)]">دخول أموال</span> : <span className="text-[var(--danger)]">خروج أموال</span>} />
+                <Row label="أثر الحركة" value={cashbox_movement.direction === "in" ? <span className="text-green-600">دخول أموال</span> : <span className="text-red-600">خروج أموال</span>} />
               </>
             ) : (
               <div className="py-4 text-sm text-[var(--text-muted)] text-center">لا يوجد حركة صندوق مرتبطة</div>

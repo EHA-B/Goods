@@ -38,7 +38,7 @@ export default function ContextHelpDrawer({ open, config, onClose }: Props) {
     <div className="fixed inset-0 z-[10000]" dir="rtl">
       <button
         type="button"
-        className="absolute inset-0 bg-[var(--overlay-soft)] backdrop-blur-[1px]"
+        className="absolute inset-0 bg-slate-950/35 backdrop-blur-[1px]"
         aria-label="إغلاق المساعدة"
         onClick={onClose}
       />
@@ -124,7 +124,7 @@ export default function ContextHelpDrawer({ open, config, onClose }: Props) {
           <Link
             to={`/help/${config.articleSlug}`}
             onClick={onClose}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--primary)] px-4 text-sm font-bold text-[var(--text-inverse)] transition hover:opacity-90"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--primary)] px-4 text-sm font-bold text-white transition hover:opacity-90"
           >
             <ExternalLink size={17} />
             فتح الشرح الكامل

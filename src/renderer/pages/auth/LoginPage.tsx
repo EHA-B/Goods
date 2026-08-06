@@ -69,7 +69,7 @@ export default function LoginPage() {
           <StockLiteLogo size="md" showWordmark />
         </div>
 
-        <div className="stocklite-auth-panel rounded-[22px] border px-6 py-7 sm:px-8 sm:py-8">
+        <div className="stocklite-login-panel rounded-[22px] border px-6 py-7 backdrop-blur-md sm:px-8 sm:py-8">
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-[-0.025em] text-[var(--text-primary)]">
               تسجيل الدخول
@@ -145,7 +145,7 @@ export default function LoginPage() {
               isLoading={isLoading}
               loadingText="جاري تسجيل الدخول..."
               startIcon={<LogIn size={17} />}
-              className="stocklite-auth-submit mt-1 h-11 rounded-xl text-sm"
+              className="mt-1 h-11 rounded-xl text-sm shadow-[0_8px_22px_rgba(15,118,110,0.18)]"
             >
               تسجيل الدخول
             </Button>

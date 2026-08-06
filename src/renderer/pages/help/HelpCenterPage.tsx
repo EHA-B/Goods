@@ -6,13 +6,9 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
-  PlayCircle,
-  ListChecks,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { startFirstRunTour } from "../../components/onboarding/FirstRunTour";
-import { PATHS } from "../../routes/path";
 
 import { Card, Input, PageHeader } from "../../components/ui";
 import {
@@ -79,25 +75,6 @@ export default function HelpCenterPage() {
       <PageHeader
         title="المساعدة ودليل الاستخدام"
         description="ابحث عن شرح أي عملية أو راجع الخطوات والحالات الشائعة داخل StockLite."
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              to={PATHS.HELP_FAQ}
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-bold text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)]"
-            >
-              <ListChecks size={17} />
-              الأسئلة الشائعة
-            </Link>
-            <button
-              type="button"
-              onClick={startFirstRunTour}
-              className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-sm font-bold text-[var(--text-inverse)] hover:opacity-90"
-            >
-              <PlayCircle size={17} />
-              تشغيل الجولة
-            </button>
-          </div>
-        }
       />
 
       <section className="relative mb-6 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-5 py-7 sm:px-8">
@@ -135,7 +112,7 @@ export default function HelpCenterPage() {
           className={[
             "shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors",
             category === ALL_CATEGORIES
-              ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--text-inverse)]"
+              ? "border-[var(--primary)] bg-[var(--primary)] text-white"
               : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)]",
           ].join(" ")}
         >
@@ -150,7 +127,7 @@ export default function HelpCenterPage() {
             className={[
               "shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors",
               category === item.id
-                ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--text-inverse)]"
+                ? "border-[var(--primary)] bg-[var(--primary)] text-white"
                 : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)]",
             ].join(" ")}
           >

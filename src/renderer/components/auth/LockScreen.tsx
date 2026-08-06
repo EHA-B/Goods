@@ -66,7 +66,7 @@ export default function LockScreen() {
           <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
         </div>
         {error && <p className="mt-2 text-sm text-[var(--danger)]">{error}</p>}
-        <button type="submit" disabled={isLoading} className="mt-5 h-11 w-full rounded-[var(--radius-md)] bg-[var(--primary)] font-bold text-[var(--text-inverse)] hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-60">{isLoading ? "جاري التحقق..." : "فتح التطبيق"}</button>
+        <button type="submit" disabled={isLoading} className="mt-5 h-11 w-full rounded-[var(--radius-md)] bg-[var(--primary)] font-bold text-white hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-60">{isLoading ? "جاري التحقق..." : "فتح التطبيق"}</button>
       </form>
     </div>
   );

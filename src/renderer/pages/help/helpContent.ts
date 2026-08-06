@@ -578,36 +578,6 @@ export const helpFaqs: HelpFaq[] = [
     answer: "نعم. الاستعادة تستبدل البيانات الحالية، لذلك يوصى دائمًا بحفظ نسخة من الوضع الحالي أولًا.",
     articleSlug: "backup-restore",
   },
-  {
-    id: "cash-sale-no-customer",
-    question: "هل يمكن إنشاء بيع نقدي دون اختيار عميل؟",
-    answer: "نعم، عندما تكون الفاتورة مدفوعة بالكامل. اختيار العميل يصبح ضروريًا عند البيع الآجل أو الجزئي أو عند الحاجة إلى كشف حساب.",
-    articleSlug: "sales",
-  },
-  {
-    id: "stock-adjustment-when",
-    question: "متى أستخدم تسوية المخزون؟",
-    answer: "استخدمها لتصحيح فرق فعلي ناتج عن جرد أو تلف أو خطأ كمية، وليس بدل إلغاء فاتورة أو عكس عملية مالية.",
-    articleSlug: "stock-adjustments",
-  },
-  {
-    id: "consignment-close",
-    question: "ما الذي يجب مراجعته قبل إغلاق الأمانة؟",
-    answer: "راجع إجمالي المبيعات والعمولة وحصة المورد والصندوق المختار ومعالجة الكمية غير المباعة قبل التأكيد.",
-    articleSlug: "consignment",
-  },
-  {
-    id: "long-print",
-    question: "هل تُطبع كل سجلات كشف الحساب الطويل؟",
-    answer: "نعم، تُقسّم السجلات التي جلبها مستند الطباعة تلقائيًا على صفحات A4. اختيار فترة محددة يجعل المستند أسرع وأسهل قراءة.",
-    articleSlug: "printing",
-  },
-  {
-    id: "restart-tour",
-    question: "كيف أعيد تشغيل الجولة التعريفية؟",
-    answer: "افتح مركز المساعدة واضغط تشغيل الجولة، أو استخدم بطاقة الجولة التعريفية الموجودة في صفحة الإعدادات.",
-    articleSlug: "getting-started",
-  },
 ];
 
 export function getHelpArticle(slug: string | undefined) {

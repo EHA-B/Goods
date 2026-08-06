@@ -5,10 +5,11 @@ import {
   CheckCircle2,
   Clock3,
   Lightbulb,
+  Printer,
 } from "lucide-react";
 import { Link, Navigate, useParams } from "react-router-dom";
 
-import { Card, PageHeader } from "../../components/ui";
+import { Button, Card, PageHeader } from "../../components/ui";
 import { getHelpArticle, getHelpCategory } from "./helpContent";
 
 export default function HelpArticlePage() {
@@ -28,6 +29,10 @@ export default function HelpArticlePage() {
         description={article.summary}
         actions={
           <div className="help-article-actions flex items-center gap-2">
+            <Button variant="secondary" onClick={() => window.print()}>
+              <Printer size={17} />
+              طباعة المقالة
+            </Button>
             <Link
               to="/help"
               className="inline-flex h-10 items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--surface)] px-4 text-sm font-bold text-[var(--text-primary)] hover:border-[var(--primary)] hover:text-[var(--primary)]"

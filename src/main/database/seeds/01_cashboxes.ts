@@ -11,28 +11,41 @@ export async function seed(knex: Knex): Promise<void> {
     // Ignore if sequence table doesn't exist
   }
 
-  // 1. Create main cashbox first
-  const [mainCashboxId] = await knex('cashboxes').insert({
-    name: 'الصندوق الرئيسي',
+  // 1. Create main cashbox (SYP)
+  const [sypCashboxId] = await knex('cashboxes').insert({
+    name: 'الصندوق الرئيسي (ل.س)',
     parent_id: null,
     initial_balance: 0,
     balance: 0,
     currency: 'SYP',
     isActive: true,
-    notes: 'الصندوق الرئيسي للنظام',
+    notes: 'الصندوق الرئيسي بالليرة السورية',
     created_at: knex.fn.now(),
     updated_at: knex.fn.now()
   });
 
-  // 2. Create the commission cashbox linked to the main cashbox
+  // 2. Create main cashbox (USD)
   await knex('cashboxes').insert({
-    name: 'صندوق العمولة',
-    parent_id: mainCashboxId || 1,
+    name: 'الصندوق الرئيسي (دولار)',
+    parent_id: null,
+    initial_balance: 0,
+    balance: 0,
+    currency: 'USD',
+    isActive: true,
+    notes: 'الصندوق الرئيسي بالدولار الأمريكي',
+    created_at: knex.fn.now(),
+    updated_at: knex.fn.now()
+  });
+
+  // 3. Create the commission / consignment cashbox
+  await knex('cashboxes').insert({
+    name: 'صندوق الأمانة (العمولة)',
+    parent_id: sypCashboxId || 1,
     initial_balance: 0,
     balance: 0,
     currency: 'SYP',
     isActive: true,
-    notes: 'خاص ببيانات البيع بالعمولة (Holding account for consignment/commission sales)',
+    notes: 'خاص ببيانات البيع بالعمولة و فواتير الأمانة',
     created_at: knex.fn.now(),
     updated_at: knex.fn.now()
   });

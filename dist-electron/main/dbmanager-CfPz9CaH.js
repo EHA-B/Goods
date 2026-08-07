@@ -346,15 +346,38 @@ async function up$f(knex2) {
     table.foreign("stock_batch_id").references("id").inTable("stock_batches").onDelete("RESTRICT");
     table.index("stock_batch_id");
   });
-  const existingCashbox = await knex2("cashboxes").where("name", "Commission Holding Cashbox").first();
+  const existingCashbox = await knex2("cashboxes").where("name", "الصندوق الرئيسي (ل.س)").first();
   if (!existingCashbox) {
-    await knex2("cashboxes").insert({
-      name: "Commission Holding Cashbox",
-      balance: 0,
+    const [sypId] = await knex2("cashboxes").insert({
+      name: "الصندوق الرئيسي (ل.س)",
+      parent_id: null,
       initial_balance: 0,
+      balance: 0,
       currency: "SYP",
       isActive: true,
-      notes: "Holding account for consignment/commission sales before settlement with suppliers.",
+      notes: "الصندوق الرئيسي بالليرة السورية",
+      created_at: knex2.fn.now(),
+      updated_at: knex2.fn.now()
+    });
+    await knex2("cashboxes").insert({
+      name: "الصندوق الرئيسي (دولار)",
+      parent_id: null,
+      initial_balance: 0,
+      balance: 0,
+      currency: "USD",
+      isActive: true,
+      notes: "الصندوق الرئيسي بالدولار الأمريكي",
+      created_at: knex2.fn.now(),
+      updated_at: knex2.fn.now()
+    });
+    await knex2("cashboxes").insert({
+      name: "صندوق الأمانة (العمولة)",
+      parent_id: sypId || 1,
+      initial_balance: 0,
+      balance: 0,
+      currency: "SYP",
+      isActive: true,
+      notes: "خاص ببيانات البيع بالعمولة و فواتير الأمانة",
       created_at: knex2.fn.now(),
       updated_at: knex2.fn.now()
     });
@@ -1463,25 +1486,36 @@ async function seed$1(knex2) {
     await knex2.raw('DELETE FROM sqlite_sequence WHERE name="cashboxes"');
   } catch (e) {
   }
-  const [mainCashboxId] = await knex2("cashboxes").insert({
-    name: "الصندوق الرئيسي",
+  const [sypCashboxId] = await knex2("cashboxes").insert({
+    name: "الصندوق الرئيسي (ل.س)",
     parent_id: null,
     initial_balance: 0,
     balance: 0,
     currency: "SYP",
     isActive: true,
-    notes: "الصندوق الرئيسي للنظام",
+    notes: "الصندوق الرئيسي بالليرة السورية",
     created_at: knex2.fn.now(),
     updated_at: knex2.fn.now()
   });
   await knex2("cashboxes").insert({
-    name: "صندوق العمولة",
-    parent_id: mainCashboxId || 1,
+    name: "الصندوق الرئيسي (دولار)",
+    parent_id: null,
+    initial_balance: 0,
+    balance: 0,
+    currency: "USD",
+    isActive: true,
+    notes: "الصندوق الرئيسي بالدولار الأمريكي",
+    created_at: knex2.fn.now(),
+    updated_at: knex2.fn.now()
+  });
+  await knex2("cashboxes").insert({
+    name: "صندوق الأمانة (العمولة)",
+    parent_id: sypCashboxId || 1,
     initial_balance: 0,
     balance: 0,
     currency: "SYP",
     isActive: true,
-    notes: "خاص ببيانات البيع بالعمولة (Holding account for consignment/commission sales)",
+    notes: "خاص ببيانات البيع بالعمولة و فواتير الأمانة",
     created_at: knex2.fn.now(),
     updated_at: knex2.fn.now()
   });

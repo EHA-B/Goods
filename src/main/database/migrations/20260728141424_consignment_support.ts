@@ -32,15 +32,42 @@ export async function up(knex: Knex): Promise<void> {
   });
 
   // 5. Insert the Commission Cashbox since existing databases skip seeds
-  const existingCashbox = await knex('cashboxes').where('name', 'Commission Holding Cashbox').first();
+  const existingCashbox = await knex('cashboxes').where('name', 'الصندوق الرئيسي (ل.س)').first();
   if (!existingCashbox) {
-    await knex('cashboxes').insert({
-      name: 'Commission Holding Cashbox',
-      balance: 0,
+    const [sypId] = await knex('cashboxes').insert({
+      name: 'الصندوق الرئيسي (ل.س)',
+      parent_id: null,
       initial_balance: 0,
+      balance: 0,
       currency: 'SYP',
       isActive: true,
-      notes: 'Holding account for consignment/commission sales before settlement with suppliers.',
+      notes: 'الصندوق الرئيسي بالليرة السورية',
+      created_at: knex.fn.now(),
+      updated_at: knex.fn.now()
+    });
+
+    // 2. Create main cashbox (USD)
+    await knex('cashboxes').insert({
+      name: 'الصندوق الرئيسي (دولار)',
+      parent_id: null,
+      initial_balance: 0,
+      balance: 0,
+      currency: 'USD',
+      isActive: true,
+      notes: 'الصندوق الرئيسي بالدولار الأمريكي',
+      created_at: knex.fn.now(),
+      updated_at: knex.fn.now()
+    });
+
+    // 3. Create the commission / consignment cashbox
+    await knex('cashboxes').insert({
+      name: 'صندوق الأمانة (العمولة)',
+      parent_id: sypId || 1,
+      initial_balance: 0,
+      balance: 0,
+      currency: 'SYP',
+      isActive: true,
+      notes: 'خاص ببيانات البيع بالعمولة و فواتير الأمانة',
       created_at: knex.fn.now(),
       updated_at: knex.fn.now()
     });

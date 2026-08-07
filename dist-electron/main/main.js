@@ -655,7 +655,7 @@ ipcMain.handle("api:system:restore", async (_event, sourcePath) => {
   try {
     if (!getCurrentUser()) return failure("UNAUTHENTICATED", "Authentication is required");
     const prepared = await backupController.prepareRestore(sourcePath);
-    const { closeDatabase } = await import("./dbmanager-DD1c3pGH.js");
+    const { closeDatabase } = await import("./dbmanager-CfPz9CaH.js");
     await closeDatabase();
     try {
       const result = await backupController.applyRestore(prepared.sourcePath);
@@ -1188,7 +1188,7 @@ app.on("activate", () => {
 });
 app.whenReady().then(async () => {
   try {
-    const { initDatabase } = await import("./dbmanager-DD1c3pGH.js");
+    const { initDatabase } = await import("./dbmanager-CfPz9CaH.js");
     await initDatabase();
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {

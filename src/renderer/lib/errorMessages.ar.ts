@@ -6,6 +6,11 @@ export const ERROR_MESSAGES_AR: Record<string, string> = {
   UNAUTHORIZED: "انتهت الجلسة أو لا تملك صلاحية تنفيذ العملية.",
   FORBIDDEN: "لا تملك صلاحية تنفيذ هذه العملية.",
   INVALID_CREDENTIALS: "اسم المستخدم أو كلمة المرور غير صحيحة.",
+
+  // أخطاء تغيير كلمة المرور
+  INVALID_CURRENT_PASSWORD: "كلمة المرور الحالية غير صحيحة.",
+  PASSWORD_UNCHANGED: "يجب أن تكون كلمة المرور الجديدة مختلفة عن كلمة المرور الحالية.",
+
   SESSION_EXPIRED: "انتهت جلسة العمل. يرجى تسجيل الدخول مجددًا.",
   DUPLICATE_ENTRY: "هذه القيمة مستخدمة مسبقًا.",
   ALREADY_EXISTS: "يوجد سجل مماثل مسبقًا.",
@@ -23,7 +28,8 @@ export const ERROR_MESSAGES_AR: Record<string, string> = {
   PRINT_FAILED: "تعذر تجهيز مستند الطباعة.",
   INVALID_RESPONSE: "وصلت استجابة غير متوقعة من النظام.",
   IPC_ERROR: "تعذر التواصل مع خدمة التطبيق الداخلية.",
-  NOTIFICATIONS_LOAD_FAILED: "تعذر تحميل الإشعارات. يرجى إعادة تشغيل التطبيق والمحاولة مجددًا.",
+  NOTIFICATIONS_LOAD_FAILED:
+    "تعذر تحميل الإشعارات. يرجى إعادة تشغيل التطبيق والمحاولة مجددًا.",
   NOTIFICATION_UPDATE_FAILED: "تعذر تحديث حالة الإشعار.",
   TIMEOUT: "استغرقت العملية وقتًا أطول من المتوقع. حاول مجددًا.",
   NETWORK_ERROR: "تعذر الاتصال بالخدمة المطلوبة.",
@@ -55,7 +61,8 @@ export const ERROR_MESSAGES_AR: Record<string, string> = {
   TRANSACTION_ALREADY_CANCELLED: "تم إلغاء هذه المعاملة مسبقًا.",
   CONSIGNMENT_ALREADY_CLOSED: "تمت تسوية فاتورة الأمانة مسبقًا.",
   CONSIGNMENT_ALREADY_REVERSED: "تم عكس هذه التسوية مسبقًا.",
-  CONSIGNMENT_SALES_CHANGED: "تغيرت بيانات المبيعات بعد المعاينة. حدّث المعاينة ثم حاول مجددًا.",
+  CONSIGNMENT_SALES_CHANGED:
+    "تغيرت بيانات المبيعات بعد المعاينة. حدّث المعاينة ثم حاول مجددًا.",
   INVALID_COMMISSION_PERCENTAGE: "نسبة العمولة غير صالحة.",
   INSUFFICIENT_SETTLEMENT_BALANCE: "رصيد الصندوق غير كافٍ لإتمام التسوية.",
 };

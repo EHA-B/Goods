@@ -93,7 +93,7 @@ export default function ProductsPage() {
       notifySuccess("تم حذف المنتج بنجاح");
       setPendingDelete(undefined);
     } catch (error) {
-      notifyError(getProductErrorMessage(error));
+      notifyError(error);
     } finally {
       setIsDeleting(false);
     }

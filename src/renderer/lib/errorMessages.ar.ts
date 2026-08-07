@@ -9,63 +9,164 @@ export const ERROR_MESSAGES_AR: Record<string, string> = {
   SQLITE_CONSTRAINT: "لا يمكن تنفيذ العملية لوجود بيانات مرتبطة.",
   // أخطاء تغيير كلمة المرور
   INVALID_CURRENT_PASSWORD: "كلمة المرور الحالية غير صحيحة.",
-  PASSWORD_UNCHANGED: "يجب أن تكون كلمة المرور الجديدة مختلفة عن كلمة المرور الحالية.",
+  PASSWORD_UNCHANGED:
+    "يجب أن تكون كلمة المرور الجديدة مختلفة عن كلمة المرور الحالية.",
 
   SESSION_EXPIRED: "انتهت جلسة العمل. يرجى تسجيل الدخول مجددًا.",
+
   DUPLICATE_ENTRY: "هذه القيمة مستخدمة مسبقًا.",
   ALREADY_EXISTS: "يوجد سجل مماثل مسبقًا.",
-  HAS_DEPENDENCIES: "لا يمكن تنفيذ العملية لوجود بيانات مرتبطة بهذا السجل.",
-  FOREIGN_KEY_CONSTRAINT: "لا يمكن تنفيذ العملية لوجود بيانات مرتبطة.",
-  PRODUCT_IN_USE: "لا يمكن حذف المنتج لأنه مرتبط بسجلات حالية.",
-  DATABASE_BUSY: "قاعدة البيانات مشغولة حاليًا. أعد المحاولة بعد لحظات.",
-  DATABASE_READONLY: "تعذر حفظ التغييرات لأن قاعدة البيانات للقراءة فقط.",
-  DATABASE_ERROR: "تعذر تنفيذ العملية على قاعدة البيانات.",
-  MIGRATION_ERROR: "تعذر تحديث قاعدة البيانات إلى الإصدار المطلوب.",
-  FILE_NOT_FOUND: "تعذر العثور على الملف المطلوب.",
-  FILE_ACCESS_DENIED: "لا يمكن الوصول إلى الملف أو المجلد المحدد.",
-  INVALID_BACKUP: "ملف النسخة الاحتياطية غير صالح أو غير متوافق.",
-  BACKUP_FAILED: "تعذر إنشاء النسخة الاحتياطية.",
-  RESTORE_FAILED: "تعذر استعادة النسخة الاحتياطية.",
-  PRINT_FAILED: "تعذر تجهيز مستند الطباعة.",
-  INVALID_RESPONSE: "وصلت استجابة غير متوقعة من النظام.",
-  IPC_ERROR: "تعذر التواصل مع خدمة التطبيق الداخلية.",
+
+  HAS_DEPENDENCIES:
+    "لا يمكن تنفيذ العملية لوجود بيانات مرتبطة بهذا السجل.",
+
+  FOREIGN_KEY_CONSTRAINT:
+    "لا يمكن تنفيذ العملية لوجود بيانات مرتبطة.",
+
+  // المنتجات
+  PRODUCT_IN_USE:
+    "لا يمكن حذف المنتج لأنه مرتبط بفواتير أو دفعات أو حركات مخزون.",
+
+  DATABASE_BUSY:
+    "قاعدة البيانات مشغولة حاليًا. أعد المحاولة بعد لحظات.",
+
+  DATABASE_READONLY:
+    "تعذر حفظ التغييرات لأن قاعدة البيانات للقراءة فقط.",
+
+  DATABASE_ERROR:
+    "تعذر تنفيذ العملية على قاعدة البيانات.",
+
+  MIGRATION_ERROR:
+    "تعذر تحديث قاعدة البيانات إلى الإصدار المطلوب.",
+
+  FILE_NOT_FOUND:
+    "تعذر العثور على الملف المطلوب.",
+
+  FILE_ACCESS_DENIED:
+    "لا يمكن الوصول إلى الملف أو المجلد المحدد.",
+
+  INVALID_BACKUP:
+    "ملف النسخة الاحتياطية غير صالح أو غير متوافق.",
+
+  BACKUP_FAILED:
+    "تعذر إنشاء النسخة الاحتياطية.",
+
+  RESTORE_FAILED:
+    "تعذر استعادة النسخة الاحتياطية.",
+
+  PRINT_FAILED:
+    "تعذر تجهيز مستند الطباعة.",
+
+  INVALID_RESPONSE:
+    "وصلت استجابة غير متوقعة من النظام.",
+
+  IPC_ERROR:
+    "تعذر التواصل مع خدمة التطبيق الداخلية.",
+
   NOTIFICATIONS_LOAD_FAILED:
     "تعذر تحميل الإشعارات. يرجى إعادة تشغيل التطبيق والمحاولة مجددًا.",
-  NOTIFICATION_UPDATE_FAILED: "تعذر تحديث حالة الإشعار.",
-  TIMEOUT: "استغرقت العملية وقتًا أطول من المتوقع. حاول مجددًا.",
-  NETWORK_ERROR: "تعذر الاتصال بالخدمة المطلوبة.",
-  INSUFFICIENT_BALANCE: "رصيد الصندوق غير كافٍ لإتمام العملية.",
-  CASHBOX_NOT_FOUND: "تعذر العثور على الصندوق المحدد.",
-  INACTIVE_CASHBOX: "الصندوق المحدد غير نشط.",
-  CASHBOX_CURRENCY_MISMATCH: "عملة الصندوق لا تطابق عملة العملية.",
-  SAME_CASHBOX_TRANSFER: "يجب اختيار صندوقين مختلفين للتحويل.",
-  INVALID_TRANSFER_AMOUNT: "مبلغ التحويل يجب أن يكون أكبر من صفر.",
-  INSUFFICIENT_STOCK: "الكمية المتوفرة في المخزون غير كافية.",
-  STOCK_BATCH_NOT_FOUND: "تعذر العثور على دفعة المخزون المحددة.",
-  INACTIVE_STOCK_BATCH: "دفعة المخزون المحددة غير نشطة.",
-  INVALID_QUANTITY: "الكمية المدخلة غير صالحة.",
-  INVALID_PRICE: "السعر المدخل غير صالح.",
-  INVALID_DISCOUNT: "قيمة الخصم غير صالحة.",
-  INVALID_EXCHANGE_RATE: "سعر الصرف غير صالح. أدخل قيمة أكبر من صفر.",
-  UNSUPPORTED_CURRENCY: "العملة المحددة غير مدعومة.",
-  CUSTOMER_REQUIRED_FOR_CREDIT: "يجب تحديد عميل عند البيع الآجل أو الجزئي.",
-  SUPPLIER_REQUIRED: "يجب تحديد المورد لإتمام عملية الشراء.",
-  INVOICE_NOT_FOUND: "تعذر العثور على الفاتورة المطلوبة.",
-  INVOICE_ALREADY_CANCELLED: "تم إلغاء هذه الفاتورة مسبقًا.",
-  INVOICE_ALREADY_PAID: "الفاتورة مدفوعة بالكامل.",
-  INVALID_PAYMENT_AMOUNT: "قيمة الدفعة غير صالحة.",
-  PAYMENT_EXCEEDS_REMAINING: "قيمة الدفعة أكبر من المبلغ المتبقي.",
-  PAYMENT_NOT_FOUND: "تعذر العثور على الدفعة المطلوبة.",
-  PAYMENT_ALREADY_REVERSED: "تم عكس هذه الدفعة مسبقًا.",
-  REVERSAL_REASON_REQUIRED: "يرجى إدخال سبب العكس.",
-  TRANSACTION_NOT_FOUND: "تعذر العثور على المعاملة المطلوبة.",
-  TRANSACTION_ALREADY_CANCELLED: "تم إلغاء هذه المعاملة مسبقًا.",
-  CONSIGNMENT_ALREADY_CLOSED: "تمت تسوية فاتورة الأمانة مسبقًا.",
-  CONSIGNMENT_ALREADY_REVERSED: "تم عكس هذه التسوية مسبقًا.",
+
+  NOTIFICATION_UPDATE_FAILED:
+    "تعذر تحديث حالة الإشعار.",
+
+  TIMEOUT:
+    "استغرقت العملية وقتًا أطول من المتوقع. حاول مجددًا.",
+
+  NETWORK_ERROR:
+    "تعذر الاتصال بالخدمة المطلوبة.",
+
+  INSUFFICIENT_BALANCE:
+    "رصيد الصندوق غير كافٍ لإتمام العملية.",
+
+  CASHBOX_NOT_FOUND:
+    "تعذر العثور على الصندوق المحدد.",
+
+  INACTIVE_CASHBOX:
+    "الصندوق المحدد غير نشط.",
+
+  CASHBOX_CURRENCY_MISMATCH:
+    "عملة الصندوق لا تطابق عملة العملية.",
+
+  SAME_CASHBOX_TRANSFER:
+    "يجب اختيار صندوقين مختلفين للتحويل.",
+
+  INVALID_TRANSFER_AMOUNT:
+    "مبلغ التحويل يجب أن يكون أكبر من صفر.",
+
+  INSUFFICIENT_STOCK:
+    "الكمية المتوفرة في المخزون غير كافية.",
+
+  STOCK_BATCH_NOT_FOUND:
+    "تعذر العثور على دفعة المخزون المحددة.",
+
+  INACTIVE_STOCK_BATCH:
+    "دفعة المخزون المحددة غير نشطة.",
+
+  INVALID_QUANTITY:
+    "الكمية المدخلة غير صالحة.",
+
+  INVALID_PRICE:
+    "السعر المدخل غير صالح.",
+
+  INVALID_DISCOUNT:
+    "قيمة الخصم غير صالحة.",
+
+  INVALID_EXCHANGE_RATE:
+    "سعر الصرف غير صالح. أدخل قيمة أكبر من صفر.",
+
+  UNSUPPORTED_CURRENCY:
+    "العملة المحددة غير مدعومة.",
+
+  CUSTOMER_REQUIRED_FOR_CREDIT:
+    "يجب تحديد عميل عند البيع الآجل أو الجزئي.",
+
+  SUPPLIER_REQUIRED:
+    "يجب تحديد المورد لإتمام عملية الشراء.",
+
+  INVOICE_NOT_FOUND:
+    "تعذر العثور على الفاتورة المطلوبة.",
+
+  INVOICE_ALREADY_CANCELLED:
+    "تم إلغاء هذه الفاتورة مسبقًا.",
+
+  INVOICE_ALREADY_PAID:
+    "الفاتورة مدفوعة بالكامل.",
+
+  INVALID_PAYMENT_AMOUNT:
+    "قيمة الدفعة غير صالحة.",
+
+  PAYMENT_EXCEEDS_REMAINING:
+    "قيمة الدفعة أكبر من المبلغ المتبقي.",
+
+  PAYMENT_NOT_FOUND:
+    "تعذر العثور على الدفعة المطلوبة.",
+
+  PAYMENT_ALREADY_REVERSED:
+    "تم عكس هذه الدفعة مسبقًا.",
+
+  REVERSAL_REASON_REQUIRED:
+    "يرجى إدخال سبب العكس.",
+
+  TRANSACTION_NOT_FOUND:
+    "تعذر العثور على المعاملة المطلوبة.",
+
+  TRANSACTION_ALREADY_CANCELLED:
+    "تم إلغاء هذه المعاملة مسبقًا.",
+
+  CONSIGNMENT_ALREADY_CLOSED:
+    "تمت تسوية فاتورة الأمانة مسبقًا.",
+
+  CONSIGNMENT_ALREADY_REVERSED:
+    "تم عكس هذه التسوية مسبقًا.",
+
   CONSIGNMENT_SALES_CHANGED:
     "تغيرت بيانات المبيعات بعد المعاينة. حدّث المعاينة ثم حاول مجددًا.",
-  INVALID_COMMISSION_PERCENTAGE: "نسبة العمولة غير صالحة.",
-  INSUFFICIENT_SETTLEMENT_BALANCE: "رصيد الصندوق غير كافٍ لإتمام التسوية.",
+
+  INVALID_COMMISSION_PERCENTAGE:
+    "نسبة العمولة غير صالحة.",
+
+  INSUFFICIENT_SETTLEMENT_BALANCE:
+    "رصيد الصندوق غير كافٍ لإتمام التسوية.",
 };
 
 export const FIELD_MESSAGES_AR: Record<string, string> = {

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import electron from "vite-plugin-electron/simple";
+import obfuscator from "vite-plugin-obfuscator";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +21,14 @@ export default defineConfig({
       main: {
         entry: path.resolve(__dirname, "electron/main.ts"),
         vite: {
+          plugins: process.env.NODE_ENV === "production" ? [obfuscator({
+            global: true,
+            compact: true,
+            controlFlowFlattening: true,
+            deadCodeInjection: false,
+            stringArray: true,
+            stringArrayEncoding: ['rc4'],
+          })] : [],
           build: {
             outDir: path.resolve(__dirname, "dist-electron/main"),
             emptyOutDir: true,
@@ -32,6 +41,14 @@ export default defineConfig({
       preload: {
         input: path.resolve(__dirname, "electron/preload.ts"),
         vite: {
+          plugins: process.env.NODE_ENV === "production" ? [obfuscator({
+            global: true,
+            compact: true,
+            controlFlowFlattening: true,
+            deadCodeInjection: false,
+            stringArray: true,
+            stringArrayEncoding: ['rc4'],
+          })] : [],
           build: {
             outDir: path.resolve(__dirname, "dist-electron/preload"),
             emptyOutDir: true,

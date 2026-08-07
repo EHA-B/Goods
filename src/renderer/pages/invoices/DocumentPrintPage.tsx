@@ -1,46 +1,1422 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileDown, Printer } from "lucide-react";
 import { useParams } from "react-router-dom";
-import { BackButton, Button, EmptyState, PageHeader } from "../../components/ui";
-import { defaultCompanySettings, settingsService, type CompanySettings } from "../settings/settingsService";
 
-type Kind = "payment"|"transaction"|"transfer"|"customer"|"supplier"|"cashbox"|"consignment";
-const n=(v:unknown)=>Number(v??0); const fmt=(v:unknown)=>n(v).toLocaleString("en-US",{maximumFractionDigits:2});
-const date=(v:unknown)=>String(v??"").replace("T"," ").slice(0,19);
-const money=(v:unknown,c="SYP")=>`${fmt(v)} ${c==="SYP"?"ل.س":c}`;
+import {
+  BackButton,
+  Button,
+  EmptyState,
+  PageHeader,
+} from "../../components/ui";
 
-export default function DocumentPrintPage({kind}:{kind:Kind}){
- const params=useParams(); const raw=params.id||params.customerId||params.supplierId||params.purchaseId||params.groupId||"";
- const id=kind==="transfer"?raw:Number(raw); const [data,setData]=useState<any>(); const [company,setCompany]=useState<CompanySettings>(defaultCompanySettings); const [error,setError]=useState(""); const [savingPdf,setSavingPdf]=useState(false);
- useEffect(()=>{let off=false;(async()=>{try{
-  const api=window.stockliteApi.printDocuments;
-  const loaders: Record<Kind, (documentId: number|string)=>Promise<unknown>> = {
-    payment: (documentId) => api.payment(Number(documentId)),
-    transaction: (documentId) => api.transaction(Number(documentId)),
-    transfer: (documentId) => api.transfer(String(documentId)),
-    customer: (documentId) => api.customerStatement(Number(documentId)),
-    supplier: (documentId) => api.supplierStatement(Number(documentId)),
-    cashbox: (documentId) => api.cashboxStatement(Number(documentId)),
-    consignment: (documentId) => api.consignment(Number(documentId)),
+import {
+  getPaymentStatusLabel,
+  getPurchaseStatusLabel,
+  getSaleStatusLabel,
+} from "../../lib/statusTranslations";
+
+import {
+  defaultCompanySettings,
+  settingsService,
+  type CompanySettings,
+} from "../settings/settingsService";
+
+type Kind =
+  | "payment"
+  | "transaction"
+  | "transfer"
+  | "customer"
+  | "supplier"
+  | "cashbox"
+  | "consignment";
+
+type PaymentDocument = {
+  id: number;
+  payment_type?: string | null;
+  party_name?: string | null;
+  invoice_number?: string | null;
+  cashbox_name?: string | null;
+  payment_date?: string | null;
+  amount?: number | string | null;
+  currency?: string | null;
+  exchange_rate?: number | string | null;
+  amount_base?: number | string | null;
+  status?: string | null;
+  notes?: string | null;
+  reference_number?: string | null;
+};
+
+type TransactionDocument = {
+  id: number;
+  type?: string | null;
+  category_name?: string | null;
+  cashbox_name?: string | null;
+  cashbox_currency?: string | null;
+  transaction_date?: string | null;
+  reference_number?: string | null;
+  amount?: number | string | null;
+  status?: string | null;
+  description?: string | null;
+  notes?: string | null;
+};
+
+type TransferMovement = {
+  id?: number;
+  direction?: string | null;
+  cashbox_name?: string | null;
+  cashbox_currency?: string | null;
+  transaction_date?: string | null;
+  amount?: number | string | null;
+  balance_before?: number | string | null;
+  balance_after?: number | string | null;
+};
+
+type TransferDocument = {
+  transfer_group_id?: string | number | null;
+  movements: TransferMovement[];
+};
+
+type StatementParty = {
+  name?: string | null;
+  phone?: string | null;
+  address?: string | null;
+};
+
+type StatementInvoice = {
+  id: number;
+  invoice_number?: string | null;
+  invoice_date?: string | null;
+  total?: number | string | null;
+  paid_amount?: number | string | null;
+  remaining_amount?: number | string | null;
+  currency?: string | null;
+  status?: string | null;
+};
+
+type StatementPayment = {
+  id: number;
+  payment_date?: string | null;
+  cashbox_name?: string | null;
+  amount?: number | string | null;
+  currency?: string | null;
+  status?: string | null;
+};
+
+type StatementDocument = {
+  party: StatementParty;
+  balance?: number | string | null;
+  invoices: StatementInvoice[];
+  payments: StatementPayment[];
+  statement_type?: "customer" | "supplier" | string;
+};
+
+type CashboxMovement = {
+  id: number;
+  transaction_date?: string | null;
+  reference_type?: string | null;
+  direction?: string | null;
+  amount?: number | string | null;
+  balance_before?: number | string | null;
+  balance_after?: number | string | null;
+};
+
+type CashboxDocument = {
+  cashbox: {
+    name?: string | null;
+    currency?: string | null;
+    balance?: number | string | null;
   };
-  const loader=loaders[kind];
-  if(!loader) throw new Error("نوع مستند الطباعة غير مدعوم");
-  const [d,c]=await Promise.all([loader(id),settingsService.loadCompany()]);
-  if(!off){setData(d);setCompany(c)}
- }catch(e:unknown){if(!off)setError(e instanceof Error?e.message:"تعذر تجهيز المستند")}})();return()=>{off=true}},[kind,id]);
- const title=useMemo(()=>({payment:"سند مالي",transaction:"مستند معاملة مالية",transfer:"سند تحويل بين الصناديق",customer:"كشف حساب عميل",supplier:"كشف حساب مورد",cashbox:"كشف حركة صندوق",consignment:"تسوية أمانة"}[kind]),[kind]);
- if(error)return <EmptyState title="تعذر تجهيز المستند" description={error}/>; if(!data)return <div className="p-12 text-center">جاري تجهيز الطباعة...</div>;
- const print=()=>window.print();
- const savePdf=async()=>{try{setSavingPdf(true);await window.stockliteApi.system.saveCurrentPageAsPdf({fileName:`${title} ${raw}`})}catch(e:unknown){setError(e instanceof Error?e.message:"تعذر حفظ ملف PDF")}finally{setSavingPdf(false)}};
- return <div className="space-y-5"><div className="no-print"><PageHeader title={title} description="مستند موحّد A4 وRTL من البيانات الفعلية للنظام." actions={<div className="flex gap-2"><BackButton/><Button variant="secondary" startIcon={<Printer size={17}/>} onClick={print}>طباعة</Button><Button startIcon={<FileDown size={17}/>} disabled={savingPdf} onClick={()=>void savePdf()}>{savingPdf?"جاري الحفظ...":"حفظ PDF"}</Button></div>}/></div>
- <article className="invoice-print-sheet" dir="rtl"><header className="invoice-print-header"><div className="invoice-company-block"><div className="invoice-company-identity">{company.logo&&<img src={company.logo} className="invoice-logo"/>}<div><h1>{company.name||"اسم الشركة"}</h1><p className="invoice-company-subtitle">{company.address||"نظام المبيعات والمخزون"}</p></div></div><div className="invoice-company-contact">{company.phone&&<p>الهاتف: <bdi>{company.phone}</bdi></p>}{company.email&&<p>البريد: <bdi>{company.email}</bdi></p>}</div></div><div className="invoice-title-box"><span className="invoice-document-label">مستند رسمي</span><h2>{title}</h2><p>تاريخ الطباعة: <bdi>{new Date().toLocaleString("en-GB")}</bdi></p></div></header>
- {kind==="payment"&&<Payment d={data}/>} {kind==="transaction"&&<Transaction d={data}/>} {kind==="transfer"&&<Transfer d={data}/>} {(kind==="customer"||kind==="supplier")&&<Statement d={data}/>} {kind==="cashbox"&&<Cashbox d={data}/>} {kind==="consignment"&&<Consignment d={data}/>} 
- <footer className="invoice-print-footer"><div className="invoice-signatures"><div><span>توقيع المستلم</span><i/></div><div><span>المحاسب</span><i/></div><div><span>الختم والتوقيع</span><i/></div></div><p>{company.invoiceFooter||"تم إنشاء هذا المستند إلكترونيًا."}</p></footer></article></div>
+  movements: CashboxMovement[];
+};
+
+type ConsignmentSettlement = {
+  id?: number;
+  invoice_number?: string | null;
+  supplier_name?: string | null;
+  cashbox_name?: string | null;
+  settlement_date?: string | null;
+  status?: string | null;
+  currency?: string | null;
+  total_sales_amount?: number | string | null;
+  commission_amount?: number | string | null;
+  supplier_share?: number | string | null;
+  exchange_rate?: number | string | null;
+};
+
+type ConsignmentItem = {
+  id: number;
+  product_name?: string | null;
+  sold_quantity?: number | string | null;
+  remaining_quantity?: number | string | null;
+  sales_amount?: number | string | null;
+  remaining_policy?: string | null;
+};
+
+type ConsignmentDocument = {
+  settlement: ConsignmentSettlement;
+  items: ConsignmentItem[];
+};
+
+type DocumentData =
+  | PaymentDocument
+  | TransactionDocument
+  | TransferDocument
+  | StatementDocument
+  | CashboxDocument
+  | ConsignmentDocument;
+
+const n = (value: unknown) =>
+  Number(value ?? 0);
+
+const fmt = (value: unknown) =>
+  n(value).toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+  });
+
+const date = (value: unknown) =>
+  String(value ?? "")
+    .replace("T", " ")
+    .slice(0, 19);
+
+const money = (
+  value: unknown,
+  currency = "SYP",
+) =>
+  `${fmt(value)} ${
+    currency === "SYP" ? "ل.س" : currency
+  }`;
+
+function getTransactionStatusLabel(
+  status?: string | null,
+) {
+  switch (status) {
+    case "active":
+      return "فعالة";
+
+    case "completed":
+      return "مكتملة";
+
+    case "cancelled":
+      return "ملغاة";
+
+    case "reversed":
+      return "معكوسة";
+
+    case "pending":
+      return "قيد الانتظار";
+
+    default:
+      return status ? "غير محددة" : "—";
+  }
 }
-const Meta=({items}:{items:[string,unknown][]})=><section className="invoice-meta">{items.map(([k,v])=><div key={k}><span>{k}</span><strong><bdi>{String(v??"—")}</bdi></strong></div>)}</section>;
-function Payment({d}:{d:any}){const c=d.currency||"SYP";return <><Meta items={[["رقم السند",d.id],["نوع السند",d.payment_type==="sale"?"سند قبض":"سند دفع"],["الطرف",d.party_name||"بيع نقدي"],["رقم الفاتورة",d.invoice_number],["الصندوق",d.cashbox_name],["التاريخ",date(d.payment_date)]]}/><section className="invoice-summary mt-6"><div className="invoice-total"><span>المبلغ الأصلي</span><strong>{money(d.amount,c)}</strong></div>{c!=="SYP"&&<><div><span>سعر الصرف</span><strong>1 {c} = {fmt(d.exchange_rate)} SYP</strong></div><div><span>القيمة الأساسية</span><strong>{money(d.amount_base,"SYP")}</strong></div></>}<div><span>الحالة</span><strong>{d.status||"active"}</strong></div></section><p className="mt-8">البيان: {d.notes||d.reference_number||"دفعة مرتبطة بفاتورة"}</p></>}
-function Transaction({d}:{d:any}){const c=d.cashbox_currency||"SYP";return <><Meta items={[["رقم المستند",d.id],["النوع",d.type==="income"?"إيراد":"مصروف"],["التصنيف",d.category_name],["الصندوق",d.cashbox_name],["التاريخ",date(d.transaction_date)],["المرجع",d.reference_number]]}/><section className="invoice-summary mt-6"><div className="invoice-total"><span>المبلغ</span><strong>{money(d.amount,c)}</strong></div><div><span>الحالة</span><strong>{d.status}</strong></div></section><p className="mt-8">الوصف: {d.description||d.notes||"—"}</p></>}
-function Transfer({d}:{d:any}){const out=d.movements.find((x:any)=>x.direction==="out"), inn=d.movements.find((x:any)=>x.direction==="in"),c=out?.cashbox_currency||"SYP";return <><Meta items={[["رقم التحويل",d.transfer_group_id],["من صندوق",out?.cashbox_name],["إلى صندوق",inn?.cashbox_name],["التاريخ",date(out?.transaction_date)],["العملة",c]]}/><section className="invoice-summary mt-6"><div className="invoice-total"><span>قيمة التحويل</span><strong>{money(out?.amount,c)}</strong></div><div><span>رصيد المصدر قبل/بعد</span><strong>{fmt(out?.balance_before)} / {fmt(out?.balance_after)}</strong></div><div><span>رصيد الوجهة قبل/بعد</span><strong>{fmt(inn?.balance_before)} / {fmt(inn?.balance_after)}</strong></div></section></>}
-function Statement({d}:{d:any}){return <><Meta items={[["الاسم",d.party.name],["الهاتف",d.party.phone],["العنوان",d.party.address],["الرصيد الحالي",money(d.balance,"SYP")]]}/><h3 className="mt-7 mb-3 font-bold">الفواتير</h3><table className="invoice-items"><thead><tr><th>الرقم</th><th>التاريخ</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th><th>الحالة</th></tr></thead><tbody>{d.invoices.map((x:any)=><tr key={x.id}><td>{x.invoice_number}</td><td>{date(x.invoice_date)}</td><td>{money(x.total,x.currency)}</td><td>{money(x.paid_amount,x.currency)}</td><td>{money(x.remaining_amount,x.currency)}</td><td>{x.status}</td></tr>)}</tbody></table><h3 className="mt-7 mb-3 font-bold">الدفعات</h3><table className="invoice-items"><thead><tr><th>الرقم</th><th>التاريخ</th><th>الصندوق</th><th>المبلغ</th><th>الحالة</th></tr></thead><tbody>{d.payments.map((x:any)=><tr key={x.id}><td>{x.id}</td><td>{date(x.payment_date)}</td><td>{x.cashbox_name}</td><td>{money(x.amount,x.currency)}</td><td>{x.status}</td></tr>)}</tbody></table></>}
-function Cashbox({d}:{d:any}){const c=d.cashbox.currency||"SYP";return <><Meta items={[["الصندوق",d.cashbox.name],["العملة",c],["الرصيد الحالي",money(d.cashbox.balance,c)],["عدد الحركات",d.movements.length]]}/><table className="invoice-items mt-7"><thead><tr><th>التاريخ</th><th>النوع</th><th>الاتجاه</th><th>المبلغ</th><th>قبل</th><th>بعد</th></tr></thead><tbody>{d.movements.map((x:any)=><tr key={x.id}><td>{date(x.transaction_date)}</td><td>{x.reference_type}</td><td>{x.direction}</td><td>{money(x.amount,c)}</td><td>{fmt(x.balance_before)}</td><td>{fmt(x.balance_after)}</td></tr>)}</tbody></table></>}
-function Consignment({d}:{d:any}){const s=d.settlement,c=s.currency||"SYP";return <><Meta items={[["رقم التسوية",s.id],["الفاتورة",s.invoice_number],["المورد",s.supplier_name],["الصندوق",s.cashbox_name],["التاريخ",date(s.settlement_date)],["الحالة",s.status]]}/><table className="invoice-items mt-7"><thead><tr><th>المنتج</th><th>المباع</th><th>المتبقي</th><th>قيمة المبيعات</th><th>السياسة</th></tr></thead><tbody>{d.items.map((x:any)=><tr key={x.id}><td>{x.product_name}</td><td>{fmt(x.sold_quantity)}</td><td>{fmt(x.remaining_quantity)}</td><td>{money(x.sales_amount,c)}</td><td>{x.remaining_policy}</td></tr>)}</tbody></table><section className="invoice-summary mt-6"><div><span>إجمالي المبيعات</span><strong>{money(s.total_sales_amount,c)}</strong></div><div><span>العمولة</span><strong>{money(s.commission_amount,c)}</strong></div><div className="invoice-total"><span>حصة المورد</span><strong>{money(s.supplier_share,c)}</strong></div>{c!=="SYP"&&<div><span>القيمة الأساسية</span><strong>{money(n(s.supplier_share)*n(s.exchange_rate),"SYP")}</strong></div>}</section></>}
+
+function getDirectionLabel(
+  direction?: string | null,
+) {
+  switch (direction) {
+    case "in":
+      return "وارد";
+
+    case "out":
+      return "صادر";
+
+    default:
+      return direction ? "غير محدد" : "—";
+  }
+}
+
+function getReferenceTypeLabel(
+  type?: string | null,
+) {
+  switch (type) {
+    case "sale":
+    case "sale_invoice":
+      return "فاتورة بيع";
+
+    case "purchase":
+    case "purchase_invoice":
+      return "فاتورة شراء";
+
+    case "payment":
+      return "دفعة";
+
+    case "transfer":
+      return "تحويل";
+
+    case "transaction":
+      return "معاملة مالية";
+
+    case "consignment":
+    case "consignment_settlement":
+      return "تسوية أمانة";
+
+    default:
+      return type ? "حركة مالية" : "—";
+  }
+}
+
+function getConsignmentStatusLabel(
+  status?: string | null,
+) {
+  switch (status) {
+    case "pending":
+      return "قيد التسوية";
+
+    case "completed":
+    case "settled":
+      return "تمت التسوية";
+
+    case "reversed":
+      return "معكوسة";
+
+    case "cancelled":
+      return "ملغاة";
+
+    default:
+      return status ? "غير محددة" : "—";
+  }
+}
+
+function getRemainingPolicyLabel(
+  policy?: string | null,
+) {
+  switch (policy) {
+    case "return_to_supplier":
+      return "إعادة للمورد";
+
+    case "spoilage":
+      return "تالف";
+
+    case "carry_forward":
+      return "ترحيل للدورة القادمة";
+
+    default:
+      return policy ? "غير محددة" : "—";
+  }
+}
+
+export default function DocumentPrintPage({
+  kind,
+}: {
+  kind: Kind;
+}) {
+  const params = useParams();
+
+  const raw =
+    params.id ||
+    params.customerId ||
+    params.supplierId ||
+    params.purchaseId ||
+    params.groupId ||
+    "";
+
+  const id =
+    kind === "transfer"
+      ? raw
+      : Number(raw);
+
+  const [data, setData] =
+    useState<DocumentData>();
+
+  const [company, setCompany] =
+    useState<CompanySettings>(
+      defaultCompanySettings,
+    );
+
+  const [error, setError] =
+    useState("");
+
+  const [savingPdf, setSavingPdf] =
+    useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const api =
+          window.stockliteApi.printDocuments;
+
+        const loaders: Record<
+          Kind,
+          (
+            documentId: number | string,
+          ) => Promise<unknown>
+        > = {
+          payment: (documentId) =>
+            api.payment(
+              Number(documentId),
+            ),
+
+          transaction: (documentId) =>
+            api.transaction(
+              Number(documentId),
+            ),
+
+          transfer: (documentId) =>
+            api.transfer(
+              String(documentId),
+            ),
+
+          customer: (documentId) =>
+            api.customerStatement(
+              Number(documentId),
+            ),
+
+          supplier: (documentId) =>
+            api.supplierStatement(
+              Number(documentId),
+            ),
+
+          cashbox: (documentId) =>
+            api.cashboxStatement(
+              Number(documentId),
+            ),
+
+          consignment: (documentId) =>
+            api.consignment(
+              Number(documentId),
+            ),
+        };
+
+        const loader = loaders[kind];
+
+        const [
+          documentData,
+          companyData,
+        ] = await Promise.all([
+          loader(id),
+          settingsService.loadCompany(),
+        ]);
+
+        if (!cancelled) {
+          setData(
+            documentData as DocumentData,
+          );
+
+          setCompany(companyData);
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          setError(
+            error instanceof Error
+              ? error.message
+              : "تعذر تجهيز المستند",
+          );
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, id]);
+
+  const title = useMemo(
+    () =>
+      ({
+        payment: "سند مالي",
+        transaction:
+          "مستند معاملة مالية",
+        transfer:
+          "سند تحويل بين الصناديق",
+        customer:
+          "كشف حساب عميل",
+        supplier:
+          "كشف حساب مورد",
+        cashbox:
+          "كشف حركة صندوق",
+        consignment:
+          "تسوية أمانة",
+      })[kind],
+    [kind],
+  );
+
+  if (error) {
+    return (
+      <EmptyState
+        title="تعذر تجهيز المستند"
+        description={error}
+      />
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="p-12 text-center">
+        جاري تجهيز الطباعة...
+      </div>
+    );
+  }
+
+  const print = () =>
+    window.print();
+
+  const savePdf = async () => {
+    try {
+      setSavingPdf(true);
+
+      await window.stockliteApi.system.saveCurrentPageAsPdf(
+        {
+          fileName: `${title} ${raw}`,
+        },
+      );
+    } catch (error: unknown) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "تعذر حفظ ملف PDF",
+      );
+    } finally {
+      setSavingPdf(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="no-print">
+        <PageHeader
+          title={title}
+          description="مستند موحّد A4 وRTL من البيانات الفعلية للنظام."
+          actions={
+            <div className="flex gap-2">
+              <BackButton />
+
+              <Button
+                variant="secondary"
+                startIcon={
+                  <Printer size={17} />
+                }
+                onClick={print}
+              >
+                طباعة
+              </Button>
+
+              <Button
+                startIcon={
+                  <FileDown size={17} />
+                }
+                disabled={savingPdf}
+                onClick={() =>
+                  void savePdf()
+                }
+              >
+                {savingPdf
+                  ? "جاري الحفظ..."
+                  : "حفظ PDF"}
+              </Button>
+            </div>
+          }
+        />
+      </div>
+
+      <article
+        className="invoice-print-sheet"
+        dir="rtl"
+      >
+        <header className="invoice-print-header">
+          <div className="invoice-company-block">
+            <div className="invoice-company-identity">
+              {company.logo && (
+                <img
+                  src={company.logo}
+                  className="invoice-logo"
+                  alt="شعار الشركة"
+                />
+              )}
+
+              <div>
+                <h1>
+                  {company.name ||
+                    "اسم الشركة"}
+                </h1>
+
+                <p className="invoice-company-subtitle">
+                  {company.address ||
+                    "نظام المبيعات والمخزون"}
+                </p>
+              </div>
+            </div>
+
+            <div className="invoice-company-contact">
+              {company.phone && (
+                <p>
+                  الهاتف:{" "}
+                  <bdi>
+                    {company.phone}
+                  </bdi>
+                </p>
+              )}
+
+              {company.email && (
+                <p>
+                  البريد:{" "}
+                  <bdi>
+                    {company.email}
+                  </bdi>
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="invoice-title-box">
+            <span className="invoice-document-label">
+              مستند رسمي
+            </span>
+
+            <h2>{title}</h2>
+
+            <p>
+              تاريخ الطباعة:{" "}
+              <bdi>
+                {new Date().toLocaleString(
+                  "en-GB",
+                )}
+              </bdi>
+            </p>
+          </div>
+        </header>
+
+        {kind === "payment" && (
+          <Payment
+            d={
+              data as PaymentDocument
+            }
+          />
+        )}
+
+        {kind === "transaction" && (
+          <Transaction
+            d={
+              data as TransactionDocument
+            }
+          />
+        )}
+
+        {kind === "transfer" && (
+          <Transfer
+            d={
+              data as TransferDocument
+            }
+          />
+        )}
+
+        {(kind === "customer" ||
+          kind === "supplier") && (
+          <Statement
+            d={
+              data as StatementDocument
+            }
+            kind={kind}
+          />
+        )}
+
+        {kind === "cashbox" && (
+          <Cashbox
+            d={
+              data as CashboxDocument
+            }
+          />
+        )}
+
+        {kind === "consignment" && (
+          <Consignment
+            d={
+              data as ConsignmentDocument
+            }
+          />
+        )}
+
+        <footer className="invoice-print-footer">
+          <div className="invoice-signatures">
+            <div>
+              <span>
+                توقيع المستلم
+              </span>
+              <i />
+            </div>
+
+            <div>
+              <span>
+                المحاسب
+              </span>
+              <i />
+            </div>
+
+            <div>
+              <span>
+                الختم والتوقيع
+              </span>
+              <i />
+            </div>
+          </div>
+
+          <p>
+            {company.invoiceFooter ||
+              "تم إنشاء هذا المستند إلكترونيًا."}
+          </p>
+        </footer>
+      </article>
+    </div>
+  );
+}
+
+const Meta = ({
+  items,
+}: {
+  items: [string, unknown][];
+}) => (
+  <section className="invoice-meta">
+    {items.map(([key, value]) => (
+      <div key={key}>
+        <span>{key}</span>
+
+        <strong>
+          <bdi>
+            {String(
+              value ?? "—",
+            )}
+          </bdi>
+        </strong>
+      </div>
+    ))}
+  </section>
+);
+
+function Payment({
+  d,
+}: {
+  d: PaymentDocument;
+}) {
+  const currency =
+    d.currency || "SYP";
+
+  return (
+    <>
+      <Meta
+        items={[
+          ["رقم السند", d.id],
+
+          [
+            "نوع السند",
+            d.payment_type ===
+            "sale"
+              ? "سند قبض"
+              : "سند دفع",
+          ],
+
+          [
+            "الطرف",
+            d.party_name ||
+              "بيع نقدي",
+          ],
+
+          [
+            "رقم الفاتورة",
+            d.invoice_number,
+          ],
+
+          [
+            "الصندوق",
+            d.cashbox_name,
+          ],
+
+          [
+            "التاريخ",
+            date(
+              d.payment_date,
+            ),
+          ],
+        ]}
+      />
+
+      <section className="invoice-summary mt-6">
+        <div className="invoice-total">
+          <span>
+            المبلغ الأصلي
+          </span>
+
+          <strong>
+            {money(
+              d.amount,
+              currency,
+            )}
+          </strong>
+        </div>
+
+        {currency !== "SYP" && (
+          <>
+            <div>
+              <span>
+                سعر الصرف
+              </span>
+
+              <strong>
+                1 {currency} ={" "}
+                {fmt(
+                  d.exchange_rate,
+                )}{" "}
+                ل.س
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                القيمة الأساسية
+              </span>
+
+              <strong>
+                {money(
+                  d.amount_base,
+                  "SYP",
+                )}
+              </strong>
+            </div>
+          </>
+        )}
+
+        <div>
+          <span>الحالة</span>
+
+          <strong>
+            {getPaymentStatusLabel(
+              d.status ||
+                "active",
+            )}
+          </strong>
+        </div>
+      </section>
+
+      <p className="mt-8">
+        البيان:{" "}
+        {d.notes ||
+          d.reference_number ||
+          "دفعة مرتبطة بفاتورة"}
+      </p>
+    </>
+  );
+}
+
+function Transaction({
+  d,
+}: {
+  d: TransactionDocument;
+}) {
+  const currency =
+    d.cashbox_currency ||
+    "SYP";
+
+  return (
+    <>
+      <Meta
+        items={[
+          [
+            "رقم المستند",
+            d.id,
+          ],
+
+          [
+            "النوع",
+            d.type === "income"
+              ? "إيراد"
+              : "مصروف",
+          ],
+
+          [
+            "التصنيف",
+            d.category_name,
+          ],
+
+          [
+            "الصندوق",
+            d.cashbox_name,
+          ],
+
+          [
+            "التاريخ",
+            date(
+              d.transaction_date,
+            ),
+          ],
+
+          [
+            "المرجع",
+            d.reference_number,
+          ],
+        ]}
+      />
+
+      <section className="invoice-summary mt-6">
+        <div className="invoice-total">
+          <span>المبلغ</span>
+
+          <strong>
+            {money(
+              d.amount,
+              currency,
+            )}
+          </strong>
+        </div>
+
+        <div>
+          <span>الحالة</span>
+
+          <strong>
+            {getTransactionStatusLabel(
+              d.status,
+            )}
+          </strong>
+        </div>
+      </section>
+
+      <p className="mt-8">
+        الوصف:{" "}
+        {d.description ||
+          d.notes ||
+          "—"}
+      </p>
+    </>
+  );
+}
+
+function Transfer({
+  d,
+}: {
+  d: TransferDocument;
+}) {
+  const outgoing =
+    d.movements.find(
+      (movement) =>
+        movement.direction ===
+        "out",
+    );
+
+  const incoming =
+    d.movements.find(
+      (movement) =>
+        movement.direction ===
+        "in",
+    );
+
+  const currency =
+    outgoing?.cashbox_currency ||
+    "SYP";
+
+  return (
+    <>
+      <Meta
+        items={[
+          [
+            "رقم التحويل",
+            d.transfer_group_id,
+          ],
+
+          [
+            "من صندوق",
+            outgoing?.cashbox_name,
+          ],
+
+          [
+            "إلى صندوق",
+            incoming?.cashbox_name,
+          ],
+
+          [
+            "التاريخ",
+            date(
+              outgoing?.transaction_date,
+            ),
+          ],
+
+          [
+            "العملة",
+            currency === "SYP"
+              ? "ل.س"
+              : currency,
+          ],
+        ]}
+      />
+
+      <section className="invoice-summary mt-6">
+        <div className="invoice-total">
+          <span>
+            قيمة التحويل
+          </span>
+
+          <strong>
+            {money(
+              outgoing?.amount,
+              currency,
+            )}
+          </strong>
+        </div>
+
+        <div>
+          <span>
+            رصيد المصدر قبل/بعد
+          </span>
+
+          <strong>
+            {fmt(
+              outgoing?.balance_before,
+            )}{" "}
+            /{" "}
+            {fmt(
+              outgoing?.balance_after,
+            )}
+          </strong>
+        </div>
+
+        <div>
+          <span>
+            رصيد الوجهة قبل/بعد
+          </span>
+
+          <strong>
+            {fmt(
+              incoming?.balance_before,
+            )}{" "}
+            /{" "}
+            {fmt(
+              incoming?.balance_after,
+            )}
+          </strong>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function Statement({
+  d,
+  kind,
+}: {
+  d: StatementDocument;
+  kind: "customer" | "supplier";
+}) {
+  const getInvoiceStatus =
+    kind === "customer"
+      ? getSaleStatusLabel
+      : getPurchaseStatusLabel;
+
+  return (
+    <>
+      <Meta
+        items={[
+          [
+            "الاسم",
+            d.party.name,
+          ],
+
+          [
+            "الهاتف",
+            d.party.phone,
+          ],
+
+          [
+            "العنوان",
+            d.party.address,
+          ],
+
+          [
+            "الرصيد الحالي",
+            money(
+              d.balance,
+              "SYP",
+            ),
+          ],
+        ]}
+      />
+
+      <h3 className="mt-7 mb-3 font-bold">
+        الفواتير
+      </h3>
+
+      <table className="invoice-items">
+        <thead>
+          <tr>
+            <th>الرقم</th>
+            <th>التاريخ</th>
+            <th>الإجمالي</th>
+            <th>المدفوع</th>
+            <th>المتبقي</th>
+            <th>الحالة</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {d.invoices.map(
+            (invoice) => (
+              <tr key={invoice.id}>
+                <td>
+                  {invoice.invoice_number ||
+                    `#${invoice.id}`}
+                </td>
+
+                <td>
+                  {date(
+                    invoice.invoice_date,
+                  )}
+                </td>
+
+                <td>
+                  {money(
+                    invoice.total,
+                    invoice.currency ||
+                      "SYP",
+                  )}
+                </td>
+
+                <td>
+                  {money(
+                    invoice.paid_amount,
+                    invoice.currency ||
+                      "SYP",
+                  )}
+                </td>
+
+                <td>
+                  {money(
+                    invoice.remaining_amount,
+                    invoice.currency ||
+                      "SYP",
+                  )}
+                </td>
+
+                <td>
+                  {getInvoiceStatus(
+                    invoice.status,
+                  )}
+                </td>
+              </tr>
+            ),
+          )}
+        </tbody>
+      </table>
+
+      <h3 className="mt-7 mb-3 font-bold">
+        الدفعات
+      </h3>
+
+      <table className="invoice-items">
+        <thead>
+          <tr>
+            <th>الرقم</th>
+            <th>التاريخ</th>
+            <th>الصندوق</th>
+            <th>المبلغ</th>
+            <th>الحالة</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {d.payments.map(
+            (payment) => (
+              <tr key={payment.id}>
+                <td>
+                  {payment.id}
+                </td>
+
+                <td>
+                  {date(
+                    payment.payment_date,
+                  )}
+                </td>
+
+                <td>
+                  {payment.cashbox_name ||
+                    "—"}
+                </td>
+
+                <td>
+                  {money(
+                    payment.amount,
+                    payment.currency ||
+                      "SYP",
+                  )}
+                </td>
+
+                <td>
+                  {getPaymentStatusLabel(
+                    payment.status,
+                  )}
+                </td>
+              </tr>
+            ),
+          )}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+function Cashbox({
+  d,
+}: {
+  d: CashboxDocument;
+}) {
+  const currency =
+    d.cashbox.currency ||
+    "SYP";
+
+  return (
+    <>
+      <Meta
+        items={[
+          [
+            "الصندوق",
+            d.cashbox.name,
+          ],
+
+          [
+            "العملة",
+            currency === "SYP"
+              ? "ل.س"
+              : currency,
+          ],
+
+          [
+            "الرصيد الحالي",
+            money(
+              d.cashbox.balance,
+              currency,
+            ),
+          ],
+
+          [
+            "عدد الحركات",
+            d.movements.length,
+          ],
+        ]}
+      />
+
+      <table className="invoice-items mt-7">
+        <thead>
+          <tr>
+            <th>التاريخ</th>
+            <th>النوع</th>
+            <th>الاتجاه</th>
+            <th>المبلغ</th>
+            <th>قبل</th>
+            <th>بعد</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {d.movements.map(
+            (movement) => (
+              <tr key={movement.id}>
+                <td>
+                  {date(
+                    movement.transaction_date,
+                  )}
+                </td>
+
+                <td>
+                  {getReferenceTypeLabel(
+                    movement.reference_type,
+                  )}
+                </td>
+
+                <td>
+                  {getDirectionLabel(
+                    movement.direction,
+                  )}
+                </td>
+
+                <td>
+                  {money(
+                    movement.amount,
+                    currency,
+                  )}
+                </td>
+
+                <td>
+                  {fmt(
+                    movement.balance_before,
+                  )}
+                </td>
+
+                <td>
+                  {fmt(
+                    movement.balance_after,
+                  )}
+                </td>
+              </tr>
+            ),
+          )}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+function Consignment({
+  d,
+}: {
+  d: ConsignmentDocument;
+}) {
+  const settlement =
+    d.settlement;
+
+  const currency =
+    settlement.currency ||
+    "SYP";
+
+  return (
+    <>
+      <Meta
+        items={[
+          [
+            "رقم التسوية",
+            settlement.id,
+          ],
+
+          [
+            "الفاتورة",
+            settlement.invoice_number,
+          ],
+
+          [
+            "المورد",
+            settlement.supplier_name,
+          ],
+
+          [
+            "الصندوق",
+            settlement.cashbox_name,
+          ],
+
+          [
+            "التاريخ",
+            date(
+              settlement.settlement_date,
+            ),
+          ],
+
+          [
+            "الحالة",
+            getConsignmentStatusLabel(
+              settlement.status,
+            ),
+          ],
+        ]}
+      />
+
+      <table className="invoice-items mt-7">
+        <thead>
+          <tr>
+            <th>المنتج</th>
+            <th>المباع</th>
+            <th>المتبقي</th>
+            <th>
+              قيمة المبيعات
+            </th>
+            <th>
+              معالجة المتبقي
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {d.items.map(
+            (item) => (
+              <tr key={item.id}>
+                <td>
+                  {item.product_name ||
+                    "—"}
+                </td>
+
+                <td>
+                  {fmt(
+                    item.sold_quantity,
+                  )}
+                </td>
+
+                <td>
+                  {fmt(
+                    item.remaining_quantity,
+                  )}
+                </td>
+
+                <td>
+                  {money(
+                    item.sales_amount,
+                    currency,
+                  )}
+                </td>
+
+                <td>
+                  {getRemainingPolicyLabel(
+                    item.remaining_policy,
+                  )}
+                </td>
+              </tr>
+            ),
+          )}
+        </tbody>
+      </table>
+
+      <section className="invoice-summary mt-6">
+        <div>
+          <span>
+            إجمالي المبيعات
+          </span>
+
+          <strong>
+            {money(
+              settlement.total_sales_amount,
+              currency,
+            )}
+          </strong>
+        </div>
+
+        <div>
+          <span>
+            العمولة
+          </span>
+
+          <strong>
+            {money(
+              settlement.commission_amount,
+              currency,
+            )}
+          </strong>
+        </div>
+
+        <div className="invoice-total">
+          <span>
+            حصة المورد
+          </span>
+
+          <strong>
+            {money(
+              settlement.supplier_share,
+              currency,
+            )}
+          </strong>
+        </div>
+
+        {currency !== "SYP" && (
+          <div>
+            <span>
+              القيمة الأساسية
+            </span>
+
+            <strong>
+              {money(
+                n(
+                  settlement.supplier_share,
+                ) *
+                  n(
+                    settlement.exchange_rate,
+                  ),
+                "SYP",
+              )}
+            </strong>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}

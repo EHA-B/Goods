@@ -1,20 +1,37 @@
 "use strict";
 const electron = require("electron");
 async function invokeApi(channel, ...args) {
-  const response = await electron.ipcRenderer.invoke(
-    channel,
-    ...args
-  );
-  if (!response || response.success !== true) {
+  try {
+    const response = await electron.ipcRenderer.invoke(
+      channel,
+      ...args
+    );
+    if (response && response.success === true) {
+      return response.data;
+    }
     const payload = response == null ? void 0 : response.error;
     const error = new Error(
       (payload == null ? void 0 : payload.message) || "حدث خطأ غير متوقع أثناء تنفيذ العملية."
     );
+    error.name = "StockLiteApiError";
     error.code = (payload == null ? void 0 : payload.code) || "UNKNOWN_ERROR";
     error.details = payload == null ? void 0 : payload.details;
+    error.field = payload == null ? void 0 : payload.field;
     throw error;
+  } catch (error) {
+    const current = error;
+    if ((current == null ? void 0 : current.name) === "StockLiteApiError") {
+      throw current;
+    }
+    const wrapped = new Error(
+      (current == null ? void 0 : current.message) || "تعذر التواصل مع خدمة التطبيق الداخلية."
+    );
+    wrapped.name = "StockLiteApiError";
+    wrapped.code = (current == null ? void 0 : current.code) || "IPC_ERROR";
+    wrapped.details = current == null ? void 0 : current.details;
+    wrapped.field = current == null ? void 0 : current.field;
+    throw wrapped;
   }
-  return response.data;
 }
 const crudApi = (entity, methodNames) => ({
   create: (input) => invokeApi(`api:${entity}:${methodNames.create}`, input),

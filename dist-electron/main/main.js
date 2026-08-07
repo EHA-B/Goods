@@ -18,10 +18,41 @@ const require$1 = createRequire(import.meta.url);
 const __filename$1 = fileURLToPath(import.meta.url);
 const __dirname$2 = path.dirname(__filename$1);
 function success(data) {
-  return { success: true, data };
+  return {
+    success: true,
+    data
+  };
+}
+function normalizeBackendError(code, message, details) {
+  const originalCode = String(code || "").trim().toUpperCase();
+  const originalMessage = String(message || "").trim();
+  let normalizedCode = originalCode || "UNKNOWN_ERROR";
+  if (normalizedCode === "SQLITE_CONSTRAINT_FOREIGNKEY" || normalizedCode === "SQLITE_CONSTRAINT" || /foreign key constraint failed/i.test(originalMessage) || /foreign key constraint/i.test(originalMessage)) {
+    normalizedCode = "HAS_DEPENDENCIES";
+  }
+  if (normalizedCode === "SQLITE_CONSTRAINT_UNIQUE" || /unique constraint failed/i.test(originalMessage)) {
+    normalizedCode = "DUPLICATE_ENTRY";
+  }
+  if (normalizedCode === "SQLITE_CONSTRAINT_NOTNULL" || normalizedCode === "SQLITE_CONSTRAINT_CHECK" || /not null constraint failed/i.test(originalMessage) || /check constraint failed/i.test(originalMessage)) {
+    normalizedCode = "VALIDATION_ERROR";
+  }
+  if (normalizedCode === "SQLITE_BUSY" || /database is locked/i.test(originalMessage)) {
+    normalizedCode = "DATABASE_BUSY";
+  }
+  if (normalizedCode === "SQLITE_READONLY" || /readonly database/i.test(originalMessage) || /attempt to write a readonly database/i.test(originalMessage)) {
+    normalizedCode = "DATABASE_READONLY";
+  }
+  return {
+    code: normalizedCode,
+    message: originalMessage || "Unknown application error",
+    details
+  };
 }
 function failure(code, message, details) {
-  return { success: false, error: { code, message, details } };
+  return {
+    success: false,
+    error: normalizeBackendError(code, message, details)
+  };
 }
 const authController = require$1(path.join(__dirname$2, "../../src/controllers", "authController.js"));
 const activityLogController = require$1(path.join(__dirname$2, "../../src/controllers", "activityLogController.js"));

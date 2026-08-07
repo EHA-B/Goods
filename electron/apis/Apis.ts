@@ -11,10 +11,76 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function success(data) {
-  return { success: true, data };
+  return {
+    success: true,
+    data,
+  };
 }
+
+function normalizeBackendError(code, message, details) {
+  const originalCode = String(code || '').trim().toUpperCase();
+  const originalMessage = String(message || '').trim();
+
+  let normalizedCode = originalCode || 'UNKNOWN_ERROR';
+
+  // Foreign-key violations usually mean the record is still referenced
+  // by invoices, payments, stock movements, batches, or other linked data.
+  if (
+    normalizedCode === 'SQLITE_CONSTRAINT_FOREIGNKEY' ||
+    normalizedCode === 'SQLITE_CONSTRAINT' ||
+    /foreign key constraint failed/i.test(originalMessage) ||
+    /foreign key constraint/i.test(originalMessage)
+  ) {
+    normalizedCode = 'HAS_DEPENDENCIES';
+  }
+
+  // Unique constraint violations.
+  if (
+    normalizedCode === 'SQLITE_CONSTRAINT_UNIQUE' ||
+    /unique constraint failed/i.test(originalMessage)
+  ) {
+    normalizedCode = 'DUPLICATE_ENTRY';
+  }
+
+  // Validation-related SQLite constraints.
+  if (
+    normalizedCode === 'SQLITE_CONSTRAINT_NOTNULL' ||
+    normalizedCode === 'SQLITE_CONSTRAINT_CHECK' ||
+    /not null constraint failed/i.test(originalMessage) ||
+    /check constraint failed/i.test(originalMessage)
+  ) {
+    normalizedCode = 'VALIDATION_ERROR';
+  }
+
+  // SQLite busy / locked database.
+  if (
+    normalizedCode === 'SQLITE_BUSY' ||
+    /database is locked/i.test(originalMessage)
+  ) {
+    normalizedCode = 'DATABASE_BUSY';
+  }
+
+  // Read-only database.
+  if (
+    normalizedCode === 'SQLITE_READONLY' ||
+    /readonly database/i.test(originalMessage) ||
+    /attempt to write a readonly database/i.test(originalMessage)
+  ) {
+    normalizedCode = 'DATABASE_READONLY';
+  }
+
+  return {
+    code: normalizedCode,
+    message: originalMessage || 'Unknown application error',
+    details,
+  };
+}
+
 function failure(code, message, details) {
-  return { success: false, error: { code, message, details } };
+  return {
+    success: false,
+    error: normalizeBackendError(code, message, details),
+  };
 }
 
 const authController = require(path.join(__dirname, '../../src/controllers', 'authController.js'));
@@ -1719,4 +1785,3 @@ ipcMain.handle('api:user:deleteUser', async (_event, id) => {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
   }
 });
-

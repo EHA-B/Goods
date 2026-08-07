@@ -84,6 +84,7 @@ const internallyAuditedChannels = /* @__PURE__ */ new Set([
   "api:payment:recordSalePayment",
   "api:payment:reverseSalePayment",
   "api:purchase:createFull",
+  "api:purchase:addItems",
   "api:purchase:cancel",
   "api:payment:recordPurchasePayment",
   "api:payment:reversePurchasePayment",
@@ -526,6 +527,14 @@ ipcMain.handle("api:product:getProductWithStock", async (_event, id) => {
 ipcMain.handle("api:purchase:createFull", async (_event, input) => {
   try {
     const result = await purchaseInvoiceController.createFullPurchaseInvoice(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:purchase:addItems", async (_event, invoiceId, items) => {
+  try {
+    const result = await purchaseInvoiceController.addItemsToPurchaseInvoice(invoiceId, items);
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);

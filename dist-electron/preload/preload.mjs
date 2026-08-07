@@ -132,6 +132,7 @@ const stockliteApi = {
     list: (filters, pagination) => invokeApi("api:purchase:list", filters, pagination),
     getDetails: (id) => invokeApi("api:purchase:getDetails", id),
     createFull: (input) => invokeApi("api:purchase:createFull", input),
+    addItems: (invoiceId, items) => invokeApi("api:purchase:addItems", invoiceId, items),
     cancel: (id, reason) => invokeApi("api:purchase:cancel", id, reason),
     recordPayment: (input) => invokeApi("api:purchase:recordPayment", input),
     reversePayment: (paymentId, reason) => invokeApi("api:purchase:reversePayment", paymentId, reason),

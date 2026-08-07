@@ -213,6 +213,8 @@ const stockliteApi = {
       invokeApi("api:purchase:getDetails", id),
     createFull: (input: unknown) =>
       invokeApi("api:purchase:createFull", input),
+    addItems: (invoiceId: number, items: unknown) =>
+      invokeApi("api:purchase:addItems", invoiceId, items),
     cancel: (id: number, reason: string) =>
       invokeApi("api:purchase:cancel", id, reason),
     recordPayment: (input: unknown) =>

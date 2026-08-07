@@ -97,7 +97,7 @@ ipcMain.handle('api:auth:changePassword', async (_event, input) => {
 
 const internallyAuditedChannels = new Set([
   'api:saleInvoice:createSaleProcess','api:saleInvoice:cancelSaleInvoice','api:payment:recordSalePayment','api:payment:reverseSalePayment',
-  'api:purchase:createFull','api:purchase:cancel','api:payment:recordPurchasePayment','api:payment:reversePurchasePayment',
+  'api:purchase:createFull','api:purchase:addItems','api:purchase:cancel','api:payment:recordPurchasePayment','api:payment:reversePurchasePayment',
   'api:purchase:closeCommission','api:purchase:reverseCommissionSettlement',
 ]);
 function auditInfoForChannel(channel, args, data) {
@@ -665,6 +665,19 @@ ipcMain.handle('api:product:getProductWithStock', async (_event, id) => {
 ipcMain.handle('api:purchase:createFull', async (_event, input) => {
   try {
     const result = await purchaseInvoiceController.createFullPurchaseInvoice(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:purchase:addItems
+ * Description: Appends new items to an existing purchase invoice and calculates related changes.
+ */
+ipcMain.handle('api:purchase:addItems', async (_event, invoiceId, items) => {
+  try {
+    const result = await purchaseInvoiceController.addItemsToPurchaseInvoice(invoiceId, items);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);

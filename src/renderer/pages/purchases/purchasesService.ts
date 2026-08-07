@@ -10,6 +10,8 @@ export const purchasesService = {
   getDetails: (id: number) => window.stockliteApi.purchases.getDetails(id),
   createFull: (input: CreatePurchaseInvoiceInput) =>
     window.stockliteApi.purchases.createFull(input),
+  addItems: (invoiceId: number, items: unknown) =>
+    window.stockliteApi.purchases.addItems(invoiceId, items),
   cancel: (id: number, reason: string) =>
     window.stockliteApi.purchases.cancel(id, reason),
   deleteDraft: (id: number) => window.stockliteApi.purchases.deleteDraft(id),

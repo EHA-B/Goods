@@ -253,6 +253,146 @@ class PurchaseInvoiceController {
         }
     }
 
+    // ─── addItemsToPurchaseInvoice ─────────────────────────────────────────
+
+    async addItemsToPurchaseInvoice(invoiceId, items) {
+        if (!invoiceId) throw { code: 'VALIDATION_ERROR', message: 'ID الفاتورة مطلوب' };
+        if (!Array.isArray(items) || items.length === 0) throw { code: 'PURCHASE_ITEM_INVALID', message: 'يجب إضافة صنف واحد على الأقل' };
+
+        const db = await dbmanager.init();
+
+        try {
+            await dbRun(db, 'BEGIN TRANSACTION');
+
+            // 1. Validate invoice
+            const invoice = await dbGet(db, 'SELECT * FROM purchase_invoices WHERE id = ?', [invoiceId]);
+            if (!invoice) throw { code: 'NOT_FOUND', message: 'فاتورة الشراء غير موجودة' };
+            if (invoice.status === 'cancelled') throw { code: 'PURCHASE_ALREADY_CANCELLED', message: 'لا يمكن التعديل على فاتورة ملغاة' };
+            if (invoice.invoice_type === 'consignment' && invoice.settlement_status === 'settled') {
+                throw { code: 'CONSIGNMENT_ALREADY_CLOSED', message: 'لا يمكن إضافة أصناف لفاتورة أمانة تم إغلاقها' };
+            }
+
+            // 2. Validate supplier
+            const supplier = await dbGet(db, 'SELECT * FROM suppliers WHERE id = ?', [invoice.supplier_id]);
+            if (!supplier) throw { code: 'SUPPLIER_NOT_FOUND', message: 'المورد غير موجود' };
+            if (!supplier.isActive) throw { code: 'INACTIVE_SUPPLIER', message: 'المورد غير نشط' };
+
+            // 3. Map new items to common shape
+            const mappedItems = items.map((item, index) => ({
+                ...item,
+                product_id: item.product_id,
+                quantity: Number(item.quantity ?? 0),
+                price: Number(item.purchase_price ?? item.unit_price ?? item.price ?? 0),
+                purchase_price: Number(item.purchase_price ?? item.unit_price ?? item.price ?? 0),
+            }));
+
+            // 4. Validate products and prevent ambiguous duplicate product rows in this batch.
+            const seenProductIds = new Set();
+            for (let i = 0; i < mappedItems.length; i++) {
+                const productId = Number(mappedItems[i].product_id);
+                if (seenProductIds.has(productId)) {
+                    throw { code: 'DUPLICATE_PURCHASE_PRODUCT', message: `المنتج في السطر ${i + 1} مكرر. اجمع الكمية في سطر واحد.` };
+                }
+                seenProductIds.add(productId);
+                const product = await dbGet(db, 'SELECT id, name, isActive FROM products WHERE id = ?', [productId]);
+                if (!product) throw { code: 'PRODUCT_NOT_FOUND', message: `المنتج في السطر ${i + 1} غير موجود` };
+                if (!product.isActive) throw { code: 'INACTIVE_PRODUCT', message: `المنتج ${product.name} غير نشط` };
+            }
+
+            // 5. Calculate totals for new items
+            const { normalizedItems, subtotal: newItemsSubtotal, totalAmount: newItemsTotal } = calculateInvoiceTotals(mappedItems, 0);
+
+            const invoiceCurrency = normalizeCurrency(invoice.currency);
+            const invoiceRate = normalizeExchangeRate(invoiceCurrency, invoice.exchange_rate);
+
+            // 6. Insert items + create stock batches + stock movements
+            for (let i = 0; i < normalizedItems.length; i++) {
+                const item = normalizedItems[i];
+
+                // Validate item received_date
+                const receivedDate = validateDate(item.received_date ?? invoice.invoice_date, `item[${i}].received_date`);
+                const expiryDate = item.expiry_date ? validateDate(item.expiry_date, `item[${i}].expiry_date`) : null;
+                if (expiryDate && expiryDate < receivedDate) {
+                    throw { code: 'VALIDATION_ERROR', message: `الصنف رقم ${i + 1}: تاريخ الانتهاء لا يمكن أن يسبق تاريخ الاستلام` };
+                }
+
+                // Insert purchase invoice item
+                await dbRun(db,
+                    `INSERT INTO purchase_invoice_items
+                       (purchase_invoice_id, product_id, quantity, unit_price, line_total, notes, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+                    [invoiceId, item.product_id, item.quantity, item.purchase_price, item.lineTotal, item.notes ?? null]
+                );
+
+                // Generate batch code if not provided
+                // Try to format it based on invoice_number and some suffix
+                // To avoid collisions we will use current timestamp or query max stock batches
+                let batchCode = item.batch_code?.trim();
+                if (!batchCode) {
+                    const cntRes = await dbGet(db, 'SELECT COUNT(*) as c FROM stock_batches WHERE purchase_invoice_id = ?', [invoiceId]);
+                    batchCode = `${invoice.invoice_number}-B${String(Number(cntRes.c) + 1).padStart(2, '0')}`;
+                }
+                // Check batch code uniqueness if provided
+                if (batchCode) {
+                    const dupBatch = await dbGet(db, 'SELECT id FROM stock_batches WHERE batch_code = ?', [batchCode]);
+                    if (dupBatch) throw { code: 'DUPLICATE_BATCH_CODE', message: `كود الدفعة ${batchCode} مستخدم مسبقًا` };
+                }
+
+                // Insert stock batch
+                const { lastID: batchId } = await dbRun(db,
+                    `INSERT INTO stock_batches
+                       (product_id, supplier_id, purchase_invoice_id, batch_code,
+                        quantity, remaining_quantity, purchase_price, purchase_currency,
+                        purchase_exchange_rate, purchase_price_base, received_date,
+                        expiry_date, notes, isActive, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
+                    [item.product_id, invoice.supplier_id, invoiceId, batchCode,
+                     item.quantity, item.quantity, item.purchase_price, invoiceCurrency,
+                     invoiceRate, toBaseAmount(item.purchase_price, invoiceRate), receivedDate,
+                     expiryDate, item.batch_notes ?? null]
+                );
+
+                // Create stock movement (purchase_in)
+                await dbRun(db,
+                    `INSERT INTO stock_movements
+                       (product_id, stock_batch_id, movement_type, quantity, quantity_before, quantity_after,
+                        reference_type, reference_id, reference_number, supplier_id, notes, created_at)
+                     VALUES (?, ?, 'purchase_in', ?, 0, ?, 'purchase_invoice', ?, ?, ?, ?, datetime('now'))`,
+                    [item.product_id, batchId, item.quantity, item.quantity, invoiceId, invoice.invoice_number, invoice.supplier_id, `إضافة لفاتورة شراء ${invoice.invoice_number}`]
+                );
+            }
+
+            // 7. Increase supplier payable balance by new items total
+            const supplierBaseAmount = toBaseAmount(newItemsTotal, invoiceRate);
+            await dbRun(db,
+                `UPDATE suppliers SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`,
+                [supplierBaseAmount, invoice.supplier_id]
+            );
+
+            // 8. Update invoice paid/remaining/status
+            const newSubtotal = normalizeAmount(invoice.subtotal + newItemsSubtotal);
+            const newTotal = normalizeAmount(invoice.total + newItemsTotal);
+            // Re-evaluate payment status
+            const { remainingAmount, status: finalStatus } = calculatePaymentState(newTotal, invoice.paid_amount);
+
+            await dbRun(db,
+                `UPDATE purchase_invoices SET subtotal = ?, total = ?, remaining_amount = ?, status = ?, updated_at = datetime('now') WHERE id = ?`,
+                [newSubtotal, newTotal, remainingAmount, finalStatus, invoiceId]
+            );
+
+            // 9. Activity log
+            await logActivity(db, 'purchase_items_added', 'purchase_invoices', invoiceId, { invoice_number: invoice.invoice_number, added_items: normalizedItems.length, added_total: newItemsTotal });
+
+            await dbRun(db, 'COMMIT');
+
+            return this.getPurchaseInvoiceDetails(invoiceId);
+
+        } catch (err) {
+            await new Promise((res) => db.run('ROLLBACK', () => res()));
+            throw err;
+        }
+    }
+
     // ─── getPurchaseInvoiceDetails ─────────────────────────────────────────
 
     async getPurchaseInvoiceDetails(id) {
@@ -264,18 +404,42 @@ class PurchaseInvoiceController {
 
         const supplier = await dbGet(db, 'SELECT * FROM suppliers WHERE id = ?', [invoice.supplier_id]);
 
-        const items = await dbAll(db,
+        const invoiceItems = await dbAll(db,
             `SELECT pii.*,
-                    p.name as product_name, p.unit as product_unit,
-                    sb.batch_code, sb.remaining_quantity, sb.received_date as batch_received_date,
-                    sb.expiry_date as batch_expiry_date, sb.isActive as batch_active, sb.id as stock_batch_id
+                    p.name as product_name, p.unit as product_unit
              FROM purchase_invoice_items pii
              LEFT JOIN products p ON pii.product_id = p.id
-             LEFT JOIN stock_batches sb ON sb.purchase_invoice_id = pii.purchase_invoice_id AND sb.product_id = pii.product_id
              WHERE pii.purchase_invoice_id = ?
              ORDER BY pii.id`,
             [id]
         );
+
+        const stockBatches = await dbAll(db,
+            `SELECT * FROM stock_batches WHERE purchase_invoice_id = ? ORDER BY id`,
+            [id]
+        );
+
+        const batchTracker = {};
+        for (const batch of stockBatches) {
+            if (!batchTracker[batch.product_id]) {
+                batchTracker[batch.product_id] = [];
+            }
+            batchTracker[batch.product_id].push(batch);
+        }
+
+        const items = invoiceItems.map(item => {
+            const batchList = batchTracker[item.product_id];
+            const batch = batchList && batchList.length > 0 ? batchList.shift() : null;
+            return {
+                ...item,
+                batch_code: batch?.batch_code ?? null,
+                remaining_quantity: batch?.remaining_quantity ?? null,
+                batch_received_date: batch?.received_date ?? null,
+                batch_expiry_date: batch?.expiry_date ?? null,
+                batch_active: batch?.isActive ?? null,
+                stock_batch_id: batch?.id ?? null,
+            };
+        });
 
         const payments = await dbAll(db,
             `SELECT p.*, c.name as cashbox_name

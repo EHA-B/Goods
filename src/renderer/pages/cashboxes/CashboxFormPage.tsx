@@ -181,9 +181,30 @@ export default function CashboxFormPage() {
           </FormField>
 
           <FormField label="الحالة">
-            <div className="flex h-11 items-center gap-3">
-              <Switch checked={active} onChange={(e) => setActive(e.target.checked)} />
-              <span className="text-sm">{active ? "نشط" : "غير نشط"}</span>
+            <div
+              className={[
+                "flex min-h-11 items-center justify-between rounded-[var(--radius-sm)] border px-3 py-2 transition-colors",
+                active
+                  ? "border-[color-mix(in_srgb,var(--success)_45%,var(--border))] bg-[var(--success-subtle)]"
+                  : "border-[color-mix(in_srgb,var(--danger)_45%,var(--border))] bg-[var(--danger-subtle)]",
+              ].join(" ")}
+            >
+              <span
+                className={[
+                  "text-sm font-bold",
+                  active
+                    ? "text-[var(--success)]"
+                    : "text-[var(--danger)]",
+                ].join(" ")}
+              >
+                {active ? "نشط" : "غير نشط"}
+              </span>
+
+              <Switch
+                checked={active}
+                onChange={(e) => setActive(e.target.checked)}
+                aria-label={active ? "تعطيل الصندوق" : "تفعيل الصندوق"}
+              />
             </div>
           </FormField>
         </div>

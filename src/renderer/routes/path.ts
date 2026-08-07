@@ -52,6 +52,8 @@ export const PATHS = {
     ACTIVITY_LOGS: "/activity-logs",
     ACTIVITY_LOG_DETAILS: "/activity-logs/:activityLogId",
     NOTIFICATIONS: "/notifications",
+    HELP: "/help",
+    HELP_ARTICLE: "/help/:articleSlug",
     SETTINGS: "/settings",
     SETTINGS_COMPANY: "/settings/company",
     SETTINGS_BACKUP: "/settings/backup",

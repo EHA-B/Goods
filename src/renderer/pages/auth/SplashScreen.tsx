@@ -1,17 +1,16 @@
 import { useLayoutEffect } from "react";
 import StockLiteLogo from "../../components/brand/StockLiteLogo";
 
-const APP_NAME = "StockLite".split("");
 const APPEARANCE_STORAGE_KEY = "stocklite.appearance";
 
 type Theme = "light" | "dark";
 type FontSize = "small" | "medium" | "large";
-type Accent = "teal" | "amber" | "blue" | "violet";
+type Accent = "teal" | "emerald" | "amber" | "blue" | "violet";
 
 type StoredAppearance = {
   theme?: Theme;
   fontSize?: FontSize;
-  accent?: Accent | "emerald";
+  accent?: Accent;
 };
 
 function applyStoredAppearance() {
@@ -29,14 +28,16 @@ function applyStoredAppearance() {
       saved.fontSize === "small" || saved.fontSize === "large"
         ? saved.fontSize
         : "medium";
-    const accent: Accent =
-      saved.accent === "amber" ||
-      saved.accent === "blue" ||
-      saved.accent === "violet"
-        ? saved.accent
-        : saved.accent === "emerald"
-          ? "amber"
-          : "teal";
+    const supportedAccents: Accent[] = [
+      "teal",
+      "emerald",
+      "amber",
+      "blue",
+      "violet",
+    ];
+    const accent: Accent = supportedAccents.includes(saved.accent as Accent)
+      ? (saved.accent as Accent)
+      : "teal";
 
     root.dataset.theme = theme;
     root.dataset.fontSize = fontSize;
@@ -62,54 +63,53 @@ export default function SplashScreen() {
       aria-label="جاري تشغيل StockLite"
       aria-busy="true"
     >
-      <div
-        className="stocklite-splash__glow stocklite-splash__glow--primary"
-        aria-hidden="true"
-      />
+      <div className="stocklite-splash__backdrop" aria-hidden="true">
+        <span className="stocklite-splash__mesh" />
+        <span className="stocklite-splash__orb stocklite-splash__orb--top" />
+        <span className="stocklite-splash__orb stocklite-splash__orb--bottom" />
+        <span className="stocklite-splash__halo" />
+        <span className="stocklite-splash__vignette" />
+      </div>
 
-      <div
-        className="stocklite-splash__glow stocklite-splash__glow--secondary"
-        aria-hidden="true"
-      />
-
-      <div className="stocklite-splash__pattern" aria-hidden="true" />
-
-      <div className="stocklite-splash__content">
-        <div className="stocklite-splash__logo">
-          <div className="stocklite-splash__logo-ring">
-            <StockLiteLogo size="lg" />
-          </div>
+      <main className="stocklite-splash__content">
+        <div className="stocklite-splash__brand-stage">
+          <span className="stocklite-splash__brand-aura" aria-hidden="true" />
+          <span className="stocklite-splash__brand-shadow" aria-hidden="true" />
+          <StockLiteLogo
+            size="xl"
+            showWordmark
+            animated
+            className="stocklite-splash__brand"
+          />
         </div>
-
-        <h1
-          dir="ltr"
-          aria-label="StockLite"
-          className="stocklite-splash__title"
-        >
-          {APP_NAME.map((letter, index) => (
-            <span
-              key={`${letter}-${index}`}
-              aria-hidden="true"
-              className="stocklite-splash__letter"
-              style={{ animationDelay: `${420 + index * 65}ms` }}
-            >
-              {letter}
-            </span>
-          ))}
-        </h1>
 
         <p className="stocklite-splash__subtitle">
           إدارة أبسط، ورؤية أوضح
         </p>
 
-        <div className="stocklite-splash__progress" aria-hidden="true">
-          <span className="stocklite-splash__progress-bar" />
+        <div
+          className="stocklite-splash__progress"
+          role="progressbar"
+          aria-label="جاري تحميل التطبيق"
+        >
+          <span className="stocklite-splash__progress-track">
+            <span className="stocklite-splash__progress-value" />
+          </span>
         </div>
 
         <p className="stocklite-splash__loading">
-          جاري تجهيز مساحة العمل
+          <span>جاري تجهيز مساحة العمل</span>
+          <span className="stocklite-splash__loading-dots" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
         </p>
-      </div>
+      </main>
+
+      <footer className="stocklite-splash__footer">
+        نظام إدارة المخزون والمبيعات
+      </footer>
     </section>
   );
 }

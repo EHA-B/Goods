@@ -48,7 +48,8 @@ const stockliteApi = {
     setAutoBackupConfig: (input) => invokeApi("api:system:setAutoBackupConfig", input),
     selectDirectory: () => invokeApi("api:system:selectDirectory"),
     selectSaveFile: () => invokeApi("api:system:selectSaveFile"),
-    selectOpenFile: () => invokeApi("api:system:selectOpenFile")
+    selectOpenFile: () => invokeApi("api:system:selectOpenFile"),
+    saveCurrentPageAsPdf: (input) => invokeApi("api:system:saveCurrentPageAsPdf", input)
   },
   products: {
     ...crudApi("product", {

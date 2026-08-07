@@ -69,7 +69,7 @@ export default function LoginPage() {
           <StockLiteLogo size="md" showWordmark />
         </div>
 
-        <div className="rounded-[22px] border border-white/80 bg-white/[0.92] px-6 py-7 shadow-[0_20px_65px_rgba(31,94,75,0.12)] backdrop-blur-md sm:px-8 sm:py-8">
+        <div className="stocklite-login-panel rounded-[22px] border px-6 py-7 backdrop-blur-md sm:px-8 sm:py-8">
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-[-0.025em] text-[var(--text-primary)]">
               تسجيل الدخول

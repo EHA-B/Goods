@@ -91,6 +91,8 @@ const stockliteApi = {
       invokeApi("api:system:selectSaveFile"),
     selectOpenFile: () =>
       invokeApi("api:system:selectOpenFile"),
+    saveCurrentPageAsPdf: (input?: { fileName?: string }) =>
+      invokeApi("api:system:saveCurrentPageAsPdf", input),
   },
   products: {
     ...crudApi("product", {

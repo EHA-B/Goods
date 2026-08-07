@@ -21,6 +21,8 @@ import {
   Warehouse,
   LogOut,
   History,
+  CircleHelp,
+  BarChart3,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -77,9 +79,19 @@ const navigationItems = [
     icon: ReceiptText,
   },
   {
+    label: "التقارير",
+    path: PATHS.REPORTS,
+    icon: BarChart3,
+  },
+  {
     label: "سجل النشاط",
     path: PATHS.ACTIVITY_LOGS,
     icon: History,
+  },
+  {
+    label: "المساعدة",
+    path: PATHS.HELP,
+    icon: CircleHelp,
   },
   {
     label: "الإعدادات",
@@ -287,7 +299,7 @@ function Sidebar() {
 
         <nav
           className={[
-            "min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
+            "sidebar-scroll-area min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
             "py-5 transition-[padding] duration-300",
             isCollapsed ? "px-2" : "px-3",
           ].join(" ")}

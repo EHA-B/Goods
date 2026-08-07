@@ -194,9 +194,6 @@ export default function SuppliersPage() {
         undefined,
       );
     } catch (error) {
-      /*
-       * لا نحول الخطأ إلى string هنا.
-       */
       notifyError(error, {
         title:
           "تعذر حذف المورد",
@@ -212,7 +209,7 @@ export default function SuppliersPage() {
     <>
       <PageHeader
         title="الموردون"
-        description="إدارة بيانات الموردين وأرصدتهم وحالتهم داخل النظام."
+        description="إدارة بيانات الموردين وأرصدة حساباتهم داخل النظام."
         actions={
           <Button
             startIcon={

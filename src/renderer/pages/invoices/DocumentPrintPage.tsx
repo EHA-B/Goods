@@ -141,15 +141,23 @@ type ConsignmentSettlement = {
   commission_amount?: number | string | null;
   supplier_share?: number | string | null;
   exchange_rate?: number | string | null;
+  remaining_stock_policy?: string | null;
+  returned_quantity?: number | string | null;
+  spoilage_quantity?: number | string | null;
+  carried_quantity?: number | string | null;
+  notes?: string | null;
 };
 
 type ConsignmentItem = {
   id: number;
   product_name?: string | null;
+  received_quantity?: number | string | null;
   sold_quantity?: number | string | null;
   remaining_quantity?: number | string | null;
+  resolved_quantity?: number | string | null;
   sales_amount?: number | string | null;
-  remaining_policy?: string | null;
+  resolution_policy?: string | null;
+  notes?: string | null;
 };
 
 type ConsignmentDocument = {
@@ -1256,12 +1264,27 @@ function Consignment({
 }: {
   d: ConsignmentDocument;
 }) {
-  const settlement =
-    d.settlement;
+  const settlement = d.settlement;
 
   const currency =
-    settlement.currency ||
-    "SYP";
+    settlement.currency || "SYP";
+
+  const returnedQuantity = n(
+    settlement.returned_quantity,
+  );
+
+  const spoilageQuantity = n(
+    settlement.spoilage_quantity,
+  );
+
+  const carriedQuantity = n(
+    settlement.carried_quantity,
+  );
+
+  const totalResolvedQuantity =
+    returnedQuantity +
+    spoilageQuantity +
+    carriedQuantity;
 
   return (
     <>
@@ -1300,6 +1323,13 @@ function Consignment({
               settlement.status,
             ),
           ],
+
+          [
+            "سياسة المتبقي",
+            getRemainingPolicyLabel(
+              settlement.remaining_stock_policy,
+            ),
+          ],
         ]}
       />
 
@@ -1307,14 +1337,12 @@ function Consignment({
         <thead>
           <tr>
             <th>المنتج</th>
+            <th>المستلم</th>
             <th>المباع</th>
-            <th>المتبقي</th>
-            <th>
-              قيمة المبيعات
-            </th>
-            <th>
-              معالجة المتبقي
-            </th>
+            <th>المتبقي عند التسوية</th>
+            <th>مصير المتبقي</th>
+            <th>الكمية المعالجة</th>
+            <th>قيمة المبيعات</th>
           </tr>
         </thead>
 
@@ -1325,6 +1353,12 @@ function Consignment({
                 <td>
                   {item.product_name ||
                     "—"}
+                </td>
+
+                <td>
+                  {fmt(
+                    item.received_quantity,
+                  )}
                 </td>
 
                 <td>
@@ -1340,15 +1374,21 @@ function Consignment({
                 </td>
 
                 <td>
-                  {money(
-                    item.sales_amount,
-                    currency,
+                  {getRemainingPolicyLabel(
+                    item.resolution_policy,
                   )}
                 </td>
 
                 <td>
-                  {getRemainingPolicyLabel(
-                    item.remaining_policy,
+                  {fmt(
+                    item.resolved_quantity,
+                  )}
+                </td>
+
+                <td>
+                  {money(
+                    item.sales_amount,
+                    currency,
                   )}
                 </td>
               </tr>
@@ -1417,6 +1457,71 @@ function Consignment({
           </div>
         )}
       </section>
+
+      <section className="invoice-summary mt-6">
+        <div className="invoice-total">
+          <span>
+            معالجة المخزون المتبقي
+          </span>
+
+          <strong>
+            {fmt(
+              totalResolvedQuantity,
+            )}{" "}
+            وحدة
+          </strong>
+        </div>
+
+        <div>
+          <span>
+            المعاد للمورد
+          </span>
+
+          <strong>
+            {fmt(
+              returnedQuantity,
+            )}{" "}
+            وحدة
+          </strong>
+        </div>
+
+        <div>
+          <span>
+            التالف
+          </span>
+
+          <strong>
+            {fmt(
+              spoilageQuantity,
+            )}{" "}
+            وحدة
+          </strong>
+        </div>
+
+        {carriedQuantity > 0 && (
+          <div>
+            <span>
+              المرحّل
+            </span>
+
+            <strong>
+              {fmt(
+                carriedQuantity,
+              )}{" "}
+              وحدة
+            </strong>
+          </div>
+        )}
+      </section>
+
+      {settlement.notes && (
+        <p className="mt-6 rounded-[var(--radius-md)] bg-[var(--surface-subtle)] p-4 text-sm leading-7">
+          <strong>
+            ملاحظات التسوية:
+          </strong>{" "}
+          {settlement.notes}
+        </p>
+      )}
     </>
   );
 }

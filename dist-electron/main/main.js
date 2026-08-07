@@ -22,7 +22,7 @@ function getCurrentUser() {
 function clearCurrentUser() {
   currentUser = null;
 }
-class LicenseManager {
+let LicenseManager$1 = class LicenseManager {
   constructor() {
     // PUBLIC KEY ONLY! Used exclusively to verify signatures.
     // The private key is kept offline and used by the generation script.
@@ -228,8 +228,8 @@ MCowBQYDK2VwAyEAypKRbbQ1cl4alzH6hJddetunUEiDqADpyMFn6zT3F8A=
       };
     }
   }
-}
-const LicenseManager$1 = new LicenseManager();
+};
+const LicenseManager2 = new LicenseManager$1();
 const require$1 = createRequire(import.meta.url);
 const __filename$1 = fileURLToPath(import.meta.url);
 const __dirname$2 = path$1.dirname(__filename$1);
@@ -480,21 +480,21 @@ ipcMain.handle("api:system:getAppInfo", async () => {
 });
 ipcMain.handle("api:license:getDeviceId", async () => {
   try {
-    return success(LicenseManager$1.getDeviceId());
+    return success(LicenseManager2.getDeviceId());
   } catch (e) {
     return failure("LICENSE_ERROR", e.message, e);
   }
 });
 ipcMain.handle("api:license:getStatus", async () => {
   try {
-    return success(LicenseManager$1.getLicenseStatus());
+    return success(LicenseManager2.getLicenseStatus());
   } catch (e) {
     return failure("LICENSE_ERROR", e.message, e);
   }
 });
 ipcMain.handle("api:license:import", async (_event, sourcePath) => {
   try {
-    return success(LicenseManager$1.importLicense(sourcePath));
+    return success(LicenseManager2.importLicense(sourcePath));
   } catch (e) {
     return failure("LICENSE_ERROR", e.message, e);
   }
@@ -1492,7 +1492,7 @@ app.on("activate", () => {
 });
 app.whenReady().then(async () => {
   try {
-    let licenseStatus = LicenseManager$1.validateLicense();
+    let licenseStatus = LicenseManager2.validateLicense();
     while (!licenseStatus.valid) {
       const response = await dialog.showMessageBox({
         type: "error",
@@ -1511,7 +1511,7 @@ Your Device ID is: ${licenseStatus.deviceId}`,
           properties: ["openFile"]
         });
         if (!importPath.canceled && importPath.filePaths.length > 0) {
-          const result = LicenseManager$1.importLicense(importPath.filePaths[0]);
+          const result = LicenseManager2.importLicense(importPath.filePaths[0]);
           if (result.success) {
             dialog.showMessageBoxSync({ type: "info", title: "Activated", message: "License imported successfully! Application will now start." });
             licenseStatus = { valid: true, message: "Success" };

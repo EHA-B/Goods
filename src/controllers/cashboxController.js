@@ -446,8 +446,22 @@ class CashboxController {
             if (!toCashbox) throw { code: 'NOT_FOUND', message: 'Destination cashbox not found' };
             if (!toCashbox.isActive) throw { code: 'INACTIVE_CASHBOX', message: 'Destination cashbox is inactive' };
 
+            let finalToAmount = numAmount;
+            
             if (fromCashbox.currency !== toCashbox.currency) {
-                throw { code: 'CURRENCY_MISMATCH', message: 'Transfers between cashboxes with different currencies are not allowed' };
+                if (!input.exchange_rate || isNaN(Number(input.exchange_rate)) || Number(input.exchange_rate) <= 0) {
+                    throw { code: 'EXCHANGE_RATE_REQUIRED', message: 'سعر الصرف مطلوب للتحويل بين عملات مختلفة' };
+                }
+                const exchangeRate = Number(input.exchange_rate);
+                
+                if (fromCashbox.currency === 'USD' && toCashbox.currency === 'SYP') {
+                    finalToAmount = numAmount * exchangeRate;
+                } else if (fromCashbox.currency === 'SYP' && toCashbox.currency === 'USD') {
+                    finalToAmount = numAmount / exchangeRate;
+                } else {
+                    // Default to multiplication for other pairs
+                    finalToAmount = numAmount * exchangeRate;
+                }
             }
 
             const fromBalanceBefore = Number(fromCashbox.balance);
@@ -457,7 +471,7 @@ class CashboxController {
 
             const toBalanceBefore = Number(toCashbox.balance);
             const fromBalanceAfter = fromBalanceBefore - numAmount;
-            const toBalanceAfter = toBalanceBefore + numAmount;
+            const toBalanceAfter = toBalanceBefore + finalToAmount;
 
             // Generate unique transfer_group_id
             let transferGroupId;
@@ -499,7 +513,7 @@ class CashboxController {
                     reversed_transaction_id, reversal_reason,
                     transaction_date, notes, created_at, updated_at)
                  VALUES (?, 'transfer', ?, ?, 'in', ?, ?, ?, NULL, NULL, ?, ?, datetime('now'), datetime('now'))`,
-                [to_cashbox_id, from_cashbox_id, numAmount, toBalanceBefore, toBalanceAfter,
+                [to_cashbox_id, from_cashbox_id, finalToAmount, toBalanceBefore, toBalanceAfter,
                  transferGroupId, txDate, notes ?? null]
             );
 

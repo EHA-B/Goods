@@ -167,6 +167,7 @@ type TransferCashboxesInput = {
   from_cashbox_id: number;
   to_cashbox_id: number;
   amount: number;
+  exchange_rate?: number;
   transaction_date?: string;
   notes?: string | null;
 };

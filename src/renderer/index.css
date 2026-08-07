@@ -42,6 +42,11 @@
   --info: #3b82f6;
   --info-subtle: #eaf3ff;
 
+  /* First-run tour */
+  --overlay-strong: rgba(15, 23, 42, 0.58);
+  --tour-highlight: rgba(255, 255, 255, 0.95);
+  --tour-shadow: rgba(2, 6, 23, 0.02);
+
   /* ===========================
      Effects
      =========================== */
@@ -913,6 +918,9 @@ html[data-theme="dark"] {
   --border: #2a3a36;
   --border-strong: #3a4c47;
   --divider: #22312e;
+  --overlay-strong: rgba(2, 6, 23, 0.72);
+  --tour-highlight: color-mix(in srgb, var(--primary) 72%, white);
+  --tour-shadow: rgba(2, 6, 23, 0.12);
   --shadow-sm: 0 1px 2px rgba(0,0,0,.22);
   --shadow-md: 0 8px 22px rgba(0,0,0,.24);
   --shadow-lg: 0 18px 42px rgba(0,0,0,.32);

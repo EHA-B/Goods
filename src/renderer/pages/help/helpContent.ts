@@ -578,6 +578,12 @@ export const helpFaqs: HelpFaq[] = [
     answer: "نعم. الاستعادة تستبدل البيانات الحالية، لذلك يوصى دائمًا بحفظ نسخة من الوضع الحالي أولًا.",
     articleSlug: "backup-restore",
   },
+  {
+    id: "restart-tour",
+    question: "كيف أعيد تشغيل الجولة التعريفية؟",
+    answer: "افتح مركز المساعدة واضغط «تشغيل الجولة التعريفية». يمكنك إعادة تشغيلها في أي وقت حتى لو سبق وأنهيتها أو تخطيتها.",
+    articleSlug: "getting-started",
+  },
 ];
 
 export function getHelpArticle(slug: string | undefined) {

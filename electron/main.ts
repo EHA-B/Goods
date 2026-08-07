@@ -1,8 +1,9 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, dialog } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 import "./apis/Apis";
+import LicenseManager from "./services/LicenseManager";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -61,6 +62,43 @@ app.on("activate", () => {
 
 app.whenReady().then(async () => {
   try {
+    
+    let licenseStatus = LicenseManager.validateLicense();
+    while (!licenseStatus.valid) {
+      const response = await dialog.showMessageBox({
+        type: 'error',
+        title: 'Activation Required',
+        message: `${licenseStatus.message}\n\nYour Device ID is: ${licenseStatus.deviceId}`,
+        buttons: ['Import License File', 'Exit Application'],
+        defaultId: 0,
+        cancelId: 1
+      });
+
+      if (response.response === 0) {
+        const importPath = await dialog.showOpenDialog({
+          title: 'Select License File',
+          filters: [{ name: 'License Files', extensions: ['dat'] }],
+          properties: ['openFile']
+        });
+
+        if (!importPath.canceled && importPath.filePaths.length > 0) {
+          const result = LicenseManager.importLicense(importPath.filePaths[0]);
+          if (result.success) {
+            dialog.showMessageBoxSync({ type: 'info', title: 'Activated', message: 'License imported successfully! Application will now start.' });
+            licenseStatus = { valid: true, message: 'Success' }; // Break loop
+          } else {
+            dialog.showMessageBoxSync({ type: 'error', title: 'Import Failed', message: `Invalid license file:\n${result.error}` });
+          }
+        } else {
+          app.quit();
+          return;
+        }
+      } else {
+        app.quit();
+        return;
+      }
+    }
+
     const { initDatabase } = await import(
       "../src/main/database/dbmanager"
     );

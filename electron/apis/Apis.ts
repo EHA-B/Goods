@@ -247,6 +247,24 @@ ipcMain.handle('api:system:getAppInfo', async () => {
   }
 });
 
+import LicenseManager from '../services/LicenseManager';
+
+/** License read-only endpoints (can be called before full auth) */
+ipcMain.handle('api:license:getDeviceId', async () => {
+  try { return success(LicenseManager.getDeviceId()); }
+  catch (e: any) { return failure('LICENSE_ERROR', e.message, e); }
+});
+
+ipcMain.handle('api:license:getStatus', async () => {
+  try { return success(LicenseManager.getLicenseStatus()); }
+  catch (e: any) { return failure('LICENSE_ERROR', e.message, e); }
+});
+
+ipcMain.handle('api:license:import', async (_event, sourcePath) => {
+  try { return success(LicenseManager.importLicense(sourcePath)); }
+  catch (e: any) { return failure('LICENSE_ERROR', e.message, e); }
+});
+
 /** Activity log read-only endpoints. */
 ipcMain.handle('api:activityLog:list', async (_event, filters, pagination) => {
   try { return success(await activityLogController.listActivityLogs(filters, pagination)); }

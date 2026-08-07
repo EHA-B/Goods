@@ -167,6 +167,11 @@ const stockliteApi = {
     saveCurrentPageAsPdf: (input?: { fileName?: string }) =>
       invokeApi("api:system:saveCurrentPageAsPdf", input),
   },
+  license: {
+    getDeviceId: () => invokeApi("api:license:getDeviceId"),
+    getStatus: () => invokeApi("api:license:getStatus"),
+    import: (sourcePath: string) => invokeApi("api:license:import", sourcePath),
+  },
   products: {
     ...crudApi("product", {
       create: "createProduct",

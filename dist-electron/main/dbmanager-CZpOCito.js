@@ -1508,17 +1508,6 @@ async function seed$1(knex2) {
     created_at: knex2.fn.now(),
     updated_at: knex2.fn.now()
   });
-  await knex2("cashboxes").insert({
-    name: "صندوق الأمانة (العمولة)",
-    parent_id: sypCashboxId || 1,
-    initial_balance: 0,
-    balance: 0,
-    currency: "SYP",
-    isActive: true,
-    notes: "خاص ببيانات البيع بالعمولة و فواتير الأمانة",
-    created_at: knex2.fn.now(),
-    updated_at: knex2.fn.now()
-  });
 }
 const cashboxesSeed = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,

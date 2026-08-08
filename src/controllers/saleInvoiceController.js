@@ -188,17 +188,31 @@ class SaleInvoiceController {
                 const cashbox = await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [payBox]);
                 if (!cashbox)          throw { code: 'NOT_FOUND', message: 'الصندوق غير موجود' };
                 if (!cashbox.isActive)  throw { code: 'VALIDATION_ERROR', message: 'الصندوق غير نشط' };
-                assertCashboxCurrency(cashbox, invoiceCurrency);
+                
+                let paymentExchangeRate = invoiceRate;
+                let cashboxAmount = payAmount;
+                
+                if (cashbox.currency !== invoiceCurrency) {
+                    if (!initial_payment.exchange_rate) {
+                        throw { code: 'MISSING_EXCHANGE_RATE', message: 'سعر الصرف مطلوب عند اختلاف عملة الصندوق عن الفاتورة' };
+                    }
+                    paymentExchangeRate = normalizeExchangeRate(cashbox.currency, initial_payment.exchange_rate);
+                    const amountBaseFromInvoice = toBaseAmount(payAmount, invoiceRate);
+                    cashboxAmount = normalizeAmount(amountBaseFromInvoice / paymentExchangeRate);
+                } else {
+                    paymentExchangeRate = invoiceRate;
+                }
+                const payBaseAmountCashbox = toBaseAmount(cashboxAmount, paymentExchangeRate);
 
                 // Increase cashbox
                 const balBefore = normalizeAmount(cashbox.balance);
-                const balAfter  = Math.round((balBefore + payAmount) * 100) / 100;
+                const balAfter  = Math.round((balBefore + cashboxAmount) * 100) / 100;
                 await dbRun(db, `UPDATE cashboxes SET balance = ?, updated_at = datetime('now') WHERE id = ?`, [balAfter, payBox]);
                 const { lastID: cbtId } = await dbRun(db,
                     `INSERT INTO cashbox_transactions
                        (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
                      VALUES (?, 'sale', ?, ?, 'in', ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-                    [payBox, invoiceId, payAmount, balBefore, balAfter, payDate, `دفعة أولى فاتورة بيع #${invNumber}`]
+                    [payBox, invoiceId, cashboxAmount, balBefore, balAfter, payDate, `دفعة أولى فاتورة بيع #${invNumber}`]
                 );
 
                 // Create payment record
@@ -207,8 +221,8 @@ class SaleInvoiceController {
                        (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
                         status, cashbox_transaction_id, notes, created_at, updated_at)
                      VALUES ('customer', ?, 'sale', ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now'))`,
-                    [customer_id ?? null, invoiceId, payBox, payAmount, invoiceCurrency, invoiceRate,
-                     toBaseAmount(payAmount, invoiceRate), payDate, cbtId, initial_payment.notes ?? null]
+                    [customer_id ?? null, invoiceId, payBox, cashboxAmount, cashbox.currency, paymentExchangeRate,
+                     payBaseAmountCashbox, payDate, cbtId, initial_payment.notes ?? null]
                 );
 
                 // Reduce customer balance by payment

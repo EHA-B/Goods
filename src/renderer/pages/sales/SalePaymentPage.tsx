@@ -18,6 +18,7 @@ export default function SalePaymentPage() {
   const [amount, setAmount] = useState(0);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [cashboxId, setCashboxId] = useState(0);
+  const [exchangeRate, setExchangeRate] = useState("");
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -26,14 +27,12 @@ export default function SalePaymentPage() {
     Promise.all([salesService.getDetails(id), salesService.getLookups()])
       .then(([data, lookups]) => {
         setDetails(data);
-        const invoiceCurrency = data.invoice.currency || "SYP";
-        const matching = lookups.cashboxes.filter(
-          (item) => Boolean(item.isActive) && item.currency === invoiceCurrency,
-        );
-        setCashboxes(matching);
+        const activeCashboxes = lookups.cashboxes.filter((item) => Boolean(item.isActive));
+        setCashboxes(activeCashboxes);
         const remaining = data.financial_summary.remaining_amount;
         setAmount(remaining);
-        setCashboxId(matching[0]?.id ?? 0);
+        const defaultCashbox = activeCashboxes.find((c) => c.currency === data.invoice.currency) || activeCashboxes[0];
+        setCashboxId(defaultCashbox?.id ?? 0);
       })
       .catch((err: Error) => setError(getArabicErrorMessage(err, "خطأ في التحميل")))
       .finally(() => setLoading(false));
@@ -46,6 +45,8 @@ export default function SalePaymentPage() {
     if (amount <= 0) { setError("المبلغ يجب أن يكون موجبًا"); notifyValidation("المبلغ يجب أن يكون موجبًا"); return; }
     if (amount > remaining + 0.001) { setError("المبلغ أكبر من المتبقي"); notifyValidation("المبلغ أكبر من المتبقي"); return; }
     if (!cashboxId) { setError("اختر الصندوق"); notifyValidation("اختر الصندوق"); return; }
+    const selectedCashbox = cashboxes.find((c) => c.id === cashboxId);
+    if (selectedCashbox && selectedCashbox.currency !== (details?.invoice.currency || "SYP") && !exchangeRate) { setError("أدخل سعر الصرف"); notifyValidation("أدخل سعر الصرف"); return; }
 
     setSubmitting(true);
     try {
@@ -53,6 +54,7 @@ export default function SalePaymentPage() {
         sale_invoice_id: Number(saleId),
         cashbox_id: cashboxId,
         amount,
+        exchange_rate: Number(exchangeRate) || undefined,
         payment_date: date,
         notes: notes || undefined,
       });
@@ -84,6 +86,11 @@ export default function SalePaymentPage() {
           <FormField label="الصندوق" htmlFor="cashbox" required>
             <Select id="cashbox" value={String(cashboxId)} options={[{ value: "0", label: "اختر الصندوق" }, ...cashboxes.map((c) => ({ value: String(c.id), label: `${c.name} — ${Number(c.balance ?? 0).toLocaleString("en-US")} ${c.currency}` }))]} onChange={(e) => setCashboxId(Number(e.target.value))} />
           </FormField>
+          {cashboxId > 0 && cashboxes.find((c) => c.id === cashboxId)?.currency !== (invoice.currency || "SYP") && (
+            <FormField label="سعر الصرف" htmlFor="exchangeRate" required>
+              <Input id="exchangeRate" type="number" min="0" step="any" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} placeholder={`سعر صرف ${cashboxes.find((c) => c.id === cashboxId)?.currency} مقابل ${invoice.currency || "SYP"}`} />
+            </FormField>
+          )}
           <FormField label="ملاحظات" htmlFor="notes" className="md:col-span-2">
             <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </FormField>

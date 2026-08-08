@@ -38,15 +38,5 @@ export async function seed(knex: Knex): Promise<void> {
   });
 
   // 3. Create the commission / consignment cashbox
-  await knex('cashboxes').insert({
-    name: 'صندوق الأمانة (العمولة)',
-    parent_id: sypCashboxId || 1,
-    initial_balance: 0,
-    balance: 0,
-    currency: 'SYP',
-    isActive: true,
-    notes: 'خاص ببيانات البيع بالعمولة و فواتير الأمانة',
-    created_at: knex.fn.now(),
-    updated_at: knex.fn.now()
-  });
+ 
 }

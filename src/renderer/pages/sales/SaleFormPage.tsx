@@ -44,6 +44,7 @@ export default function SaleFormPage() {
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentCashboxId, setPaymentCashboxId] = useState(0);
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [paymentExchangeRate, setPaymentExchangeRate] = useState("");
   const [currency, setCurrency] = useState("SYP");
   const [exchangeRate, setExchangeRate] = useState(1);
   const [lookups, setLookups] = useState<{ customers: PartyApiRecord[]; cashboxes: CashboxApiRecord[]; products: ProductApiRecord[] } | null>(null);
@@ -59,9 +60,9 @@ export default function SaleFormPage() {
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.quantity * item.sale_price, 0), [items]);
   const total = Math.max(0, subtotal - discount);
   const remaining = Math.max(0, total - paymentAmount);
-  const matchingCashboxes = useMemo(
-    () => (lookups?.cashboxes ?? []).filter((cashbox) => Boolean(cashbox.isActive) && cashbox.currency === currency),
-    [lookups, currency],
+  const activeCashboxes = useMemo(
+    () => (lookups?.cashboxes ?? []).filter((cashbox) => Boolean(cashbox.isActive)),
+    [lookups],
   );
   const totalBase = currency === "SYP" ? total : total * exchangeRate;
 
@@ -111,7 +112,8 @@ export default function SaleFormPage() {
     if (paymentAmount < 0 || paymentAmount > total + 0.001) { setError("قيمة الدفعة الأولية غير صحيحة"); notifyValidation("قيمة الدفعة الأولية غير صحيحة"); return; }
     if (currency !== "SYP" && (!Number.isFinite(exchangeRate) || exchangeRate <= 0)) { setError("سعر الصرف مطلوب ويجب أن يكون أكبر من صفر"); notifyValidation("سعر الصرف مطلوب ويجب أن يكون أكبر من صفر"); return; }
     if (paymentAmount > 0 && !paymentCashboxId) { setError("اختر صندوق الدفعة الأولية"); notifyValidation("اختر صندوق الدفعة الأولية"); return; }
-    if (paymentAmount > 0 && !matchingCashboxes.some((cashbox) => cashbox.id === paymentCashboxId)) { setError("يجب اختيار صندوق بنفس عملة الفاتورة"); notifyValidation("يجب اختيار صندوق بنفس عملة الفاتورة"); return; }
+    const selectedCashbox = activeCashboxes.find((c) => c.id === paymentCashboxId);
+    if (paymentAmount > 0 && selectedCashbox && selectedCashbox.currency !== currency && !paymentExchangeRate) { setError("يجب إدخال سعر الصرف للدفعة الأولية"); notifyValidation("يجب إدخال سعر الصرف للدفعة الأولية"); return; }
     if (!customerId && paymentAmount < total - 0.001) {
       setError("يجب تحديد عميل للبيع الآجل. البيع النقدي يتطلب دفع المبلغ كاملًا."); notifyValidation("يجب تحديد عميل للبيع الآجل. البيع النقدي يتطلب دفع المبلغ كاملًا."); return;
     }
@@ -129,7 +131,7 @@ export default function SaleFormPage() {
         sale_price: item.sale_price,
       })),
       initial_payment: paymentAmount > 0 && paymentCashboxId
-        ? { cashbox_id: paymentCashboxId, amount: paymentAmount, payment_date: paymentDate }
+        ? { cashbox_id: paymentCashboxId, amount: paymentAmount, payment_date: paymentDate, exchange_rate: Number(paymentExchangeRate) || undefined }
         : undefined,
       currency: currency,
       exchange_rate: currency === "SYP" ? 1 : exchangeRate,
@@ -250,8 +252,13 @@ export default function SaleFormPage() {
               <Input type="number" min="0" max={total} value={paymentAmount} onChange={(e) => setPaymentAmount(Number(e.target.value))} />
             </FormField>
             <FormField label="الصندوق">
-              <Select value={String(paymentCashboxId)} options={[{ value: "0", label: "اختر الصندوق" }, ...matchingCashboxes.map((c) => ({ value: String(c.id), label: `${c.name} — ${Number(c.balance ?? 0).toLocaleString("en-US")} ${c.currency}` }))]} onChange={(e) => setPaymentCashboxId(Number(e.target.value))} />
+              <Select value={String(paymentCashboxId)} options={[{ value: "0", label: "اختر الصندوق" }, ...activeCashboxes.map((c) => ({ value: String(c.id), label: `${c.name} — ${Number(c.balance ?? 0).toLocaleString("en-US")} ${c.currency}` }))]} onChange={(e) => setPaymentCashboxId(Number(e.target.value))} />
             </FormField>
+            {paymentCashboxId > 0 && activeCashboxes.find((c) => c.id === paymentCashboxId)?.currency !== currency && (
+              <FormField label="سعر صرف الدفعة" required>
+                <Input type="number" min="0" step="any" value={paymentExchangeRate} onChange={(e) => setPaymentExchangeRate(e.target.value)} placeholder={`سعر صرف ${activeCashboxes.find((c) => c.id === paymentCashboxId)?.currency} مقابل ${currency}`} />
+              </FormField>
+            )}
             <FormField label="تاريخ الدفع">
               <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
             </FormField>

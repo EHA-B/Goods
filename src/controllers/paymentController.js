@@ -131,12 +131,27 @@ class PaymentController {
             // 2. Load customer (may be null for cash sales)
             const customerId = invoice.customer_id;
 
-            // 3. Load and validate cashbox
             const cashbox = await this._loadActiveCashbox(db, cashbox_id);
             const invoiceCurrency = normalizeCurrency(invoice.currency);
             const invoiceRate = normalizeExchangeRate(invoiceCurrency, invoice.exchange_rate);
-            assertCashboxCurrency(cashbox, invoiceCurrency);
-            const amountBase = toBaseAmount(validatedAmount, invoiceRate);
+            
+            let paymentExchangeRate = invoiceRate;
+            let cashboxAmount = validatedAmount;
+            
+            if (cashbox.currency !== invoiceCurrency) {
+                if (!input.exchange_rate) {
+                    throw { code: 'MISSING_EXCHANGE_RATE', message: 'سعر الصرف مطلوب عند اختلاف عملة الصندوق عن الفاتورة' };
+                }
+                paymentExchangeRate = normalizeExchangeRate(cashbox.currency, input.exchange_rate);
+                // `amount` passed in is the amount in the INVOICE currency.
+                // We need to convert it to the CASHBOX currency for the cashbox transaction.
+                // Invoice Amount -> Base Amount -> Cashbox Amount
+                const amountBaseFromInvoice = toBaseAmount(validatedAmount, invoiceRate);
+                cashboxAmount = normalizeAmount(amountBaseFromInvoice / paymentExchangeRate);
+            } else {
+                paymentExchangeRate = invoiceRate;
+            }
+            const amountBase = toBaseAmount(cashboxAmount, paymentExchangeRate);
 
             // 4. Calculate outstanding
             const outstanding = Math.round((normalizeAmount(invoice.total) - normalizeAmount(invoice.paid_amount)) * 100) / 100;
@@ -150,13 +165,13 @@ class PaymentController {
                    (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
                     status, notes, created_at, updated_at)
                  VALUES ('customer', ?, 'sale', ?, ?, ?, ?, ?, ?, ?, 'active', ?, datetime('now'), datetime('now'))`,
-                [customerId ?? null, sale_invoice_id, cashbox_id, validatedAmount, invoiceCurrency,
-                 invoiceRate, amountBase, validatedDate, notes ?? null]
+                [customerId ?? null, sale_invoice_id, cashbox_id, cashboxAmount, cashbox.currency,
+                 paymentExchangeRate, amountBase, validatedDate, notes ?? null]
             );
 
             // 6. Increase cashbox balance
             const cbResult = await this._updateCashboxBalance(
-                db, cashbox_id, validatedAmount, 'sale', sale_invoice_id,
+                db, cashbox_id, cashboxAmount, 'sale', sale_invoice_id,
                 validatedDate, `دفعة فاتورة بيع #${invoice.invoice_number}`
             );
 
@@ -223,13 +238,26 @@ class PaymentController {
             const cashbox = await this._loadActiveCashbox(db, cashbox_id);
             const invoiceCurrency = normalizeCurrency(invoice.currency);
             const invoiceRate = normalizeExchangeRate(invoiceCurrency, invoice.exchange_rate);
-            assertCashboxCurrency(cashbox, invoiceCurrency);
-            const amountBase = toBaseAmount(validatedAmount, invoiceRate);
+            
+            let paymentExchangeRate = invoiceRate;
+            let cashboxAmount = validatedAmount;
+            
+            if (cashbox.currency !== invoiceCurrency) {
+                if (!input.exchange_rate) {
+                    throw { code: 'MISSING_EXCHANGE_RATE', message: 'سعر الصرف مطلوب عند اختلاف عملة الصندوق عن الفاتورة' };
+                }
+                paymentExchangeRate = normalizeExchangeRate(cashbox.currency, input.exchange_rate);
+                const amountBaseFromInvoice = toBaseAmount(validatedAmount, invoiceRate);
+                cashboxAmount = normalizeAmount(amountBaseFromInvoice / paymentExchangeRate);
+            } else {
+                paymentExchangeRate = invoiceRate;
+            }
+            const amountBase = toBaseAmount(cashboxAmount, paymentExchangeRate);
 
             // 3. Check cashbox balance sufficient
             const cashboxBalance = normalizeAmount(cashbox.balance);
-            if (cashboxBalance < validatedAmount - 0.001) {
-                throw { code: 'INSUFFICIENT_BALANCE', message: `رصيد الصندوق (${cashboxBalance}) أقل من المبلغ المطلوب (${validatedAmount})` };
+            if (cashboxBalance < cashboxAmount - 0.001) {
+                throw { code: 'INSUFFICIENT_BALANCE', message: `رصيد الصندوق (${cashboxBalance}) أقل من المبلغ المطلوب (${cashboxAmount})` };
             }
 
             // 4. Calculate outstanding
@@ -244,8 +272,8 @@ class PaymentController {
                    (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
                     status, notes, created_at, updated_at)
                  VALUES ('supplier', ?, 'purchase', ?, ?, ?, ?, ?, ?, ?, 'active', ?, datetime('now'), datetime('now'))`,
-                [supplierId, purchase_invoice_id, cashbox_id, validatedAmount, invoiceCurrency,
-                 invoiceRate, amountBase, validatedDate, notes ?? null]
+                [supplierId, purchase_invoice_id, cashbox_id, cashboxAmount, cashbox.currency,
+                 paymentExchangeRate, amountBase, validatedDate, notes ?? null]
             );
 
             // 6. Deduct cashbox balance (negative delta)

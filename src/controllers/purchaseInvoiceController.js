@@ -199,18 +199,33 @@ class PurchaseInvoiceController {
                 const cashbox = await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [payBox]);
                 if (!cashbox)          throw { code: 'CASHBOX_NOT_FOUND', message: 'الصندوق غير موجود' };
                 if (!cashbox.isActive)  throw { code: 'INACTIVE_CASHBOX', message: 'الصندوق غير نشط' };
-                assertCashboxCurrency(cashbox, invoiceCurrency);
-                if (cashbox.balance < payAmount - 0.001) throw { code: 'INSUFFICIENT_BALANCE', message: `رصيد الصندوق (${cashbox.balance}) غير كافٍ` };
+                
+                let paymentExchangeRate = invoiceRate;
+                let cashboxAmount = payAmount;
+                
+                if (cashbox.currency !== invoiceCurrency) {
+                    if (!initial_payment.exchange_rate) {
+                        throw { code: 'MISSING_EXCHANGE_RATE', message: 'سعر الصرف مطلوب عند اختلاف عملة الصندوق عن الفاتورة' };
+                    }
+                    paymentExchangeRate = normalizeExchangeRate(cashbox.currency, initial_payment.exchange_rate);
+                    const amountBaseFromInvoice = toBaseAmount(payAmount, invoiceRate);
+                    cashboxAmount = normalizeAmount(amountBaseFromInvoice / paymentExchangeRate);
+                } else {
+                    paymentExchangeRate = invoiceRate;
+                }
+                const payBaseAmountCashbox = toBaseAmount(cashboxAmount, paymentExchangeRate);
+                
+                if (cashbox.balance < cashboxAmount - 0.001) throw { code: 'INSUFFICIENT_BALANCE', message: `رصيد الصندوق (${cashbox.balance}) غير كافٍ` };
 
                 // Deduct cashbox
                 const balBefore = normalizeAmount(cashbox.balance);
-                const balAfter  = Math.round((balBefore - payAmount) * 100) / 100;
+                const balAfter  = Math.round((balBefore - cashboxAmount) * 100) / 100;
                 await dbRun(db, `UPDATE cashboxes SET balance = ?, updated_at = datetime('now') WHERE id = ?`, [balAfter, payBox]);
                 const { lastID: cbtId } = await dbRun(db,
                     `INSERT INTO cashbox_transactions
                        (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
                      VALUES (?, 'purchase', ?, ?, 'out', ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-                    [payBox, invoiceId, payAmount, balBefore, balAfter, payDate, `دفعة أولى فاتورة شراء #${invNumber}`]
+                    [payBox, invoiceId, cashboxAmount, balBefore, balAfter, payDate, `دفعة أولى فاتورة شراء #${invNumber}`]
                 );
 
                 // Create payment record
@@ -219,8 +234,8 @@ class PurchaseInvoiceController {
                        (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
                         status, cashbox_transaction_id, notes, created_at, updated_at)
                      VALUES ('supplier', ?, 'purchase', ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now'))`,
-                    [supplier_id, invoiceId, payBox, payAmount, invoiceCurrency, invoiceRate,
-                     toBaseAmount(payAmount, invoiceRate), payDate, cbtId, initial_payment.notes ?? null]
+                    [supplier_id, invoiceId, payBox, cashboxAmount, cashbox.currency, paymentExchangeRate,
+                     payBaseAmountCashbox, payDate, cbtId, initial_payment.notes ?? null]
                 );
 
                 // Reduce supplier balance by payment amount
@@ -744,7 +759,7 @@ class PurchaseInvoiceController {
                 sb.quantity AS received_quantity,
                 COALESCE(SUM(CASE WHEN si.status != 'cancelled' THEN sii.quantity ELSE 0 END), 0) AS sold_quantity,
                 sb.remaining_quantity,
-                COALESCE(SUM(CASE WHEN si.status != 'cancelled' THEN sii.line_total ELSE 0 END), 0) AS total_sales_amount,
+                COALESCE(SUM(CASE WHEN si.status != 'cancelled' THEN sii.line_total * COALESCE(si.exchange_rate, 1) ELSE 0 END), 0) / ? AS total_sales_amount,
                 sb.expiry_date
             FROM stock_batches sb
             JOIN products p ON p.id = sb.product_id
@@ -753,7 +768,7 @@ class PurchaseInvoiceController {
             WHERE sb.purchase_invoice_id = ?
             GROUP BY sb.id, sb.product_id, p.name, sb.batch_code, sb.quantity, sb.remaining_quantity, sb.expiry_date
             ORDER BY sb.id ASC
-        `, [invoiceId]);
+        `, [invoice.exchange_rate || 1, invoiceId]);
 
         const salesCountRow = await dbGet(db, `
             SELECT COUNT(DISTINCT si.id) AS sales_count
@@ -859,23 +874,34 @@ class PurchaseInvoiceController {
             LIMIT 1
         `);
         const invoiceCurrency = currencySetting?.setting_value || 'SYP';
+        
+        let paymentExchangeRate = 1;
         if (cashbox.currency !== invoiceCurrency) {
-            throw { code: 'CASHBOX_CURRENCY_MISMATCH', message: 'عملة الصندوق لا تطابق عملة التسوية' };
+            if (!input.exchange_rate) {
+                throw { code: 'MISSING_EXCHANGE_RATE', message: 'سعر الصرف مطلوب عند اختلاف عملة الصندوق' };
+            }
+            paymentExchangeRate = normalizeExchangeRate(cashbox.currency, input.exchange_rate);
         }
 
         const salesTotalRow = await dbGet(db, `
-            SELECT SUM(sii.line_total) AS total_sales
+            SELECT SUM(sii.line_total * si.exchange_rate) AS total_sales_base
             FROM sale_invoice_items sii
             JOIN sale_invoices si ON sii.sale_invoice_id = si.id
             JOIN stock_batches sb ON sii.stock_batch_id = sb.id
             WHERE sb.purchase_invoice_id = ? AND si.status != 'cancelled'
         `, [invoiceId]);
-        const totalSalesAmount = normalizeAmount(salesTotalRow?.total_sales ?? 0);
+        const totalSalesAmount = normalizeAmount(salesTotalRow?.total_sales_base ?? 0);
         const commissionAmount = normalizeAmount((totalSalesAmount * commPct) / 100);
-        const supplierShare = normalizeAmount(totalSalesAmount - commissionAmount);
+        const supplierShareBase = normalizeAmount(totalSalesAmount - commissionAmount);
+        
+        let supplierShareCashbox = supplierShareBase;
+        if (cashbox.currency !== invoiceCurrency) {
+             supplierShareCashbox = normalizeAmount(supplierShareBase / paymentExchangeRate);
+        }
+        
         const cashboxBalance = normalizeAmount(cashbox.balance);
 
-        if (supplierShare > cashboxBalance) {
+        if (supplierShareCashbox > cashboxBalance) {
             throw { code: 'INSUFFICIENT_BALANCE', message: 'الرصيد في الصندوق لا يكفي للدفع للمورد' };
         }
 
@@ -889,11 +915,11 @@ class PurchaseInvoiceController {
             total_sales_amount: totalSalesAmount,
             commission_percentage: commPct,
             commission_amount: commissionAmount,
-            supplier_share: supplierShare,
+            supplier_share: supplierShareBase,
             remaining_quantity: remainingQuantity,
             currency: invoiceCurrency,
             cashbox_balance: cashboxBalance,
-            balance_after_settlement: normalizeAmount(cashboxBalance - supplierShare),
+            balance_after_settlement: normalizeAmount(cashboxBalance - supplierShareCashbox),
             can_submit: true,
             warnings: [],
             calculation_hash: calculationHash
@@ -930,25 +956,36 @@ class PurchaseInvoiceController {
 
             const currencySetting = await dbGet(db, `SELECT setting_value FROM settings WHERE setting_key IN ('default_currency', 'currency') ORDER BY CASE setting_key WHEN 'default_currency' THEN 0 ELSE 1 END LIMIT 1`);
             const invoiceCurrency = currencySetting?.setting_value || 'SYP';
-            if (cashbox.currency !== invoiceCurrency) throw { code: 'CASHBOX_CURRENCY_MISMATCH', message: 'عملة الصندوق لا تطابق عملة التسوية' };
+            
+            let paymentExchangeRate = 1;
+            if (cashbox.currency !== invoiceCurrency) {
+                if (!input.exchange_rate) {
+                    throw { code: 'MISSING_EXCHANGE_RATE', message: 'سعر الصرف مطلوب عند اختلاف عملة الصندوق' };
+                }
+                paymentExchangeRate = normalizeExchangeRate(cashbox.currency, input.exchange_rate);
+            }
 
             const salesTotalRow = await dbGet(db, `
-                SELECT SUM(sii.line_total) AS total_sales
+                SELECT SUM(sii.line_total * si.exchange_rate) AS total_sales_base
                 FROM sale_invoice_items sii
                 JOIN sale_invoices si ON sii.sale_invoice_id = si.id
                 JOIN stock_batches sb ON sii.stock_batch_id = sb.id
                 WHERE sb.purchase_invoice_id = ? AND si.status != 'cancelled'
             `, [invoiceId]);
-            const totalSalesAmount = normalizeAmount(salesTotalRow?.total_sales ?? 0);
+            const totalSalesAmount = normalizeAmount(salesTotalRow?.total_sales_base ?? 0);
             const remainingRow = await dbGet(db, 'SELECT SUM(remaining_quantity) AS remaining FROM stock_batches WHERE purchase_invoice_id = ?', [invoiceId]);
             const remainingQuantity = Number(remainingRow?.remaining ?? 0);
             const expectedHash = require('crypto').createHash('sha256').update(`${invoiceId}_${totalSalesAmount}_${remainingQuantity}_${remaining_stock_policy}`).digest('hex');
             if (calculation_hash !== expectedHash) throw { code: 'CONSIGNMENT_SALES_CHANGED', message: 'المبيعات أو المخزون تغير منذ آخر معاينة. يرجى التحديث والمحاولة مرة أخرى.' };
 
             const commissionAmount = normalizeAmount((totalSalesAmount * commPct) / 100);
-            const supplierShare = normalizeAmount(totalSalesAmount - commissionAmount);
+            const supplierShareBase = normalizeAmount(totalSalesAmount - commissionAmount);
+            let supplierShareCashbox = supplierShareBase;
+            if (cashbox.currency !== invoiceCurrency) {
+                 supplierShareCashbox = normalizeAmount(supplierShareBase / paymentExchangeRate);
+            }
             const balanceBefore = normalizeAmount(cashbox.balance);
-            if (supplierShare > balanceBefore) throw { code: 'INSUFFICIENT_BALANCE', message: 'الرصيد في الصندوق لا يكفي للدفع للمورد' };
+            if (supplierShareCashbox > balanceBefore) throw { code: 'INSUFFICIENT_BALANCE', message: 'الرصيد في الصندوق لا يكفي للدفع للمورد' };
 
             const countRow = await dbGet(db, 'SELECT COUNT(*) AS count FROM consignment_settlements');
             const settlementNumber = `SET-${String(Number(countRow?.count ?? 0) + 1).padStart(6, '0')}`;
@@ -991,23 +1028,25 @@ class PurchaseInvoiceController {
 
             let paymentId = null;
             let cashboxTransactionId = null;
-            if (supplierShare > 0) {
-                const { lastID: payId } = await dbRun(db, `
-                    INSERT INTO payments
-                    (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, payment_date, payment_method, status, notes, created_at, updated_at)
-                    VALUES ('supplier', ?, 'purchase', ?, ?, ?, ?, 'cash', 'active', ?, datetime('now'), datetime('now'))
-                `, [invoice.supplier_id, invoiceId, cashbox_id, supplierShare, settlement_date, `تسوية أمانة ${settlementNumber}`]);
-                paymentId = payId;
-
-                const balanceAfter = normalizeAmount(balanceBefore - supplierShare);
+            if (supplierShareBase > 0) {
+                const balanceAfter = normalizeAmount(balanceBefore - supplierShareCashbox);
                 await dbRun(db, 'UPDATE cashboxes SET balance = ?, updated_at = datetime("now") WHERE id = ?', [balanceAfter, cashbox_id]);
                 const { lastID: movementId } = await dbRun(db, `
                     INSERT INTO cashbox_transactions
                     (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
                     VALUES (?, 'purchase', ?, ?, 'out', ?, ?, ?, ?, datetime('now'), datetime('now'))
-                `, [cashbox_id, invoiceId, supplierShare, balanceBefore, balanceAfter, settlement_date, `تسوية أمانة ${settlementNumber}`]);
+                `, [cashbox_id, invoiceId, supplierShareCashbox, balanceBefore, balanceAfter, settlement_date, `تسوية أمانة ${settlementNumber}`]);
                 cashboxTransactionId = movementId;
-                await dbRun(db, 'UPDATE payments SET cashbox_transaction_id = ?, balance_before = ?, balance_after = ? WHERE id = ?', [movementId, balanceBefore, balanceAfter, paymentId]);
+
+                const { lastID: payId } = await dbRun(db, `
+                    INSERT INTO payments
+                    (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date, payment_method, status, cashbox_transaction_id, notes, created_at, updated_at)
+                    VALUES ('supplier', ?, 'purchase', ?, ?, ?, ?, ?, ?, ?, 'cash', 'active', ?, ?, datetime('now'), datetime('now'))
+                `, [invoice.supplier_id, invoiceId, cashbox_id, supplierShareCashbox, cashbox.currency, paymentExchangeRate, supplierShareBase, settlement_date, movementId, `تسوية أمانة ${settlementNumber}`]);
+                paymentId = payId;
+
+                // We don't deduct supplier balance here because we didn't add the invoice total to the supplier balance
+                // for consignment invoices initially. Or did we? In closeCommission, it doesn't update supplier balance.
             }
 
             await dbRun(db, 'UPDATE consignment_settlements SET payment_id = ?, cashbox_transaction_id = ? WHERE id = ?', [paymentId, cashboxTransactionId, settlementId]);

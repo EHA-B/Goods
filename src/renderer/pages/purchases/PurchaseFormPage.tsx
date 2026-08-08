@@ -96,6 +96,7 @@ export default function PurchaseFormPage() {
   const [paymentDate, setPaymentDate] = useState(
     new Date().toISOString().slice(0, 10),
   );
+  const [paymentExchangeRate, setPaymentExchangeRate] = useState("");
 
   const [currency, setCurrency] = useState("SYP");
   const [exchangeRate, setExchangeRate] = useState(1);
@@ -202,14 +203,9 @@ export default function PurchaseFormPage() {
     total - paymentAmount,
   );
 
-  const matchingCashboxes = useMemo(
-    () =>
-      (lookups?.cashboxes ?? []).filter(
-        (cashbox) =>
-          Boolean(cashbox.isActive) &&
-          cashbox.currency === currency,
-      ),
-    [lookups, currency],
+  const activeCashboxes = useMemo(
+    () => (lookups?.cashboxes ?? []).filter((cashbox) => Boolean(cashbox.isActive)),
+    [lookups],
   );
 
   const totalBase =
@@ -428,20 +424,16 @@ export default function PurchaseFormPage() {
       return;
     }
 
+    const selectedCashbox = activeCashboxes.find((c) => c.id === paymentCashboxId);
     if (
       !isConsignment &&
       paymentAmount > 0 &&
-      !matchingCashboxes.some(
-        (cashbox) =>
-          cashbox.id === paymentCashboxId,
-      )
+      selectedCashbox &&
+      selectedCashbox.currency !== currency &&
+      !paymentExchangeRate
     ) {
-      setError(
-        "يجب اختيار صندوق بنفس عملة الفاتورة",
-      );
-      notifyValidation(
-        "يجب اختيار صندوق بنفس عملة الفاتورة",
-      );
+      setError("يجب إدخال سعر الصرف للدفعة الأولية");
+      notifyValidation("يجب إدخال سعر الصرف للدفعة الأولية");
       return;
     }
 
@@ -578,13 +570,12 @@ export default function PurchaseFormPage() {
          * لا توجد دفعة أولية لفاتورة الأمانة.
          */
         initial_payment:
-          !isConsignment &&
-          paymentAmount > 0 &&
-          paymentCashboxId
+          !isConsignment && paymentAmount > 0 && paymentCashboxId
             ? {
                 cashbox_id: paymentCashboxId,
                 amount: paymentAmount,
                 payment_date: paymentDate,
+                exchange_rate: Number(paymentExchangeRate) || undefined,
               }
             : undefined,
 
@@ -1176,7 +1167,7 @@ export default function PurchaseFormPage() {
                               : "اختر الصندوق",
                       },
 
-                      ...matchingCashboxes.map(
+                      ...activeCashboxes.map(
                         (cashbox) => ({
                           value: String(
                             cashbox.id,
@@ -1198,6 +1189,12 @@ export default function PurchaseFormPage() {
                     }
                   />
                 </FormField>
+
+                {paymentCashboxId > 0 && activeCashboxes.find((c) => c.id === paymentCashboxId)?.currency !== currency && (
+                  <FormField label="سعر صرف الدفعة" required>
+                    <Input type="number" min="0" step="any" value={paymentExchangeRate} onChange={(e) => setPaymentExchangeRate(e.target.value)} placeholder={`سعر صرف ${activeCashboxes.find((c) => c.id === paymentCashboxId)?.currency} مقابل ${currency}`} />
+                  </FormField>
+                )}
 
                 <FormField label="تاريخ الدفع">
                   <Input

@@ -222,6 +222,7 @@ type RecordSalePaymentInput = {
   sale_invoice_id: number;
   cashbox_id: number;
   amount: number;
+  exchange_rate?: number;
   payment_date?: string;
   notes?: string | null;
 };
@@ -230,6 +231,7 @@ type RecordPurchasePaymentInput = {
   purchase_invoice_id: number;
   cashbox_id: number;
   amount: number;
+  exchange_rate?: number;
   payment_date?: string;
   notes?: string | null;
 };
@@ -237,6 +239,7 @@ type RecordPurchasePaymentInput = {
 type InitialPaymentInput = {
   cashbox_id: number;
   amount: number;
+  exchange_rate?: number;
   payment_date?: string;
   notes?: string | null;
 };

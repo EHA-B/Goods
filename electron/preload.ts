@@ -391,6 +391,22 @@ const stockliteApi = {
     markAllRead: () => invokeApi("api:notification:markAllRead"),
     dismiss: (id: number) => invokeApi("api:notification:dismiss", id),
   },
+
+  workers: {
+    ...crudApi("worker", {
+      create: "createWorker",
+      get: "getWorker",
+      list: "getAllWorkers",
+      update: "updateWorker",
+      remove: "deleteWorker",
+    }),
+    recordPayment: (input: unknown) =>
+      invokeApi("api:worker:recordPayment", input),
+    reversePayment: (paymentId: number, reason: string) =>
+      invokeApi("api:worker:reversePayment", paymentId, reason),
+    getPayments: (workerId: number) =>
+      invokeApi("api:worker:getPayments", workerId),
+  },
 };
 
 contextBridge.exposeInMainWorld("stockliteApi", stockliteApi);

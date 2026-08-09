@@ -106,6 +106,7 @@ const backupController = require(path.join(__dirname, '../../src/controllers', '
 const dashboardController = require(path.join(__dirname, '../../src/controllers', 'dashboardController.js'));
 const printController = require(path.join(__dirname, '../../src/controllers', 'printController.js'));
 const notificationController = require(path.join(__dirname, '../../src/controllers', 'notificationController.js'));
+const workerController = require(path.join(__dirname, '../../src/controllers', 'workerController.js'));
 
 
 /**
@@ -1798,6 +1799,115 @@ ipcMain.handle('api:user:updateUser', async (_event, id, input) => {
 ipcMain.handle('api:user:deleteUser', async (_event, id) => {
   try {
     const result = await userController.deleteUser(id);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+// ─── Worker CRUD ──────────────────────────────────────────────────────────────
+
+/**
+ * Endpoint: api:worker:createWorker
+ * Description: Creates a new worker/employee record.
+ */
+ipcMain.handle('api:worker:createWorker', async (_event, input) => {
+  try {
+    const result = await workerController.createWorker(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:worker:getWorker
+ * Description: Returns a single worker by ID.
+ */
+ipcMain.handle('api:worker:getWorker', async (_event, id) => {
+  try {
+    const result = await workerController.getWorker(id);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:worker:getAllWorkers
+ * Description: Returns all workers.
+ */
+ipcMain.handle('api:worker:getAllWorkers', async (_event) => {
+  try {
+    const result = await workerController.getAllWorkers();
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:worker:updateWorker
+ * Description: Partially updates a worker record.
+ */
+ipcMain.handle('api:worker:updateWorker', async (_event, id, input) => {
+  try {
+    const result = await workerController.updateWorker(id, input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:worker:deleteWorker
+ * Description: Hard-deletes a worker (blocked if they have payments).
+ */
+ipcMain.handle('api:worker:deleteWorker', async (_event, id) => {
+  try {
+    const result = await workerController.deleteWorker(id);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+// ─── Worker Payments ─────────────────────────────────────────────────────────
+
+/**
+ * Endpoint: api:worker:recordPayment
+ * Description: Atomically records a cash payment to a worker:
+ *   cashbox balance out, worker balance decremented, cashbox_transaction created.
+ */
+ipcMain.handle('api:worker:recordPayment', async (_event, input) => {
+  try {
+    const result = await workerController.recordWorkerPayment(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:worker:reversePayment
+ * Description: Reverses a worker payment: cashbox balance restored, worker balance restored.
+ */
+ipcMain.handle('api:worker:reversePayment', async (_event, paymentId, reason) => {
+  try {
+    const result = await workerController.reverseWorkerPayment(paymentId, reason);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:worker:getPayments
+ * Description: Returns all payments for a given worker.
+ */
+ipcMain.handle('api:worker:getPayments', async (_event, workerId) => {
+  try {
+    const result = await workerController.getWorkerPayments(workerId);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);

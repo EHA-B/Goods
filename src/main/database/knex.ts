@@ -21,6 +21,7 @@ import * as multiCurrencyHardeningMigration from './migrations/20260805160000_mu
 import * as notificationsCenterMigration from './migrations/20260805203000_notifications_center';
 import * as notificationsLifecycleHardeningMigration from './migrations/20260805214500_notifications_lifecycle_hardening';
 import * as consignmentPrepaidAmountMigration from './migrations/20260809000000_consignment_prepaid_amount';
+import * as addWorkersTableMigration from './migrations/20260809100000_add_workers_table';
 import * as cashboxesSeed from './seeds/01_cashboxes';
 import * as usersSeed from './seeds/02_users';
 
@@ -47,6 +48,7 @@ class MigrationSource {
       '20260805203000_notifications_center.ts',
       '20260805214500_notifications_lifecycle_hardening.ts',
       '20260809000000_consignment_prepaid_amount.ts',
+      '20260809100000_add_workers_table.ts',
     ]);
   }
   getMigrationName(migration: string) {
@@ -103,6 +105,9 @@ class MigrationSource {
     }
     if (migration === '20260809000000_consignment_prepaid_amount.ts') {
       return consignmentPrepaidAmountMigration;
+    }
+    if (migration === '20260809100000_add_workers_table.ts') {
+      return addWorkersTableMigration;
     }
     if (migration === '20260804_sales_purchases_hardening.ts') {
       return sales_purchases_hardening;

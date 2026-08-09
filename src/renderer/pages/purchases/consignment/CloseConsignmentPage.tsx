@@ -50,6 +50,6 @@ export default function CloseConsignmentPage() {
       </div>
       {preview && <CommissionPreviewCard preview={preview} />}
     </div>
-    <ConfirmDialog open={confirmOpen} title="تأكيد إغلاق فاتورة الأمانة" message={`سيتم اعتماد إجمالي مبيعات ${money(preview?.total_sales_amount ?? 0, summary.invoice.currency)}، وعمولة ${commission}%، وحصة مورد ${money(preview?.supplier_share ?? 0, summary.invoice.currency)}، ومعالجة المتبقي عبر: ${policyLabels[policy]}. سيتم تنفيذ جميع الآثار المخزنية والمالية وحفظها في قاعدة البيانات.`} confirmText="تأكيد التسوية" cancelText="مراجعة" loading={submitting} onCancel={() => setConfirmOpen(false)} onConfirm={() => void submit()} />
+    <ConfirmDialog open={confirmOpen} title="تأكيد إغلاق فاتورة الأمانة" message={`سيتم اعتماد إجمالي مبيعات ${money(preview?.total_sales_amount ?? 0, summary.invoice.currency)}، وعمولة ${commission}%، وحصة مورد إجمالية ${money(preview?.supplier_share ?? 0, summary.invoice.currency)}${(preview?.prepaid_amount ?? 0) > 0 ? ` (مدفوع مسبقاً: ${money(preview!.prepaid_amount, summary.invoice.currency)}، صافي من الصندوق: ${money(preview!.net_supplier_payout, summary.invoice.currency)})` : ""}، ومعالجة المتبقي عبر: ${policyLabels[policy]}. سيتم تنفيذ جميع الآثار المخزنية والمالية وحفظها في قاعدة البيانات.`} confirmText="تأكيد التسوية" cancelText="مراجعة" loading={submitting} onCancel={() => setConfirmOpen(false)} onConfirm={() => void submit()} />
   </>;
 }

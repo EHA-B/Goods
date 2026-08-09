@@ -43,7 +43,7 @@ export default function PurchasePaymentPage() {
   const submit = async () => {
     setError("");
     if (amount <= 0) { setError("المبلغ يجب أن يكون موجبًا"); notifyValidation("المبلغ يجب أن يكون موجبًا"); return; }
-    if (amount > remaining + 0.001) { setError("المبلغ أكبر من المتبقي"); notifyValidation("المبلغ أكبر من المتبقي"); return; }
+    // if (amount > remaining + 0.001) { setError("المبلغ أكبر من المتبقي"); notifyValidation("المبلغ أكبر من المتبقي"); return; }
     if (!cashboxId) { setError("اختر الصندوق"); notifyValidation("اختر الصندوق"); return; }
     const selectedCashbox = cashboxes.find((c) => c.id === cashboxId);
     if (selectedCashbox && selectedCashbox.currency !== (details?.invoice.currency || "SYP") && !exchangeRate) { setError("أدخل سعر الصرف"); notifyValidation("أدخل سعر الصرف"); return; }
@@ -77,8 +77,8 @@ export default function PurchasePaymentPage() {
     <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
       <FormSection title="بيانات الدفعة" description="أدخل المبلغ والصندوق." icon={<Banknote size={18} />}>
         <div className="grid gap-4 md:grid-cols-2">
-          <FormField label="المبلغ" htmlFor="amount" required error={amount > remaining + 0.001 ? "المبلغ أكبر من المتبقي." : undefined}>
-            <Input id="amount" type="number" min="1" max={remaining} value={amount} error={amount > remaining + 0.001} onChange={(e) => setAmount(Number(e.target.value))} />
+          <FormField label="المبلغ" htmlFor="amount">
+            <Input id="amount" type="number" min="1" max={remaining} value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
           </FormField>
           <FormField label="التاريخ" htmlFor="date" required>
             <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />

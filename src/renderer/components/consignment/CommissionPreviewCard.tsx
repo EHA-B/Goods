@@ -1,4 +1,4 @@
-import { AlertCircle, Building2, Calculator, HandCoins, Landmark, WalletCards } from "lucide-react";
+import { AlertCircle, Building2, Calculator, HandCoins, Landmark, Minus, WalletCards } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ConsignmentClosingPreview } from "../../pages/purchases/consignment/consignmentTypes";
 import { money } from "../../pages/purchases/consignment/consignmentUtils";
@@ -15,9 +15,10 @@ type RowProps = {
   value: string;
   emphasis?: boolean;
   danger?: boolean;
+  muted?: boolean;
 };
 
-function SummaryRow({ icon, label, value, emphasis, danger }: RowProps) {
+function SummaryRow({ icon, label, value, emphasis, danger, muted }: RowProps) {
   return (
     <div
       className={[
@@ -32,7 +33,7 @@ function SummaryRow({ icon, label, value, emphasis, danger }: RowProps) {
       <strong
         className={[
           "shrink-0 text-sm font-black",
-          danger ? "text-[var(--danger)]" : "text-[var(--text-primary)]",
+          danger ? "text-[var(--danger)]" : muted ? "text-[var(--text-muted)]" : "text-[var(--text-primary)]",
         ].join(" ")}
       >
         {value}
@@ -57,7 +58,7 @@ export default function CommissionPreviewCard({ preview, loading = false, policy
       <div className="space-y-2.5 p-4">
         {loading ? (
           <div className="space-y-2.5" aria-label="جارٍ حساب المعاينة">
-            {[0, 1, 2, 3, 4].map((item) => (
+            {[0, 1, 2, 3, 4, 5].map((item) => (
               <div key={item} className="h-11 animate-pulse rounded-lg bg-[var(--surface-subtle)]" />
             ))}
           </div>
@@ -75,8 +76,22 @@ export default function CommissionPreviewCard({ preview, loading = false, policy
             />
             <SummaryRow
               icon={<HandCoins size={16} />}
-              label="حصة المورد"
+              label="حصة المورد الإجمالية"
               value={money(preview.supplier_share, preview.currency)}
+              muted
+            />
+            {preview.prepaid_amount > 0 && (
+              <SummaryRow
+                icon={<Minus size={16} />}
+                label="المدفوع مسبقاً للمورد"
+                value={`- ${money(preview.prepaid_amount, preview.currency)}`}
+                muted
+              />
+            )}
+            <SummaryRow
+              icon={<HandCoins size={16} />}
+              label={preview.prepaid_amount > 0 ? "صافي المبلغ المستحق (من الصندوق)" : "حصة المورد"}
+              value={money(preview.net_supplier_payout, preview.currency)}
               emphasis
             />
             <SummaryRow

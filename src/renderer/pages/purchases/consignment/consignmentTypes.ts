@@ -23,6 +23,8 @@ export type ConsignmentSettlement = {
   commission_percentage: number;
   commission_amount: number;
   supplier_share: number;
+  /** Amount already paid to the supplier before the settlement closing. */
+  prepaid_amount: number;
   cashbox_id: number;
   cashbox_name: string;
   currency: string;
@@ -48,6 +50,10 @@ export type ConsignmentInvoiceSummary = {
     status: string;
     settlement_status: SettlementStatus;
     currency: string;
+    /** Amount already paid to the supplier (via partial payments) */
+    paid_amount: number;
+    /** Remaining balance still owed to the supplier based on invoice total */
+    remaining_amount: number;
   };
   sales: { total_sales_amount: number; sold_quantity: number; sales_count: number };
   stock: { received_quantity: number; sold_quantity: number; remaining_quantity: number; damaged_quantity: number; returned_quantity: number };
@@ -69,7 +75,12 @@ export type ConsignmentClosingPreview = {
   total_sales_amount: number;
   commission_percentage: number;
   commission_amount: number;
+  /** Gross supplier share (before subtracting pre-payments) */
   supplier_share: number;
+  /** Amount already paid to the supplier before closing */
+  prepaid_amount: number;
+  /** Net amount still owed — what will actually be deducted from the cashbox */
+  net_supplier_payout: number;
   remaining_quantity: number;
   currency: string;
   cashbox_balance: number;

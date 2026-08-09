@@ -1,0 +1,15 @@
+export const consignmentErrorMessages: Record<string, string> = {
+  PURCHASE_NOT_FOUND: "فاتورة الشراء غير موجودة.",
+  NOT_CONSIGNMENT_INVOICE: "هذه الفاتورة ليست فاتورة أمانة.",
+  CONSIGNMENT_ALREADY_CLOSED: "تم إغلاق وتسوية هذه الفاتورة مسبقًا.",
+  INVALID_COMMISSION_PERCENTAGE: "نسبة العمولة غير صحيحة.",
+  CASHBOX_NOT_FOUND: "الصندوق المحدد غير موجود.",
+  INACTIVE_CASHBOX: "الصندوق المحدد غير نشط.",
+  CASHBOX_CURRENCY_MISMATCH: "عملة الصندوق لا تطابق عملة التسوية.",
+  INSUFFICIENT_BALANCE: "رصيد الصندوق غير كافٍ لإتمام التسوية.",
+  INVALID_SETTLEMENT_DATE: "تاريخ التسوية غير صالح.",
+  INVALID_REMAINING_STOCK_POLICY: "سياسة معالجة الكمية المتبقية غير صالحة.",
+  INVALID_STOCK_RESOLUTION: "بيانات معالجة المخزون المتبقي غير صحيحة.",
+  CONSIGNMENT_SALES_CHANGED: "تغيرت بيانات المبيعات. يرجى تحديث المعاينة.",
+  CONSIGNMENT_CLOSE_FAILED: "تعذر إغلاق فاتورة الأمانة.",
+};

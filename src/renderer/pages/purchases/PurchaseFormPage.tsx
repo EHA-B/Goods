@@ -188,15 +188,16 @@ export default function PurchaseFormPage() {
   );
 
   /**
-   * الخصم يطبق فقط على الفاتورة العادية.
+   * المجموع الكلي — للأمانة يستخدم سعر التسويق كأساس الفاتورة.
+   * هذا يسمح بتسجيل دفعات جزئية للمورد.
    */
   const total = Math.max(
     0,
-    standardSubtotal - discount,
+    isConsignment ? estimatedSubtotal : standardSubtotal - discount,
   );
 
   /**
-   * المتبقي له معنى مالي فقط في الفاتورة العادية.
+   * المتبقي = الإجمالي - الدفعة الأولية (للعادية) أو صفر (للأمانة عند الإنشاء).
    */
   const remaining = Math.max(
     0,
@@ -330,10 +331,12 @@ export default function PurchaseFormPage() {
 
     if (nextType === "consignment") {
       /**
-       * الأمانة حاليًا SYP فقط.
+       * الأمانة تدعم نفس عملات النظام (SYP / USD).
+       * نحافظ على العملة الحالية بدل فرض الليرة السورية.
        */
-      setCurrency("SYP");
-      setExchangeRate(1);
+      if (currency === "SYP") {
+        setExchangeRate(1);
+      }
 
       /**
        * الأمانة لا تحتوي دفعة أولية.
@@ -508,7 +511,7 @@ export default function PurchaseFormPage() {
 
     if (invalidItem) {
       const message = isConsignment
-        ? "راجع الأصناف — المنتج والكمية مطلوبان، وسعر الشراء المتوقع لا يمكن أن يكون سالبًا"
+        ? "راجع الأصناف — المنتج والكمية وسعر التسويق مطلوبة ولا يمكن أن تكون سالبة"
         : "راجع الأصناف — المنتج والكمية والسعر مطلوبة";
 
       setError(message);
@@ -541,14 +544,12 @@ export default function PurchaseFormPage() {
 
           /**
            * للأمانة:
-           * لا يوجد سعر شراء فعلي عند الاستلام.
-           *
-           * نرسل purchase_price = 0 حاليًا حتى يبقى
-           * الطلب متوافقًا مع النوع القديم،
-           * ويقرأ الباك السعر المتوقع من الحقل الجديد.
+           * نرسل سعر التسويق كـ purchase_price حتى يؤثر على إجمالي الفاتورة
+           * ويسمح بتسجيل دفعات جزئية منه للمورد.
+           * التسوية النهائية تعتمد على المبيعات الفعلية والعمولة.
            */
           purchase_price: isConsignment
-            ? 0
+            ? item.estimated_purchase_price
             : item.purchase_price,
 
           estimated_purchase_price:
@@ -580,15 +581,12 @@ export default function PurchaseFormPage() {
             : undefined,
 
         /**
-         * الأمانة تبقى SYP حاليًا.
+         * الأمانة والعادية تستخدمان العملة المختارة نفسها.
          */
-        currency: isConsignment
-          ? "SYP"
-          : currency,
+        currency,
 
-        exchange_rate: isConsignment
-          ? 1
-          : currency === "SYP"
+        exchange_rate:
+          currency === "SYP"
             ? 1
             : exchangeRate,
       };
@@ -737,27 +735,16 @@ export default function PurchaseFormPage() {
             <FormField label="العملة" required>
               <Select
                 value={currency}
-                disabled={isConsignment}
-                options={
-                  isConsignment
-                    ? [
-                        {
-                          value: "SYP",
-                          label:
-                            "ل.س (SYP) — الأمانة",
-                        },
-                      ]
-                    : [
-                        {
-                          value: "SYP",
-                          label: "ل.س (SYP)",
-                        },
-                        {
-                          value: "USD",
-                          label: "دولار (USD)",
-                        },
-                      ]
-                }
+                options={[
+                  {
+                    value: "SYP",
+                    label: "ل.س (SYP)",
+                  },
+                  {
+                    value: "USD",
+                    label: "دولار (USD)",
+                  },
+                ]}
                 onChange={(e) => {
                   const newCurrency =
                     e.target.value;
@@ -787,8 +774,7 @@ export default function PurchaseFormPage() {
               />
             </FormField>
 
-            {currency !== "SYP" &&
-              !isConsignment && (
+            {currency !== "SYP" && (
                 <FormField
                   label={`سعر 1 ${currency} بالليرة السورية`}
                   required
@@ -829,7 +815,7 @@ export default function PurchaseFormPage() {
           header="أصناف الفاتورة"
           description={
             isConsignment
-              ? "أضف المنتجات وحدد الكمية وسعر الشراء المتوقع وبيانات دفعة المخزون. السعر المتوقع تقديري فقط ويمكن أن يكون صفراً."
+              ? "أضف المنتجات وحدد الكمية وسعر تسويق المنتج وبيانات دفعة المخزون. سعر التسويق يحدد إجمالي الفاتورة ويمكن دفع دفعات منه للمورد."
               : "أضف المنتجات وحدد الكمية وسعر الشراء وبيانات دفعة المخزون."
           }
         >
@@ -952,7 +938,7 @@ export default function PurchaseFormPage() {
                     </FormField>
 
                     {isConsignment ? (
-                      <FormField label="سعر الشراء المتوقع">
+                      <FormField label="سعر تسويق المنتج" required>
                         <Input
                           type="number"
                           min="0"
@@ -960,7 +946,7 @@ export default function PurchaseFormPage() {
                           value={
                             item.estimated_purchase_price
                           }
-                          placeholder="اختياري — يمكن تركه 0"
+                          placeholder="سعر تسويق الوحدة للمورد"
                           onChange={(e) =>
                             updateItem(index, {
                               estimated_purchase_price:
@@ -971,12 +957,6 @@ export default function PurchaseFormPage() {
                             })
                           }
                         />
-
-                        <p className="mt-1.5 text-xs leading-5 text-[var(--text-muted)]">
-                          قيمة تقديرية فقط، ولا
-                          تؤثر على مستحقات المورد
-                          عند تسوية الأمانة.
-                        </p>
                       </FormField>
                     ) : (
                       <FormField
@@ -1006,7 +986,7 @@ export default function PurchaseFormPage() {
                     <FormField
                       label={
                         isConsignment
-                          ? "إجمالي السطر التقديري"
+                          ? "إجمالي السطر"
                           : "إجمالي السطر"
                       }
                     >
@@ -1083,49 +1063,7 @@ export default function PurchaseFormPage() {
           </div>
         </Card>
 
-        {isConsignment ? (
-          <Card
-            header="ملخص الأمانة"
-            className="h-fit"
-          >
-            <div className="space-y-4">
-              <div className="rounded-[var(--radius-md)] bg-[var(--surface-subtle)] p-4">
-                <p className="text-sm text-[var(--text-muted)]">
-                  القيمة التقديرية للبضاعة
-                </p>
-
-                <p className="mt-2 text-xl font-bold text-[var(--primary)]">
-                  {money(estimatedSubtotal)} SYP
-                </p>
-              </div>
-
-              <p className="text-sm leading-6 text-[var(--text-muted)]">
-                هذه القيمة مبنية على أسعار الشراء
-                المتوقعة فقط، ولا تمثل دينًا أو
-                مبلغًا مستحقًا للمورد. مستحقات
-                المورد تُحسب لاحقًا عند تسوية
-                الأمانة حسب المبيعات الفعلية
-                والعمولة.
-              </p>
-
-              <div className="flex justify-between border-t border-[var(--border)] pt-3 text-sm">
-                <span className="text-[var(--text-muted)]">
-                  المبلغ المدفوع عند الاستلام
-                </span>
-
-                <strong>0 SYP</strong>
-              </div>
-
-              <div className="flex justify-between text-sm">
-                <span className="text-[var(--text-muted)]">
-                  الدين الناتج عن الاستلام
-                </span>
-
-                <strong>0 SYP</strong>
-              </div>
-            </div>
-          </Card>
-        ) : (
+        {!isConsignment && (
           <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
             <FormSection
               title="الدفع الأولي"

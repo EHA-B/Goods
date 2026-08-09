@@ -1,0 +1,123 @@
+import { notifyValidation } from "../../lib/notifications";
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
+import { useEffect, useState } from "react";
+import { Banknote, Save } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import { BackButton, Button, Card, FormField, FormSection, Input, PageHeader, Select, Textarea } from "../../components/ui";
+import { salesService } from "./salesService";
+
+export default function SalePaymentPage() {
+  const navigate = useNavigate();
+  const { saleId } = useParams();
+  const [details, setDetails] = useState<SaleInvoiceDetails | null>(null);
+  const [cashboxes, setCashboxes] = useState<CashboxApiRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const [amount, setAmount] = useState(0);
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [cashboxId, setCashboxId] = useState(0);
+  const [exchangeRate, setExchangeRate] = useState("");
+  const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    const id = Number(saleId);
+    if (!id) return;
+    Promise.all([salesService.getDetails(id), salesService.getLookups()])
+      .then(([data, lookups]) => {
+        setDetails(data);
+        const activeCashboxes = lookups.cashboxes.filter((item) => Boolean(item.isActive));
+        setCashboxes(activeCashboxes);
+        const remaining = data.financial_summary.remaining_amount;
+        setAmount(remaining);
+        const defaultCashbox = activeCashboxes.find((c) => c.currency === data.invoice.currency) || activeCashboxes[0];
+        setCashboxId(defaultCashbox?.id ?? 0);
+      })
+      .catch((err: Error) => setError(getArabicErrorMessage(err, "خطأ في التحميل")))
+      .finally(() => setLoading(false));
+  }, [saleId]);
+
+  const remaining = details?.financial_summary.remaining_amount ?? 0;
+
+  const submit = async () => {
+    setError("");
+    if (amount <= 0) { setError("المبلغ يجب أن يكون موجبًا"); notifyValidation("المبلغ يجب أن يكون موجبًا"); return; }
+    if (amount > remaining + 0.001) { setError("المبلغ أكبر من المتبقي"); notifyValidation("المبلغ أكبر من المتبقي"); return; }
+    if (!cashboxId) { setError("اختر الصندوق"); notifyValidation("اختر الصندوق"); return; }
+    const selectedCashbox = cashboxes.find((c) => c.id === cashboxId);
+    if (selectedCashbox && selectedCashbox.currency !== (details?.invoice.currency || "SYP") && !exchangeRate) { setError("أدخل سعر الصرف"); notifyValidation("أدخل سعر الصرف"); return; }
+
+    setSubmitting(true);
+    try {
+      await window.stockliteApi.payments.recordSale({
+        sale_invoice_id: Number(saleId),
+        cashbox_id: cashboxId,
+        amount,
+        exchange_rate: Number(exchangeRate) || undefined,
+        payment_date: date,
+        notes: notes || undefined,
+      });
+      navigate(`/sales/${saleId}`);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(getArabicErrorMessage(e, "تعذر تسجيل الدفعة"));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) return <div className="px-6 py-12 text-center text-sm text-[var(--text-muted)]">جاري التحميل...</div>;
+  if (!details) return null;
+
+  const { invoice } = details;
+
+  return <>
+    <PageHeader title="تسجيل دفعة" description={`إضافة دفعة إلى الفاتورة ${invoice.invoice_number}.`} actions={<BackButton to={`/sales/${saleId}`} />} />
+    <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
+      <FormSection title="بيانات الدفعة" description="أدخل المبلغ وطريقة الدفع والصندوق." icon={<Banknote size={18} />}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField label="المبلغ" htmlFor="amount" required error={amount > remaining + 0.001 ? "المبلغ أكبر من المتبقي." : undefined}>
+            <Input id="amount" type="number" min="1" max={remaining} value={amount} error={amount > remaining + 0.001} onChange={(e) => setAmount(Number(e.target.value))} />
+          </FormField>
+          <FormField label="التاريخ" htmlFor="date" required>
+            <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </FormField>
+          <FormField label="الصندوق" htmlFor="cashbox" required>
+            <Select id="cashbox" value={String(cashboxId)} options={[{ value: "0", label: "اختر الصندوق" }, ...cashboxes.map((c) => ({ value: String(c.id), label: `${c.name} — ${Number(c.balance ?? 0).toLocaleString("en-US")} ${c.currency}` }))]} onChange={(e) => setCashboxId(Number(e.target.value))} />
+          </FormField>
+          {cashboxId > 0 && cashboxes.find((c) => c.id === cashboxId)?.currency !== (invoice.currency || "SYP") && (
+            <FormField label="سعر الصرف" htmlFor="exchangeRate" required>
+              <Input id="exchangeRate" type="number" min="0" step="any" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} placeholder={`سعر صرف ${cashboxes.find((c) => c.id === cashboxId)?.currency} مقابل ${invoice.currency || "SYP"}`} />
+            </FormField>
+          )}
+          <FormField label="ملاحظات" htmlFor="notes" className="md:col-span-2">
+            <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </FormField>
+        </div>
+        {error && <div className="mt-3 rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
+        <div className="flex justify-end gap-3 pt-2">
+          <Button variant="secondary" onClick={() => navigate(`/sales/${saleId}`)}>إلغاء</Button>
+          <Button startIcon={<Save size={17} />} disabled={submitting} onClick={submit}>{submitting ? "جاري الحفظ..." : "حفظ الدفعة"}</Button>
+        </div>
+      </FormSection>
+
+      <Card header="ملخص الفاتورة" className="h-fit">
+        <div className="space-y-3 text-sm">
+          {[
+            ["رقم الفاتورة", invoice.invoice_number],
+            ["العميل", details.customer?.name ?? "بيع نقدي"],
+            ["الإجمالي", `${details.financial_summary.total_amount.toLocaleString("en-US")} ${invoice.currency || "SYP"}`],
+            ["المدفوع سابقًا", `${details.financial_summary.paid_amount.toLocaleString("en-US")} ${invoice.currency || "SYP"}`],
+            ["المتبقي", `${remaining.toLocaleString("en-US")} ${invoice.currency || "SYP"}`],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="flex justify-between">
+              <span className="text-[var(--text-muted)]">{label}</span>
+              <strong>{value}</strong>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  </>;
+}

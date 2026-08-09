@@ -217,6 +217,21 @@ class TransactionController {
         if (!reason) throw { code: 'VALIDATION_ERROR', message: 'Cancellation reason is required' };
 
         const knex = getKnex();
+
+        // Worker salary/wage expenses are owned by workerController because that
+        // flow must restore both the worker balance and the cashbox atomically.
+        // Delegating here prevents a second cashbox reversal.
+        const linkedWorkerPayment = await knex('worker_payments')
+            .where('transaction_id', id)
+            .where('status', 'active')
+            .first();
+
+        if (linkedWorkerPayment) {
+            const workerController = require('./workerController');
+            await workerController.reverseWorkerPayment(linkedWorkerPayment.id, reason);
+            return this.getFinancialTransactionDetails(id);
+        }
+
         let updatedTransaction;
 
         await knex.transaction(async (trx) => {

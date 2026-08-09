@@ -106,13 +106,6 @@ class PurchaseInvoiceController {
             // 7. Insert purchase invoice
             const invoiceCurrency = normalizeCurrency(currency);
             const invoiceRate = normalizeExchangeRate(invoiceCurrency, exchange_rate);
-            if (invoice_type === 'consignment' && invoiceCurrency !== 'SYP') {
-                throw {
-                    code: 'CONSIGNMENT_CURRENCY_NOT_SUPPORTED',
-                    message: 'فواتير الأمانة متعددة العملات غير مدعومة حاليًا. استخدم SYP لفاتورة الأمانة.',
-                };
-            }
-            
             const { lastID: invoiceId } = await dbRun(db,
                 `INSERT INTO purchase_invoices
                    (invoice_number, supplier_id, invoice_type, invoice_date,
@@ -743,13 +736,6 @@ class PurchaseInvoiceController {
         const supplier = invoice.supplier_id
             ? await dbGet(db, 'SELECT id, name FROM suppliers WHERE id = ?', [invoice.supplier_id])
             : null;
-        const currencySetting = await dbGet(db, `
-            SELECT setting_value FROM settings
-            WHERE setting_key IN ('default_currency', 'currency')
-            ORDER BY CASE setting_key WHEN 'default_currency' THEN 0 ELSE 1 END
-            LIMIT 1
-        `);
-
         const itemRows = await dbAll(db, `
             SELECT
                 sb.id AS stock_batch_id,
@@ -797,21 +783,23 @@ class PurchaseInvoiceController {
             sold_quantity: Number(row.sold_quantity ?? 0),
             remaining_quantity: Number(row.remaining_quantity ?? 0),
             total_sales_amount: normalizeAmount(row.total_sales_amount ?? 0),
-            expiry_date: row.expiry_date ?? null
+        expiry_date: row.expiry_date ?? null
         }));
 
         const receivedQuantity = items.reduce((sum, item) => sum + item.received_quantity, 0);
         const soldQuantity = items.reduce((sum, item) => sum + item.sold_quantity, 0);
         const remainingQuantity = items.reduce((sum, item) => sum + item.remaining_quantity, 0);
         const totalSalesAmount = normalizeAmount(items.reduce((sum, item) => sum + item.total_sales_amount, 0));
-        const currency = settlement?.currency || currencySetting?.setting_value || 'SYP';
+        const currency = settlement?.currency || normalizeCurrency(invoice.currency);
 
         return {
             invoice: {
                 ...invoice,
                 supplier_name: supplier?.name || '—',
                 settlement_status: invoice.settlement_status || 'pending',
-                currency
+                currency,
+                paid_amount: normalizeAmount(invoice.paid_amount ?? 0),
+                remaining_amount: normalizeAmount(invoice.remaining_amount ?? invoice.total ?? 0),
             },
             sales: {
                 total_sales_amount: totalSalesAmount,
@@ -834,6 +822,7 @@ class PurchaseInvoiceController {
                 commission_percentage: Number(settlement.commission_percentage ?? 0),
                 commission_amount: normalizeAmount(settlement.commission_amount),
                 supplier_share: normalizeAmount(settlement.supplier_share),
+                prepaid_amount: normalizeAmount(settlement.prepaid_amount ?? 0),
                 cashbox_id: Number(settlement.cashbox_id),
                 returned_quantity: Number(settlement.returned_quantity ?? 0),
                 spoilage_quantity: Number(settlement.spoilage_quantity ?? 0),
@@ -867,21 +856,9 @@ class PurchaseInvoiceController {
         if (!cashbox) throw { code: 'CASHBOX_NOT_FOUND', message: 'الصندوق غير موجود' };
         if (!cashbox.isActive) throw { code: 'INACTIVE_CASHBOX', message: 'الصندوق غير نشط' };
 
-        const currencySetting = await dbGet(db, `
-            SELECT setting_value FROM settings
-            WHERE setting_key IN ('default_currency', 'currency')
-            ORDER BY CASE setting_key WHEN 'default_currency' THEN 0 ELSE 1 END
-            LIMIT 1
-        `);
-        const invoiceCurrency = currencySetting?.setting_value || 'SYP';
-        
-        let paymentExchangeRate = 1;
-        if (cashbox.currency !== invoiceCurrency) {
-            if (!input.exchange_rate) {
-                throw { code: 'MISSING_EXCHANGE_RATE', message: 'سعر الصرف مطلوب عند اختلاف عملة الصندوق' };
-            }
-            paymentExchangeRate = normalizeExchangeRate(cashbox.currency, input.exchange_rate);
-        }
+        const invoiceCurrency = normalizeCurrency(invoice.currency);
+        const invoiceRate = normalizeExchangeRate(invoiceCurrency, invoice.exchange_rate);
+        assertCashboxCurrency(cashbox, invoiceCurrency);
 
         const salesTotalRow = await dbGet(db, `
             SELECT SUM(sii.line_total * si.exchange_rate) AS total_sales_base
@@ -890,25 +867,28 @@ class PurchaseInvoiceController {
             JOIN stock_batches sb ON sii.stock_batch_id = sb.id
             WHERE sb.purchase_invoice_id = ? AND si.status != 'cancelled'
         `, [invoiceId]);
-        const totalSalesAmount = normalizeAmount(salesTotalRow?.total_sales_base ?? 0);
+        const totalSalesBase = normalizeAmount(salesTotalRow?.total_sales_base ?? 0);
+        const totalSalesAmount = normalizeAmount(totalSalesBase / invoiceRate);
         const commissionAmount = normalizeAmount((totalSalesAmount * commPct) / 100);
         const supplierShareBase = normalizeAmount(totalSalesAmount - commissionAmount);
+
+        // The supplier may have already received partial payments during the consignment.
+        // We only need to pay the remaining balance from the cashbox.
+        const prepaidAmount = normalizeAmount(invoice.paid_amount ?? 0);
+        const netSupplierPayout = normalizeAmount(Math.max(0, supplierShareBase - prepaidAmount));
         
-        let supplierShareCashbox = supplierShareBase;
-        if (cashbox.currency !== invoiceCurrency) {
-             supplierShareCashbox = normalizeAmount(supplierShareBase / paymentExchangeRate);
-        }
-        
+        const netSupplierPayoutCashbox = netSupplierPayout;
         const cashboxBalance = normalizeAmount(cashbox.balance);
 
-        if (supplierShareCashbox > cashboxBalance) {
+        if (netSupplierPayoutCashbox > cashboxBalance + 0.001) {
             throw { code: 'INSUFFICIENT_BALANCE', message: 'الرصيد في الصندوق لا يكفي للدفع للمورد' };
         }
 
         const remainingRow = await dbGet(db, 'SELECT SUM(remaining_quantity) AS remaining FROM stock_batches WHERE purchase_invoice_id = ?', [invoiceId]);
         const remainingQuantity = Number(remainingRow?.remaining ?? 0);
+        // Include prepaidAmount in hash so stale previews (recorded before a payment was made) are rejected
         const calculationHash = require('crypto').createHash('sha256').update(
-            `${invoiceId}_${totalSalesAmount}_${remainingQuantity}_${remaining_stock_policy}`
+            `${invoiceId}_${totalSalesAmount}_${remainingQuantity}_${remaining_stock_policy}_${prepaidAmount}_${commPct}_${invoiceCurrency}_${invoiceRate}`
         ).digest('hex');
 
         return {
@@ -916,10 +896,12 @@ class PurchaseInvoiceController {
             commission_percentage: commPct,
             commission_amount: commissionAmount,
             supplier_share: supplierShareBase,
+            prepaid_amount: prepaidAmount,
+            net_supplier_payout: netSupplierPayout,
             remaining_quantity: remainingQuantity,
             currency: invoiceCurrency,
             cashbox_balance: cashboxBalance,
-            balance_after_settlement: normalizeAmount(cashboxBalance - supplierShareCashbox),
+            balance_after_settlement: normalizeAmount(cashboxBalance - netSupplierPayoutCashbox),
             can_submit: true,
             warnings: [],
             calculation_hash: calculationHash
@@ -954,16 +936,9 @@ class PurchaseInvoiceController {
             if (!cashbox) throw { code: 'CASHBOX_NOT_FOUND', message: 'الصندوق غير موجود' };
             if (!cashbox.isActive) throw { code: 'INACTIVE_CASHBOX', message: 'الصندوق غير نشط' };
 
-            const currencySetting = await dbGet(db, `SELECT setting_value FROM settings WHERE setting_key IN ('default_currency', 'currency') ORDER BY CASE setting_key WHEN 'default_currency' THEN 0 ELSE 1 END LIMIT 1`);
-            const invoiceCurrency = currencySetting?.setting_value || 'SYP';
-            
-            let paymentExchangeRate = 1;
-            if (cashbox.currency !== invoiceCurrency) {
-                if (!input.exchange_rate) {
-                    throw { code: 'MISSING_EXCHANGE_RATE', message: 'سعر الصرف مطلوب عند اختلاف عملة الصندوق' };
-                }
-                paymentExchangeRate = normalizeExchangeRate(cashbox.currency, input.exchange_rate);
-            }
+            const invoiceCurrency = normalizeCurrency(invoice.currency);
+            const invoiceRate = normalizeExchangeRate(invoiceCurrency, invoice.exchange_rate);
+            assertCashboxCurrency(cashbox, invoiceCurrency);
 
             const salesTotalRow = await dbGet(db, `
                 SELECT SUM(sii.line_total * si.exchange_rate) AS total_sales_base
@@ -972,40 +947,46 @@ class PurchaseInvoiceController {
                 JOIN stock_batches sb ON sii.stock_batch_id = sb.id
                 WHERE sb.purchase_invoice_id = ? AND si.status != 'cancelled'
             `, [invoiceId]);
-            const totalSalesAmount = normalizeAmount(salesTotalRow?.total_sales_base ?? 0);
+            const totalSalesBase = normalizeAmount(salesTotalRow?.total_sales_base ?? 0);
+            const totalSalesAmount = normalizeAmount(totalSalesBase / invoiceRate);
             const remainingRow = await dbGet(db, 'SELECT SUM(remaining_quantity) AS remaining FROM stock_batches WHERE purchase_invoice_id = ?', [invoiceId]);
             const remainingQuantity = Number(remainingRow?.remaining ?? 0);
-            const expectedHash = require('crypto').createHash('sha256').update(`${invoiceId}_${totalSalesAmount}_${remainingQuantity}_${remaining_stock_policy}`).digest('hex');
-            if (calculation_hash !== expectedHash) throw { code: 'CONSIGNMENT_SALES_CHANGED', message: 'المبيعات أو المخزون تغير منذ آخر معاينة. يرجى التحديث والمحاولة مرة أخرى.' };
+
+            // Re-read the invoice inside the transaction to get the freshest paid_amount
+            const prepaidAmount = normalizeAmount(invoice.paid_amount ?? 0);
+
+            // Validate hash (includes prepaidAmount so stale previews are rejected)
+            const expectedHash = require('crypto').createHash('sha256').update(`${invoiceId}_${totalSalesAmount}_${remainingQuantity}_${remaining_stock_policy}_${prepaidAmount}_${commPct}_${invoiceCurrency}_${invoiceRate}`).digest('hex');
+            if (calculation_hash !== expectedHash) throw { code: 'CONSIGNMENT_SALES_CHANGED', message: 'المبيعات أو المخزون أو المبالغ المدفوعة تغيّرت منذ آخر معاينة. يرجى التحديث والمحاولة مرة أخرى.' };
 
             const commissionAmount = normalizeAmount((totalSalesAmount * commPct) / 100);
             const supplierShareBase = normalizeAmount(totalSalesAmount - commissionAmount);
-            let supplierShareCashbox = supplierShareBase;
-            if (cashbox.currency !== invoiceCurrency) {
-                 supplierShareCashbox = normalizeAmount(supplierShareBase / paymentExchangeRate);
-            }
+
+            // Net amount still owed to supplier after deducting pre-payments
+            const netSupplierPayout = normalizeAmount(Math.max(0, supplierShareBase - prepaidAmount));
+            const netSupplierPayoutCashbox = netSupplierPayout;
             const balanceBefore = normalizeAmount(cashbox.balance);
-            if (supplierShareCashbox > balanceBefore) throw { code: 'INSUFFICIENT_BALANCE', message: 'الرصيد في الصندوق لا يكفي للدفع للمورد' };
+            if (netSupplierPayoutCashbox > balanceBefore + 0.001) throw { code: 'INSUFFICIENT_BALANCE', message: 'الرصيد في الصندوق لا يكفي للدفع للمورد' };
 
             const countRow = await dbGet(db, 'SELECT COUNT(*) AS count FROM consignment_settlements');
             const settlementNumber = `SET-${String(Number(countRow?.count ?? 0) + 1).padStart(6, '0')}`;
             const { lastID: settlementId } = await dbRun(db, `
                 INSERT INTO consignment_settlements
-                (purchase_invoice_id, settlement_number, settlement_date, total_sales_amount, commission_percentage, commission_amount, supplier_share, cashbox_id, currency, remaining_stock_policy, returned_quantity, spoilage_quantity, carried_quantity, status, notes, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'completed', ?, datetime('now'), datetime('now'))
-            `, [invoiceId, settlementNumber, settlement_date, totalSalesAmount, commPct, commissionAmount, supplierShare, cashbox_id, invoiceCurrency, remaining_stock_policy, remaining_stock_policy === 'return_to_supplier' ? remainingQuantity : 0, remaining_stock_policy === 'spoilage' ? remainingQuantity : 0, notes ?? null]);
+                (purchase_invoice_id, settlement_number, settlement_date, total_sales_amount, commission_percentage, commission_amount, supplier_share, prepaid_amount, cashbox_id, currency, remaining_stock_policy, returned_quantity, spoilage_quantity, carried_quantity, status, notes, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'completed', ?, datetime('now'), datetime('now'))
+            `, [invoiceId, settlementNumber, settlement_date, totalSalesAmount, commPct, commissionAmount, supplierShareBase, prepaidAmount, cashbox_id, invoiceCurrency, remaining_stock_policy, remaining_stock_policy === 'return_to_supplier' ? remainingQuantity : 0, remaining_stock_policy === 'spoilage' ? remainingQuantity : 0, notes ?? null]);
 
             const batches = await dbAll(db, 'SELECT * FROM stock_batches WHERE purchase_invoice_id = ? ORDER BY id ASC', [invoiceId]);
             for (const batch of batches) {
                 const soldRow = await dbGet(db, `
                     SELECT SUM(CASE WHEN si.status != 'cancelled' THEN sii.quantity ELSE 0 END) AS sold,
-                           SUM(CASE WHEN si.status != 'cancelled' THEN sii.line_total ELSE 0 END) AS sales
+                           SUM(CASE WHEN si.status != 'cancelled' THEN sii.line_total * COALESCE(si.exchange_rate, 1) ELSE 0 END) AS sales_base
                     FROM sale_invoice_items sii
                     JOIN sale_invoices si ON si.id = sii.sale_invoice_id
                     WHERE sii.stock_batch_id = ?
                 `, [batch.id]);
                 const soldQty = Number(soldRow?.sold ?? 0);
-                const salesAmount = normalizeAmount(soldRow?.sales ?? 0);
+                const salesAmount = normalizeAmount(normalizeAmount(soldRow?.sales_base ?? 0) / invoiceRate);
                 const resolvedQuantity = Number(batch.remaining_quantity ?? 0);
                 let adjustmentId = null;
 
@@ -1028,29 +1009,34 @@ class PurchaseInvoiceController {
 
             let paymentId = null;
             let cashboxTransactionId = null;
-            if (supplierShareBase > 0) {
-                const balanceAfter = normalizeAmount(balanceBefore - supplierShareCashbox);
+            if (netSupplierPayout > 0) {
+                const balanceAfter = normalizeAmount(balanceBefore - netSupplierPayoutCashbox);
                 await dbRun(db, 'UPDATE cashboxes SET balance = ?, updated_at = datetime("now") WHERE id = ?', [balanceAfter, cashbox_id]);
                 const { lastID: movementId } = await dbRun(db, `
                     INSERT INTO cashbox_transactions
                     (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
                     VALUES (?, 'purchase', ?, ?, 'out', ?, ?, ?, ?, datetime('now'), datetime('now'))
-                `, [cashbox_id, invoiceId, supplierShareCashbox, balanceBefore, balanceAfter, settlement_date, `تسوية أمانة ${settlementNumber}`]);
+                `, [cashbox_id, invoiceId, netSupplierPayoutCashbox, balanceBefore, balanceAfter, settlement_date, `تسوية أمانة ${settlementNumber}`]);
                 cashboxTransactionId = movementId;
 
                 const { lastID: payId } = await dbRun(db, `
                     INSERT INTO payments
                     (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date, payment_method, status, cashbox_transaction_id, notes, created_at, updated_at)
                     VALUES ('supplier', ?, 'purchase', ?, ?, ?, ?, ?, ?, ?, 'cash', 'active', ?, ?, datetime('now'), datetime('now'))
-                `, [invoice.supplier_id, invoiceId, cashbox_id, supplierShareCashbox, cashbox.currency, paymentExchangeRate, supplierShareBase, settlement_date, movementId, `تسوية أمانة ${settlementNumber}`]);
+                `, [invoice.supplier_id, invoiceId, cashbox_id, netSupplierPayoutCashbox, invoiceCurrency, invoiceRate, toBaseAmount(netSupplierPayout, invoiceRate), settlement_date, movementId, `تسوية أمانة ${settlementNumber}`]);
                 paymentId = payId;
 
-                // We don't deduct supplier balance here because we didn't add the invoice total to the supplier balance
-                // for consignment invoices initially. Or did we? In closeCommission, it doesn't update supplier balance.
+                // Reduce supplier payable balance by the final payout amount.
+                // (Partial payments during the consignment already reduced the balance via recordPurchasePayment.)
+                const netPayoutBase = toBaseAmount(netSupplierPayout, invoiceRate);
+                await dbRun(db,
+                    `UPDATE suppliers SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`,
+                    [netPayoutBase, invoice.supplier_id]
+                );
             }
 
             await dbRun(db, 'UPDATE consignment_settlements SET payment_id = ?, cashbox_transaction_id = ? WHERE id = ?', [paymentId, cashboxTransactionId, settlementId]);
-            await dbRun(db, 'UPDATE purchase_invoices SET settlement_status = "settled", settled_at = ?, consignment_settlement_id = ?, updated_at = datetime("now") WHERE id = ?', [settlement_date, settlementId, invoiceId]);
+            await dbRun(db, 'UPDATE purchase_invoices SET settlement_status = "settled", paid_amount = total, remaining_amount = 0, status = "paid", settled_at = ?, consignment_settlement_id = ?, updated_at = datetime("now") WHERE id = ?', [settlement_date, settlementId, invoiceId]);
             await logActivity(db, 'purchase_commission_closed', 'purchase_invoices', invoiceId, { settlement_id: settlementId });
             await dbRun(db, 'COMMIT');
 
@@ -1082,6 +1068,7 @@ class PurchaseInvoiceController {
             commission_percentage: Number(settlement.commission_percentage ?? 0),
             commission_amount: normalizeAmount(settlement.commission_amount),
             supplier_share: normalizeAmount(settlement.supplier_share),
+            prepaid_amount: normalizeAmount(settlement.prepaid_amount ?? 0),
             cashbox_id: Number(settlement.cashbox_id),
             returned_quantity: Number(settlement.returned_quantity ?? 0),
             spoilage_quantity: Number(settlement.spoilage_quantity ?? 0),
@@ -1118,30 +1105,43 @@ class PurchaseInvoiceController {
             }
 
             let reverseCashboxTransactionId = null;
-            if (normalizeAmount(settlement.supplier_share) > 0) {
-                const cashbox = await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [settlement.cashbox_id]);
+            const settlementPayment = settlement.payment_id
+                ? await dbGet(db, 'SELECT * FROM payments WHERE id = ?', [settlement.payment_id])
+                : null;
+
+            if (settlementPayment && settlementPayment.status !== 'reversed') {
+                const cashbox = await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [settlementPayment.cashbox_id]);
                 if (!cashbox) throw { code: 'CASHBOX_NOT_FOUND', message: 'الصندوق غير موجود' };
+
+                const reverseAmount = normalizeAmount(settlementPayment.amount);
+                const reverseAmountBase = normalizeAmount(
+                    settlementPayment.amount_base ??
+                    toBaseAmount(reverseAmount, settlementPayment.exchange_rate || 1)
+                );
                 const before = normalizeAmount(cashbox.balance);
-                const after = normalizeAmount(before + settlement.supplier_share);
-                await dbRun(db, 'UPDATE cashboxes SET balance = ?, updated_at = datetime("now") WHERE id = ?', [after, settlement.cashbox_id]);
+                const after = normalizeAmount(before + reverseAmount);
+
+                await dbRun(db, 'UPDATE cashboxes SET balance = ?, updated_at = datetime("now") WHERE id = ?', [after, cashbox.id]);
                 const { lastID } = await dbRun(db, `
                     INSERT INTO cashbox_transactions
                     (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, reversed_transaction_id, reversal_reason, transaction_date, notes, created_at, updated_at)
                     VALUES (?, 'reversal', ?, ?, 'in', ?, ?, ?, ?, date('now'), ?, datetime('now'), datetime('now'))
-                `, [settlement.cashbox_id, settlement.purchase_invoice_id, settlement.supplier_share, before, after, settlement.cashbox_transaction_id ?? null, String(reason).trim(), `عكس تسوية أمانة ${settlement.settlement_number}`]);
+                `, [cashbox.id, settlement.purchase_invoice_id, reverseAmount, before, after, settlement.cashbox_transaction_id ?? null, String(reason).trim(), `عكس تسوية أمانة ${settlement.settlement_number}`]);
                 reverseCashboxTransactionId = lastID;
-            }
 
-            if (settlement.payment_id) {
-                const payment = await dbGet(db, 'SELECT * FROM payments WHERE id = ?', [settlement.payment_id]);
-                if (payment && payment.status !== 'reversed') {
-                    await dbRun(db, 'UPDATE payments SET status = "reversed", reversal_reason = ?, updated_at = datetime("now") WHERE id = ?', [String(reason).trim(), payment.id]);
-                    const { lastID: reversalPaymentId } = await dbRun(db, `
-                        INSERT INTO payments
-                        (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, payment_date, payment_method, status, reversed_payment_id, cashbox_transaction_id, reversal_reason, notes, created_at, updated_at)
-                        VALUES (?, ?, 'purchase', ?, ?, ?, date('now'), ?, 'reversed', ?, ?, ?, ?, datetime('now'), datetime('now'))
-                    `, [payment.party_type, payment.party_id, payment.invoice_id, payment.cashbox_id, payment.amount, payment.payment_method || 'cash', payment.id, reverseCashboxTransactionId, String(reason).trim(), `عكس دفعة تسوية أمانة #${payment.id}`]);
-                    await dbRun(db, 'UPDATE payments SET reversed_payment_id = ? WHERE id = ?', [reversalPaymentId, payment.id]);
+                await dbRun(db, 'UPDATE payments SET status = "reversed", reversal_reason = ?, updated_at = datetime("now") WHERE id = ?', [String(reason).trim(), settlementPayment.id]);
+                const { lastID: reversalPaymentId } = await dbRun(db, `
+                    INSERT INTO payments
+                    (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date, payment_method, status, reversed_payment_id, cashbox_transaction_id, reversal_reason, notes, created_at, updated_at)
+                    VALUES (?, ?, 'purchase', ?, ?, ?, ?, ?, ?, date('now'), ?, 'reversed', ?, ?, ?, ?, datetime('now'), datetime('now'))
+                `, [settlementPayment.party_type, settlementPayment.party_id, settlementPayment.invoice_id, settlementPayment.cashbox_id, reverseAmount, settlementPayment.currency, settlementPayment.exchange_rate, reverseAmountBase, settlementPayment.payment_method || 'cash', settlementPayment.id, reverseCashboxTransactionId, String(reason).trim(), `عكس دفعة تسوية أمانة #${settlementPayment.id}`]);
+                await dbRun(db, 'UPDATE payments SET reversed_payment_id = ? WHERE id = ?', [reversalPaymentId, settlementPayment.id]);
+
+                if (settlementPayment.party_id) {
+                    await dbRun(db,
+                        `UPDATE suppliers SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`,
+                        [reverseAmountBase, settlementPayment.party_id]
+                    );
                 }
             }
 

@@ -293,6 +293,7 @@ const backupController = require$1(path$1.join(__dirname$2, "../../src/controlle
 const dashboardController = require$1(path$1.join(__dirname$2, "../../src/controllers", "dashboardController.js"));
 const printController = require$1(path$1.join(__dirname$2, "../../src/controllers", "printController.js"));
 const notificationController = require$1(path$1.join(__dirname$2, "../../src/controllers", "notificationController.js"));
+const workerController = require$1(path$1.join(__dirname$2, "../../src/controllers", "workerController.js"));
 ipcMain.handle("api:auth:login", async (_event, input) => {
   try {
     const user = await authController.login(input);
@@ -933,7 +934,7 @@ ipcMain.handle("api:system:restore", async (_event, sourcePath) => {
   try {
     if (!getCurrentUser()) return failure("UNAUTHENTICATED", "Authentication is required");
     const prepared = await backupController.prepareRestore(sourcePath);
-    const { closeDatabase } = await import("./dbmanager-BHH6RASS.js");
+    const { closeDatabase } = await import("./dbmanager-D3ua2Cjm.js");
     await closeDatabase();
     try {
       const result = await backupController.applyRestore(prepared.sourcePath);
@@ -1447,6 +1448,70 @@ ipcMain.handle("api:user:deleteUser", async (_event, id) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
+ipcMain.handle("api:worker:createWorker", async (_event, input) => {
+  try {
+    const result = await workerController.createWorker(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:worker:getWorker", async (_event, id) => {
+  try {
+    const result = await workerController.getWorker(id);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:worker:getAllWorkers", async (_event) => {
+  try {
+    const result = await workerController.getAllWorkers();
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:worker:updateWorker", async (_event, id, input) => {
+  try {
+    const result = await workerController.updateWorker(id, input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:worker:deleteWorker", async (_event, id) => {
+  try {
+    const result = await workerController.deleteWorker(id);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:worker:recordPayment", async (_event, input) => {
+  try {
+    const result = await workerController.recordWorkerPayment(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:worker:reversePayment", async (_event, paymentId, reason) => {
+  try {
+    const result = await workerController.reverseWorkerPayment(paymentId, reason);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:worker:getPayments", async (_event, workerId) => {
+  try {
+    const result = await workerController.getWorkerPayments(workerId);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
 const __dirname$1 = path$1.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path$1.join(__dirname$1, "../..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
@@ -1528,7 +1593,7 @@ ${result.error}` });
         return;
       }
     }
-    const { initDatabase } = await import("./dbmanager-BHH6RASS.js");
+    const { initDatabase } = await import("./dbmanager-D3ua2Cjm.js");
     await initDatabase();
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {

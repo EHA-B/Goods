@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import {
+  BriefcaseBusiness,
   Plus,
   Tags,
 } from "lucide-react";
@@ -33,6 +34,11 @@ import type {
   TransactionCategory,
 } from "../../components/transactions/types";
 import { transactionsService } from "./transactionsService";
+import {
+  getWorkerTypeLabel,
+  workersService,
+  type Worker,
+} from "../workers/workersService";
 
 const money = (value: number) =>
   new Intl.NumberFormat("en-US", {
@@ -62,6 +68,20 @@ const normalizeCategoryName = (value: string) =>
     .trim()
     .replace(/\s+/g, " ")
     .toLocaleLowerCase("ar");
+
+const isPayrollCategoryName = (value: string) => {
+  const normalized = normalizeCategoryName(value)
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي");
+
+  return (
+    normalized.includes("رواتب") ||
+    normalized.includes("راتب") ||
+    normalized.includes("اجور") ||
+    normalized.includes("اجر")
+  );
+};
 
 export default function TransactionFormPage() {
   const navigate = useNavigate();
@@ -96,6 +116,12 @@ export default function TransactionFormPage() {
 
   const [boxes, setBoxes] =
     useState<CashboxLite[]>([]);
+
+  const [workers, setWorkers] =
+    useState<Worker[]>([]);
+
+  const [workerId, setWorkerId] =
+    useState(params.get("workerId") ?? "");
 
   const [loading, setLoading] =
     useState(true);
@@ -149,9 +175,11 @@ export default function TransactionFormPage() {
         const [
           cashboxes,
           loadedCategories,
+          loadedWorkers,
         ] = await Promise.all([
           transactionsService.loadCashboxes(),
           transactionsService.loadCategories(),
+          workersService.list(),
         ]);
 
         const activeBoxes =
@@ -163,6 +191,28 @@ export default function TransactionFormPage() {
 
         setBoxes(activeBoxes);
         setCategories(loadedCategories);
+        setWorkers(
+          loadedWorkers.filter(
+            (worker) => worker.state === "active",
+          ),
+        );
+
+        const requestedWorkerId = params.get("workerId");
+        if (
+          direction === "expense" &&
+          requestedWorkerId
+        ) {
+          const payrollCategory = loadedCategories.find(
+            (category) =>
+              category.type === "expense" &&
+              category.isActive &&
+              isPayrollCategoryName(category.name),
+          );
+
+          if (payrollCategory) {
+            setCategoryId(String(payrollCategory.id));
+          }
+        }
 
         if (activeBoxes[0]) {
           setBoxId(
@@ -180,7 +230,7 @@ export default function TransactionFormPage() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [direction, params]);
 
   const availableCategories =
     useMemo(
@@ -192,6 +242,21 @@ export default function TransactionFormPage() {
         ),
       [categories, direction],
     );
+
+  const selectedCategory = categories.find(
+    (item) => item.id === Number(categoryId),
+  );
+
+  const isPayrollExpense =
+    direction === "expense" &&
+    Boolean(
+      selectedCategory &&
+        isPayrollCategoryName(selectedCategory.name),
+    );
+
+  const selectedWorker = workers.find(
+    (worker) => worker.id === Number(workerId),
+  );
 
   const selected = boxes.find(
     (item) =>
@@ -368,6 +433,11 @@ export default function TransactionFormPage() {
         "اختر الفئة.";
     }
 
+    if (isPayrollExpense && !workerId) {
+      nextErrors.workerId =
+        "اختر العامل أو الموظف المستفيد.";
+    }
+
     if (
       !Number.isFinite(amount) ||
       amount <= 0
@@ -418,27 +488,65 @@ export default function TransactionFormPage() {
       setSaving(true);
       setError("");
 
-      await transactionsService.createFinancial({
-        cashboxId: Number(boxId),
-        categoryId:
-          Number(categoryId),
-        amount,
-        type: direction,
-        transactionDate: date,
-        description:
-          description.trim(),
-        referenceNumber:
-          reference.trim(),
-        notes: notes.trim(),
-      });
+      if (isPayrollExpense) {
+        if (!selectedWorker) {
+          throw new Error(
+            "تعذر العثور على العامل أو الموظف المحدد.",
+          );
+        }
 
-      notifySuccess(
-        "تم حفظ المعاملة وتحديث الصندوق بنجاح.",
-      );
+        const payrollNotes = [
+          `فئة المصروف: ${selectedCategory?.name ?? "رواتب وأجور"}`,
+          description.trim()
+            ? `الوصف: ${description.trim()}`
+            : "",
+          reference.trim()
+            ? `المرجع: ${reference.trim()}`
+            : "",
+          notes.trim(),
+        ]
+          .filter(Boolean)
+          .join("\n");
 
-      navigate(
-        PATHS.TRANSACTIONS,
-      );
+        await workersService.recordPayment({
+          workerId: selectedWorker.id,
+          cashboxId: Number(boxId),
+          categoryId: Number(categoryId),
+          amount,
+          paymentDate: date,
+          description: description.trim(),
+          referenceNumber: reference.trim(),
+          notes: payrollNotes,
+        });
+
+        notifySuccess(
+          `تم تسجيل دفعة الرواتب والأجور لـ ${selectedWorker.name} وتحديث الصندوق والرصيد بنجاح.`,
+        );
+
+        navigate(`/workers/${selectedWorker.id}`);
+      } else {
+        await transactionsService.createFinancial({
+          cashboxId: Number(boxId),
+          categoryId:
+            Number(categoryId),
+          amount,
+          type: direction,
+          transactionDate: date,
+          description:
+            description.trim(),
+          referenceNumber:
+            reference.trim(),
+          notes: notes.trim(),
+        });
+
+        notifySuccess(
+          "تم حفظ المعاملة وتحديث الصندوق بنجاح.",
+        );
+
+        navigate(
+          PATHS.TRANSACTIONS,
+        );
+      }
     } catch (saveError) {
       const message =
         getArabicErrorMessage(
@@ -513,6 +621,7 @@ export default function TransactionFormPage() {
                     setCategoryId(
                       "",
                     );
+                    setWorkerId("");
 
                     setFieldErrors(
                       (current) => ({
@@ -611,6 +720,7 @@ export default function TransactionFormPage() {
                           event.target
                             .value,
                         );
+                        setWorkerId("");
 
                         if (
                           fieldErrors.categoryId
@@ -679,6 +789,79 @@ export default function TransactionFormPage() {
                   مغادرة المعاملة.
                 </p>
               </FormField>
+
+              {isPayrollExpense && (
+                <FormField
+                  label="العامل أو الموظف المستفيد"
+                  required
+                  error={fieldErrors.workerId}
+                >
+                  <Select
+                    value={workerId}
+                    onChange={(event) => {
+                      setWorkerId(event.target.value);
+
+                      if (fieldErrors.workerId) {
+                        setFieldErrors((current) => ({
+                          ...current,
+                          workerId: "",
+                        }));
+                      }
+                    }}
+                    options={[
+                      {
+                        value: "",
+                        label: workers.length
+                          ? "اختر العامل أو الموظف"
+                          : "لا يوجد عمال أو موظفون نشطون",
+                      },
+                      ...workers.map((worker) => ({
+                        value: String(worker.id),
+                        label: `${worker.name} — ${getWorkerTypeLabel(
+                          worker.type,
+                        )}`,
+                      })),
+                    ]}
+                  />
+
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs leading-5 text-[var(--text-muted)]">
+                      عند اختيار الرواتب والأجور تستخدم الصفحة باك دفعات العمال مباشرة، لذلك يتم تحديث الصندوق ورصيد المستفيد في عملية واحدة.
+                    </p>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      startIcon={<BriefcaseBusiness size={14} />}
+                      onClick={() => navigate(PATHS.WORKERS)}
+                    >
+                      إدارة العمال والموظفين
+                    </Button>
+                  </div>
+
+                  {selectedWorker && (
+                    <div className="mt-3 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-subtle)] p-3 text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <strong className="text-[var(--text-primary)]">
+                          {selectedWorker.name}
+                        </strong>
+                        <span className="text-[var(--text-muted)]">
+                          {getWorkerTypeLabel(selectedWorker.type)}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[var(--text-muted)]">
+                        <span>
+                          الهاتف: {selectedWorker.phone || "—"}
+                        </span>
+                        <span>
+                          الرصيد: {money(selectedWorker.balance)} ل.س
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </FormField>
+              )}
 
               <FormField
                 label="المبلغ"
@@ -891,6 +1074,7 @@ export default function TransactionFormPage() {
             loading ||
             !boxId ||
             !categoryId ||
+            (isPayrollExpense && !workerId) ||
             amount <= 0 ||
             (direction ===
               "expense" &&

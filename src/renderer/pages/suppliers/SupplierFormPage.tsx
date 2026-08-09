@@ -210,18 +210,38 @@ export default function SupplierFormPage() {
             />
           </FormField>
 
-          <div className="flex items-center justify-between self-end rounded-[var(--radius-sm)] border border-[var(--border)] px-4 py-3">
+          <div
+            className={[
+              "flex items-center justify-between self-end rounded-[var(--radius-sm)] border px-4 py-3 transition-colors",
+              form.isActive
+                ? "border-[color-mix(in_srgb,var(--success)_45%,var(--border))] bg-[var(--success-subtle)]"
+                : "border-[color-mix(in_srgb,var(--danger)_45%,var(--border))] bg-[var(--danger-subtle)]",
+            ].join(" ")}
+          >
             <div>
               <p className="text-sm font-bold text-[var(--text-primary)]">
-                المورد نشط
+                حالة المورد
               </p>
-              <p className="mt-1 text-xs text-[var(--text-muted)]">
-                يمكن إيقاف المورد مع الاحتفاظ بسجله.
+              <p
+                className={[
+                  "mt-1 text-xs font-bold",
+                  form.isActive
+                    ? "text-[var(--success)]"
+                    : "text-[var(--danger)]",
+                ].join(" ")}
+              >
+                {form.isActive ? "نشط" : "غير نشط"}
               </p>
             </div>
+
             <Switch
               checked={form.isActive}
-              onChange={(event) => update("isActive", event.target.checked)}
+              onChange={(event) =>
+                update("isActive", event.target.checked)
+              }
+              aria-label={
+                form.isActive ? "تعطيل المورد" : "تفعيل المورد"
+              }
             />
           </div>
 

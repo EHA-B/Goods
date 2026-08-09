@@ -52,6 +52,7 @@ import NotificationsPage from "../pages/notifications/NotificationsPage";
 import NotificationSettingsPage from "../pages/settings/NotificationSettingsPage";
 import HelpCenterPage from "../pages/help/HelpCenterPage";
 import HelpArticlePage from "../pages/help/HelpArticlePage";
+import ReportsPage from "../pages/reports/ReportsPage";
 import { PATHS } from "./path";
 
 function AppRouter() {
@@ -112,6 +113,7 @@ function AppRouter() {
                     <Route path={PATHS.TRANSACTION_CATEGORIES} element={<TransactionCategoriesPage />} />
                     <Route path={PATHS.TRANSACTION_CATEGORY_NEW} element={<TransactionCategoryFormPage />} />
                     <Route path={PATHS.TRANSACTION_CATEGORY_EDIT} element={<TransactionCategoryFormPage />} />
+                    <Route path={PATHS.REPORTS} element={<ReportsPage />} />
                     <Route path={PATHS.ACTIVITY_LOGS} element={<ActivityLogsPage />} />
                     <Route path={PATHS.ACTIVITY_LOG_DETAILS} element={<ActivityLogDetailsPage />} />
                     <Route path={PATHS.NOTIFICATIONS} element={<NotificationsPage />} />

@@ -1,7 +1,16 @@
-import { ipcMain, app, dialog, BrowserWindow } from "electron";
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+import { app, ipcMain, BrowserWindow, dialog } from "electron";
 import { fileURLToPath } from "node:url";
-import path from "node:path";
+import path$1 from "node:path";
 import { createRequire } from "node:module";
+import { writeFile } from "node:fs/promises";
+import crypto from "crypto";
+import os from "os";
+import fs from "fs";
+import path from "path";
+import { execSync } from "child_process";
 let currentUser = null;
 function setCurrentUser(user) {
   currentUser = { ...user };
@@ -13,38 +22,277 @@ function getCurrentUser() {
 function clearCurrentUser() {
   currentUser = null;
 }
+class LicenseManager {
+  constructor() {
+    // PUBLIC KEY ONLY! Used exclusively to verify signatures.
+    // The private key is kept offline and used by the generation script.
+    __publicField(this, "publicKeyPem", `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAypKRbbQ1cl4alzH6hJddetunUEiDqADpyMFn6zT3F8A=
+-----END PUBLIC KEY-----`);
+    __publicField(this, "licenseFileName", "license.dat");
+  }
+  /**
+   * Generate a unique device ID based on hardware characteristics
+   * Uses PowerShell to get stable identifiers like Motherboard UUID and OS Drive Serial
+   */
+  getDeviceId() {
+    try {
+      const components = [];
+      components.push(os.hostname());
+      if (os.platform() === "win32") {
+        try {
+          const uuidOutput = execSync('powershell.exe -NoProfile -Command "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"', { encoding: "utf8" });
+          if (uuidOutput && uuidOutput.trim()) {
+            components.push(uuidOutput.trim());
+          }
+        } catch (e) {
+          console.error("Failed to get Motherboard UUID:", e);
+        }
+      } else {
+        components.push(os.platform());
+        components.push(os.arch());
+      }
+      components.push(os.totalmem().toString());
+      const fingerprint = components.join("|");
+      const hash = crypto.createHash("sha256").update(fingerprint).digest("hex");
+      return hash.substring(0, 16).toUpperCase();
+    } catch (error) {
+      console.error("Error generating device ID:", error);
+      throw new Error("Failed to generate device ID");
+    }
+  }
+  /**
+   * Get the path where license file should be stored
+   */
+  getLicensePath() {
+    try {
+      const userDataPath = app.getPath("userData");
+      return path.join(userDataPath, this.licenseFileName);
+    } catch (error) {
+      console.error("Error getting license path:", error);
+      return path.join(process.cwd(), this.licenseFileName);
+    }
+  }
+  /**
+   * Verify the license signature using Ed25519
+   */
+  verifySignature(data, signatureHex) {
+    try {
+      const publicKey = crypto.createPublicKey(this.publicKeyPem);
+      const signatureBuffer = Buffer.from(signatureHex, "hex");
+      return crypto.verify(
+        null,
+        Buffer.from(data, "utf8"),
+        publicKey,
+        signatureBuffer
+      );
+    } catch (error) {
+      console.error("Signature verification error:", error);
+      return false;
+    }
+  }
+  /**
+   * Validate the license file
+   * Returns validation status and details
+   */
+  validateLicense() {
+    try {
+      const pathsToCheck = [
+        this.getLicensePath(),
+        // AppData
+        path.join(process.cwd(), this.licenseFileName)
+        // Current working dir
+      ];
+      try {
+        pathsToCheck.push(path.join(path.dirname(app.getAppPath()), this.licenseFileName));
+      } catch (e) {
+      }
+      let licensePath = null;
+      for (const p of pathsToCheck) {
+        if (fs.existsSync(p)) {
+          licensePath = p;
+          break;
+        }
+      }
+      if (!licensePath) {
+        return {
+          valid: false,
+          error: "NO_LICENSE_FILE",
+          message: "No license file found. Please activate this application.",
+          deviceId: this.getDeviceId()
+        };
+      }
+      const licenseContent = fs.readFileSync(licensePath, "utf8");
+      let licenseObj;
+      try {
+        licenseObj = JSON.parse(licenseContent);
+      } catch (error) {
+        return {
+          valid: false,
+          error: "INVALID_LICENSE_FORMAT",
+          message: "License file is corrupted or invalid.",
+          deviceId: this.getDeviceId()
+        };
+      }
+      const { data, signature } = licenseObj;
+      if (!data || !signature) {
+        return {
+          valid: false,
+          error: "INVALID_LICENSE_FORMAT",
+          message: "License file is missing data or signature.",
+          deviceId: this.getDeviceId()
+        };
+      }
+      const stringifiedData = JSON.stringify(data);
+      if (!this.verifySignature(stringifiedData, signature)) {
+        return {
+          valid: false,
+          error: "SIGNATURE_MISMATCH",
+          message: "License signature is invalid. The license may have been tampered with.",
+          deviceId: this.getDeviceId()
+        };
+      }
+      const currentDeviceId = this.getDeviceId();
+      if (data.deviceId !== currentDeviceId) {
+        return {
+          valid: false,
+          error: "DEVICE_MISMATCH",
+          message: "This license is not valid for this device. Please contact support.",
+          deviceId: currentDeviceId,
+          licensedDeviceId: data.deviceId
+        };
+      }
+      return {
+        valid: true,
+        deviceId: currentDeviceId,
+        generatedAt: data.generatedAt,
+        message: "License is valid"
+      };
+    } catch (error) {
+      console.error("License validation error:", error);
+      return {
+        valid: false,
+        error: "VALIDATION_ERROR",
+        message: "Failed to validate license: " + error.message,
+        deviceId: this.getDeviceId()
+      };
+    }
+  }
+  /**
+   * Get license status information
+   */
+  getLicenseStatus() {
+    const validation = this.validateLicense();
+    return {
+      ...validation,
+      licensePath: this.getLicensePath()
+    };
+  }
+  /**
+   * Import a license file from an external path
+   * @param {string} sourcePath - Path to the license file to import
+   */
+  importLicense(sourcePath) {
+    try {
+      if (!fs.existsSync(sourcePath)) {
+        return {
+          success: false,
+          error: "Source license file not found"
+        };
+      }
+      const licenseData = fs.readFileSync(sourcePath, "utf8");
+      const targetPath = this.getLicensePath();
+      const dir = path.dirname(targetPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(targetPath, licenseData, "utf8");
+      const validation = this.validateLicense();
+      if (!validation.valid) {
+        fs.unlinkSync(targetPath);
+        return {
+          success: false,
+          error: validation.message,
+          ...validation
+        };
+      }
+      return {
+        success: true,
+        ...validation
+      };
+    } catch (error) {
+      console.error("Error importing license:", error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+}
+const LicenseManager$1 = new LicenseManager();
 const require$1 = createRequire(import.meta.url);
 const __filename$1 = fileURLToPath(import.meta.url);
-const __dirname$2 = path.dirname(__filename$1);
+const __dirname$2 = path$1.dirname(__filename$1);
 function success(data) {
-  return { success: true, data };
+  return {
+    success: true,
+    data
+  };
+}
+function normalizeBackendError(code, message, details) {
+  const originalCode = String(code || "").trim().toUpperCase();
+  const originalMessage = String(message || "").trim();
+  let normalizedCode = originalCode || "UNKNOWN_ERROR";
+  if (normalizedCode === "SQLITE_CONSTRAINT_FOREIGNKEY" || normalizedCode === "SQLITE_CONSTRAINT" || /foreign key constraint failed/i.test(originalMessage) || /foreign key constraint/i.test(originalMessage)) {
+    normalizedCode = "HAS_DEPENDENCIES";
+  }
+  if (normalizedCode === "SQLITE_CONSTRAINT_UNIQUE" || /unique constraint failed/i.test(originalMessage)) {
+    normalizedCode = "DUPLICATE_ENTRY";
+  }
+  if (normalizedCode === "SQLITE_CONSTRAINT_NOTNULL" || normalizedCode === "SQLITE_CONSTRAINT_CHECK" || /not null constraint failed/i.test(originalMessage) || /check constraint failed/i.test(originalMessage)) {
+    normalizedCode = "VALIDATION_ERROR";
+  }
+  if (normalizedCode === "SQLITE_BUSY" || /database is locked/i.test(originalMessage)) {
+    normalizedCode = "DATABASE_BUSY";
+  }
+  if (normalizedCode === "SQLITE_READONLY" || /readonly database/i.test(originalMessage) || /attempt to write a readonly database/i.test(originalMessage)) {
+    normalizedCode = "DATABASE_READONLY";
+  }
+  return {
+    code: normalizedCode,
+    message: originalMessage || "Unknown application error",
+    details
+  };
 }
 function failure(code, message, details) {
-  return { success: false, error: { code, message, details } };
+  return {
+    success: false,
+    error: normalizeBackendError(code, message, details)
+  };
 }
-const authController = require$1(path.join(__dirname$2, "../../src/controllers", "authController.js"));
-const activityLogController = require$1(path.join(__dirname$2, "../../src/controllers", "activityLogController.js"));
-const cashboxController = require$1(path.join(__dirname$2, "../../src/controllers", "cashboxController.js"));
-const cashboxTransactionController = require$1(path.join(__dirname$2, "../../src/controllers", "cashboxTransactionController.js"));
-const customerController = require$1(path.join(__dirname$2, "../../src/controllers", "customerController.js"));
-const paymentController = require$1(path.join(__dirname$2, "../../src/controllers", "paymentController.js"));
-const productController = require$1(path.join(__dirname$2, "../../src/controllers", "productController.js"));
-const purchaseInvoiceController = require$1(path.join(__dirname$2, "../../src/controllers", "purchaseInvoiceController.js"));
-require$1(path.join(__dirname$2, "../../src/controllers", "purchaseInvoiceItemController.js"));
-const saleInvoiceController = require$1(path.join(__dirname$2, "../../src/controllers", "saleInvoiceController.js"));
-const saleInvoiceItemController = require$1(path.join(__dirname$2, "../../src/controllers", "saleInvoiceItemController.js"));
-const saleTypeController = require$1(path.join(__dirname$2, "../../src/controllers", "saleTypeController.js"));
-const settingController = require$1(path.join(__dirname$2, "../../src/controllers", "settingController.js"));
-const stockAdjustmentController = require$1(path.join(__dirname$2, "../../src/controllers", "stockAdjustmentController.js"));
-const stockBatchController = require$1(path.join(__dirname$2, "../../src/controllers", "stockBatchController.js"));
-const supplierController = require$1(path.join(__dirname$2, "../../src/controllers", "supplierController.js"));
-const transactionCategoryController = require$1(path.join(__dirname$2, "../../src/controllers", "transactionCategoryController.js"));
-const transactionController = require$1(path.join(__dirname$2, "../../src/controllers", "transactionController.js"));
-const userController = require$1(path.join(__dirname$2, "../../src/controllers", "userController.js"));
-const backupController = require$1(path.join(__dirname$2, "../../src/controllers", "backupController.js"));
-const dashboardController = require$1(path.join(__dirname$2, "../../src/controllers", "dashboardController.js"));
-const printController = require$1(path.join(__dirname$2, "../../src/controllers", "printController.js"));
-const notificationController = require$1(path.join(__dirname$2, "../../src/controllers", "notificationController.js"));
+const authController = require$1(path$1.join(__dirname$2, "../../src/controllers", "authController.js"));
+const activityLogController = require$1(path$1.join(__dirname$2, "../../src/controllers", "activityLogController.js"));
+const cashboxController = require$1(path$1.join(__dirname$2, "../../src/controllers", "cashboxController.js"));
+const cashboxTransactionController = require$1(path$1.join(__dirname$2, "../../src/controllers", "cashboxTransactionController.js"));
+const customerController = require$1(path$1.join(__dirname$2, "../../src/controllers", "customerController.js"));
+const paymentController = require$1(path$1.join(__dirname$2, "../../src/controllers", "paymentController.js"));
+const productController = require$1(path$1.join(__dirname$2, "../../src/controllers", "productController.js"));
+const purchaseInvoiceController = require$1(path$1.join(__dirname$2, "../../src/controllers", "purchaseInvoiceController.js"));
+require$1(path$1.join(__dirname$2, "../../src/controllers", "purchaseInvoiceItemController.js"));
+const saleInvoiceController = require$1(path$1.join(__dirname$2, "../../src/controllers", "saleInvoiceController.js"));
+const saleInvoiceItemController = require$1(path$1.join(__dirname$2, "../../src/controllers", "saleInvoiceItemController.js"));
+const saleTypeController = require$1(path$1.join(__dirname$2, "../../src/controllers", "saleTypeController.js"));
+const settingController = require$1(path$1.join(__dirname$2, "../../src/controllers", "settingController.js"));
+const stockAdjustmentController = require$1(path$1.join(__dirname$2, "../../src/controllers", "stockAdjustmentController.js"));
+const stockBatchController = require$1(path$1.join(__dirname$2, "../../src/controllers", "stockBatchController.js"));
+const supplierController = require$1(path$1.join(__dirname$2, "../../src/controllers", "supplierController.js"));
+const transactionCategoryController = require$1(path$1.join(__dirname$2, "../../src/controllers", "transactionCategoryController.js"));
+const transactionController = require$1(path$1.join(__dirname$2, "../../src/controllers", "transactionController.js"));
+const userController = require$1(path$1.join(__dirname$2, "../../src/controllers", "userController.js"));
+const backupController = require$1(path$1.join(__dirname$2, "../../src/controllers", "backupController.js"));
+const dashboardController = require$1(path$1.join(__dirname$2, "../../src/controllers", "dashboardController.js"));
+const printController = require$1(path$1.join(__dirname$2, "../../src/controllers", "printController.js"));
+const notificationController = require$1(path$1.join(__dirname$2, "../../src/controllers", "notificationController.js"));
 ipcMain.handle("api:auth:login", async (_event, input) => {
   try {
     const user = await authController.login(input);
@@ -83,6 +331,7 @@ const internallyAuditedChannels = /* @__PURE__ */ new Set([
   "api:payment:recordSalePayment",
   "api:payment:reverseSalePayment",
   "api:purchase:createFull",
+  "api:purchase:addItems",
   "api:purchase:cancel",
   "api:payment:recordPurchasePayment",
   "api:payment:reversePurchasePayment",
@@ -212,7 +461,7 @@ ipcMain.handle("api:dashboard:get", async () => {
 });
 ipcMain.handle("api:system:getAppInfo", async () => {
   try {
-    const databasePath = path.join(app.getPath("userData"), "farmer-market.db");
+    const databasePath = path$1.join(app.getPath("userData"), "farmer-market.db");
     return success({
       appName: "StockLite",
       appVersion: app.getVersion(),
@@ -227,6 +476,27 @@ ipcMain.handle("api:system:getAppInfo", async () => {
     });
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:license:getDeviceId", async () => {
+  try {
+    return success(LicenseManager$1.getDeviceId());
+  } catch (e) {
+    return failure("LICENSE_ERROR", e.message, e);
+  }
+});
+ipcMain.handle("api:license:getStatus", async () => {
+  try {
+    return success(LicenseManager$1.getLicenseStatus());
+  } catch (e) {
+    return failure("LICENSE_ERROR", e.message, e);
+  }
+});
+ipcMain.handle("api:license:import", async (_event, sourcePath) => {
+  try {
+    return success(LicenseManager$1.importLicense(sourcePath));
+  } catch (e) {
+    return failure("LICENSE_ERROR", e.message, e);
   }
 });
 ipcMain.handle("api:activityLog:list", async (_event, filters, pagination) => {
@@ -530,6 +800,14 @@ ipcMain.handle("api:purchase:createFull", async (_event, input) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
+ipcMain.handle("api:purchase:addItems", async (_event, invoiceId, items) => {
+  try {
+    const result = await purchaseInvoiceController.addItemsToPurchaseInvoice(invoiceId, items);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
 ipcMain.handle("api:purchase:get", async (_event, id) => {
   try {
     const result = await purchaseInvoiceController.getPurchaseInvoice(id);
@@ -655,7 +933,7 @@ ipcMain.handle("api:system:restore", async (_event, sourcePath) => {
   try {
     if (!getCurrentUser()) return failure("UNAUTHENTICATED", "Authentication is required");
     const prepared = await backupController.prepareRestore(sourcePath);
-    const { closeDatabase } = await import("./dbmanager-DD1c3pGH.js");
+    const { closeDatabase } = await import("./dbmanager-BHH6RASS.js");
     await closeDatabase();
     try {
       const result = await backupController.applyRestore(prepared.sourcePath);
@@ -687,6 +965,32 @@ ipcMain.handle("api:system:setAutoBackupConfig", async (_event, input) => {
     return success(result);
   } catch (e) {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
+  }
+});
+ipcMain.handle("api:system:saveCurrentPageAsPdf", async (event, input = {}) => {
+  try {
+    if (!getCurrentUser()) return failure("UNAUTHENTICATED", "Authentication is required");
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return failure("PRINT_FAILED", "تعذر الوصول إلى نافذة المستند");
+    const rawName = String((input == null ? void 0 : input.fileName) || "document").trim() || "document";
+    const safeName = rawName.replace(/[\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").slice(0, 120);
+    const result = await dialog.showSaveDialog(window, {
+      title: "حفظ المستند بصيغة PDF",
+      defaultPath: `${safeName}.pdf`,
+      filters: [{ name: "PDF", extensions: ["pdf"] }]
+    });
+    if (result.canceled || !result.filePath) return success({ canceled: true, path: null });
+    const pdf = await window.webContents.printToPDF({
+      printBackground: true,
+      pageSize: "A4",
+      landscape: false,
+      margins: { top: 0.35, bottom: 0.35, left: 0.35, right: 0.35 },
+      preferCSSPageSize: true
+    });
+    await writeFile(result.filePath, pdf);
+    return success({ canceled: false, path: result.filePath });
+  } catch (e) {
+    return failure(e.code || "PRINT_FAILED", e.message || "تعذر حفظ ملف PDF", e.details);
   }
 });
 ipcMain.handle("api:system:selectDirectory", async () => {
@@ -1143,12 +1447,12 @@ ipcMain.handle("api:user:deleteUser", async (_event, id) => {
     return failure(e.code || "UNKNOWN_ERROR", e.message || "Unknown error", e.details);
   }
 });
-const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
-process.env.APP_ROOT = path.join(__dirname$1, "../..");
+const __dirname$1 = path$1.dirname(fileURLToPath(import.meta.url));
+process.env.APP_ROOT = path$1.join(__dirname$1, "../..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
-const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
-const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
-process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
+const MAIN_DIST = path$1.join(process.env.APP_ROOT, "dist-electron");
+const RENDERER_DIST = path$1.join(process.env.APP_ROOT, "dist");
+process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path$1.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
 let win;
 function createWindow() {
   win = new BrowserWindow({
@@ -1158,7 +1462,7 @@ function createWindow() {
     minHeight: 600,
     title: "نظام محاسبة أسواق المزارعين",
     webPreferences: {
-      preload: path.join(__dirname$1, "../preload/preload.mjs"),
+      preload: path$1.join(__dirname$1, "../preload/preload.mjs"),
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -1172,7 +1476,7 @@ function createWindow() {
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL);
   } else {
-    win.loadFile(path.join(RENDERER_DIST, "index.html"));
+    win.loadFile(path$1.join(RENDERER_DIST, "index.html"));
   }
 }
 app.on("window-all-closed", () => {
@@ -1188,7 +1492,43 @@ app.on("activate", () => {
 });
 app.whenReady().then(async () => {
   try {
-    const { initDatabase } = await import("./dbmanager-DD1c3pGH.js");
+    let licenseStatus = LicenseManager$1.validateLicense();
+    while (!licenseStatus.valid) {
+      const response = await dialog.showMessageBox({
+        type: "error",
+        title: "Activation Required",
+        message: `${licenseStatus.message}
+
+Your Device ID is: ${licenseStatus.deviceId}`,
+        buttons: ["Import License File", "Exit Application"],
+        defaultId: 0,
+        cancelId: 1
+      });
+      if (response.response === 0) {
+        const importPath = await dialog.showOpenDialog({
+          title: "Select License File",
+          filters: [{ name: "License Files", extensions: ["dat"] }],
+          properties: ["openFile"]
+        });
+        if (!importPath.canceled && importPath.filePaths.length > 0) {
+          const result = LicenseManager$1.importLicense(importPath.filePaths[0]);
+          if (result.success) {
+            dialog.showMessageBoxSync({ type: "info", title: "Activated", message: "License imported successfully! Application will now start." });
+            licenseStatus = { valid: true, message: "Success" };
+          } else {
+            dialog.showMessageBoxSync({ type: "error", title: "Import Failed", message: `Invalid license file:
+${result.error}` });
+          }
+        } else {
+          app.quit();
+          return;
+        }
+      } else {
+        app.quit();
+        return;
+      }
+    }
+    const { initDatabase } = await import("./dbmanager-BHH6RASS.js");
     await initDatabase();
     console.log("Database initialized successfully from electron/main.ts");
   } catch (error) {
@@ -1199,7 +1539,7 @@ app.whenReady().then(async () => {
   try {
     const { createRequire: createRequire2 } = await import("node:module");
     const require2 = createRequire2(import.meta.url);
-    const backupController2 = require2(path.join(__dirname$1, "../../src/controllers/backupController.js"));
+    const backupController2 = require2(path$1.join(__dirname$1, "../../src/controllers/backupController.js"));
     setInterval(() => {
       backupController2.runAutoBackupCycle().catch(console.error);
     }, 60 * 60 * 1e3);
@@ -1210,7 +1550,7 @@ app.whenReady().then(async () => {
   try {
     const { createRequire: createRequire2 } = await import("node:module");
     const require2 = createRequire2(import.meta.url);
-    const backupController2 = require2(path.join(__dirname$1, "../../src/controllers/backupController.js"));
+    const backupController2 = require2(path$1.join(__dirname$1, "../../src/controllers/backupController.js"));
     setInterval(() => {
       backupController2.runAutoBackupCycle().catch(console.error);
     }, 60 * 60 * 1e3);

@@ -60,6 +60,7 @@ export type CloseConsignmentInput = {
   cashbox_id: number;
   settlement_date: string;
   remaining_stock_policy: RemainingStockPolicy;
+  exchange_rate?: number;
   notes?: string | null;
   calculation_hash?: string;
 };

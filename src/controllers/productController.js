@@ -117,16 +117,62 @@ class ProductController {
     }
 
     async deleteProduct(id) {
-        if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
-        const db = await dbmanager.init();
-        const info = await new Promise((resolve, reject) => {
-            db.run(`DELETE FROM products WHERE id = ?`, [id], function (err) {
-                if (err) return reject(err);
-                resolve({ changes: this.changes });
+        try {
+            if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
+            const db = await dbmanager.init();
+            const info = await new Promise((resolve, reject) => {
+                db.run(`DELETE FROM products WHERE id = ?`,
+                    [id],
+                    function (err) {
+                        if (err) {
+                            reject(err);
+                            return;
+                        }
+
+                        resolve({
+                            changes: this.changes
+                        });
+                    }
+                );
             });
-        });
-        if (!info || info.changes === 0) throw { code: 'NOT_FOUND', message: 'Product not found' };
-        return { success: true, message: 'Product deleted successfully' };
+
+            if (!info || info.changes === 0) {
+                const error = new Error('Product not found');
+                error.code = 'NOT_FOUND';
+                throw error;
+            }
+
+            return {
+                success: true,
+                message: 'Product deleted successfully'
+            };
+        } catch (error) {
+            /*
+             * SQLite يمنع حذف المنتج عندما يكون مرتبطًا
+             * بفواتير أو دفعات أو حركات مخزون عن طريق
+             * FOREIGN KEY constraint.
+             *
+             * نحول الخطأ التقني إلى كود مفهوم للواجهة.
+             */
+            const message = String(error?.message ?? "");
+
+            if (
+                error?.code === "SQLITE_CONSTRAINT" ||
+                error?.code === "SQLITE_CONSTRAINT_FOREIGNKEY" ||
+                message.includes("FOREIGN KEY constraint failed") ||
+                message.includes("foreign key constraint")
+            ) {
+                const productInUseError = new Error(
+                    "Cannot delete product because it is referenced by existing records"
+                );
+
+                productInUseError.code = "PRODUCT_IN_USE";
+
+                throw productInUseError;
+            }
+
+            throw error;
+        }
     }
 // Add these methods to your ProductController class
 

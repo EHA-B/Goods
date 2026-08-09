@@ -1,8 +1,9 @@
 // @ts-nocheck
-import { app, ipcMain, dialog } from 'electron';
+import { app, ipcMain, dialog, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { writeFile } from 'node:fs/promises';
 import { clearCurrentUser, getCurrentUser, setCurrentUser } from '../services/sessionService';
 
 const require = createRequire(import.meta.url);
@@ -10,10 +11,76 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function success(data) {
-  return { success: true, data };
+  return {
+    success: true,
+    data,
+  };
 }
+
+function normalizeBackendError(code, message, details) {
+  const originalCode = String(code || '').trim().toUpperCase();
+  const originalMessage = String(message || '').trim();
+
+  let normalizedCode = originalCode || 'UNKNOWN_ERROR';
+
+  // Foreign-key violations usually mean the record is still referenced
+  // by invoices, payments, stock movements, batches, or other linked data.
+  if (
+    normalizedCode === 'SQLITE_CONSTRAINT_FOREIGNKEY' ||
+    normalizedCode === 'SQLITE_CONSTRAINT' ||
+    /foreign key constraint failed/i.test(originalMessage) ||
+    /foreign key constraint/i.test(originalMessage)
+  ) {
+    normalizedCode = 'HAS_DEPENDENCIES';
+  }
+
+  // Unique constraint violations.
+  if (
+    normalizedCode === 'SQLITE_CONSTRAINT_UNIQUE' ||
+    /unique constraint failed/i.test(originalMessage)
+  ) {
+    normalizedCode = 'DUPLICATE_ENTRY';
+  }
+
+  // Validation-related SQLite constraints.
+  if (
+    normalizedCode === 'SQLITE_CONSTRAINT_NOTNULL' ||
+    normalizedCode === 'SQLITE_CONSTRAINT_CHECK' ||
+    /not null constraint failed/i.test(originalMessage) ||
+    /check constraint failed/i.test(originalMessage)
+  ) {
+    normalizedCode = 'VALIDATION_ERROR';
+  }
+
+  // SQLite busy / locked database.
+  if (
+    normalizedCode === 'SQLITE_BUSY' ||
+    /database is locked/i.test(originalMessage)
+  ) {
+    normalizedCode = 'DATABASE_BUSY';
+  }
+
+  // Read-only database.
+  if (
+    normalizedCode === 'SQLITE_READONLY' ||
+    /readonly database/i.test(originalMessage) ||
+    /attempt to write a readonly database/i.test(originalMessage)
+  ) {
+    normalizedCode = 'DATABASE_READONLY';
+  }
+
+  return {
+    code: normalizedCode,
+    message: originalMessage || 'Unknown application error',
+    details,
+  };
+}
+
 function failure(code, message, details) {
-  return { success: false, error: { code, message, details } };
+  return {
+    success: false,
+    error: normalizeBackendError(code, message, details),
+  };
 }
 
 const authController = require(path.join(__dirname, '../../src/controllers', 'authController.js'));
@@ -96,7 +163,7 @@ ipcMain.handle('api:auth:changePassword', async (_event, input) => {
 
 const internallyAuditedChannels = new Set([
   'api:saleInvoice:createSaleProcess','api:saleInvoice:cancelSaleInvoice','api:payment:recordSalePayment','api:payment:reverseSalePayment',
-  'api:purchase:createFull','api:purchase:cancel','api:payment:recordPurchasePayment','api:payment:reversePurchasePayment',
+  'api:purchase:createFull','api:purchase:addItems','api:purchase:cancel','api:payment:recordPurchasePayment','api:payment:reversePurchasePayment',
   'api:purchase:closeCommission','api:purchase:reverseCommissionSettlement',
 ]);
 function auditInfoForChannel(channel, args, data) {
@@ -178,6 +245,24 @@ ipcMain.handle('api:system:getAppInfo', async () => {
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
   }
+});
+
+import LicenseManager from '../services/LicenseManager';
+
+/** License read-only endpoints (can be called before full auth) */
+ipcMain.handle('api:license:getDeviceId', async () => {
+  try { return success(LicenseManager.getDeviceId()); }
+  catch (e: any) { return failure('LICENSE_ERROR', e.message, e); }
+});
+
+ipcMain.handle('api:license:getStatus', async () => {
+  try { return success(LicenseManager.getLicenseStatus()); }
+  catch (e: any) { return failure('LICENSE_ERROR', e.message, e); }
+});
+
+ipcMain.handle('api:license:import', async (_event, sourcePath) => {
+  try { return success(LicenseManager.importLicense(sourcePath)); }
+  catch (e: any) { return failure('LICENSE_ERROR', e.message, e); }
 });
 
 /** Activity log read-only endpoints. */
@@ -671,6 +756,19 @@ ipcMain.handle('api:purchase:createFull', async (_event, input) => {
 });
 
 /**
+ * Endpoint: api:purchase:addItems
+ * Description: Appends new items to an existing purchase invoice and calculates related changes.
+ */
+ipcMain.handle('api:purchase:addItems', async (_event, invoiceId, items) => {
+  try {
+    const result = await purchaseInvoiceController.addItemsToPurchaseInvoice(invoiceId, items);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
  * Endpoint: api:purchase:get
  * Description: Read-only. Returns a single purchase invoice row.
  */
@@ -907,6 +1005,37 @@ ipcMain.handle('api:system:setAutoBackupConfig', async (_event, input) => {
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+
+
+ipcMain.handle('api:system:saveCurrentPageAsPdf', async (event, input = {}) => {
+  try {
+    if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return failure('PRINT_FAILED', 'تعذر الوصول إلى نافذة المستند');
+
+    const rawName = String(input?.fileName || 'document').trim() || 'document';
+    const safeName = rawName.replace(/[\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').slice(0, 120);
+    const result = await dialog.showSaveDialog(window, {
+      title: 'حفظ المستند بصيغة PDF',
+      defaultPath: `${safeName}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (result.canceled || !result.filePath) return success({ canceled: true, path: null });
+
+    const pdf = await window.webContents.printToPDF({
+      printBackground: true,
+      pageSize: 'A4',
+      landscape: false,
+      margins: { top: 0.35, bottom: 0.35, left: 0.35, right: 0.35 },
+      preferCSSPageSize: true,
+    });
+    await writeFile(result.filePath, pdf);
+    return success({ canceled: false, path: result.filePath });
+  } catch (e) {
+    return failure(e.code || 'PRINT_FAILED', e.message || 'تعذر حفظ ملف PDF', e.details);
   }
 });
 
@@ -1674,4 +1803,3 @@ ipcMain.handle('api:user:deleteUser', async (_event, id) => {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
   }
 });
-

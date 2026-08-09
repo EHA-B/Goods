@@ -167,6 +167,7 @@ type TransferCashboxesInput = {
   from_cashbox_id: number;
   to_cashbox_id: number;
   amount: number;
+  exchange_rate?: number;
   transaction_date?: string;
   notes?: string | null;
 };
@@ -221,6 +222,7 @@ type RecordSalePaymentInput = {
   sale_invoice_id: number;
   cashbox_id: number;
   amount: number;
+  exchange_rate?: number;
   payment_date?: string;
   notes?: string | null;
 };
@@ -229,6 +231,7 @@ type RecordPurchasePaymentInput = {
   purchase_invoice_id: number;
   cashbox_id: number;
   amount: number;
+  exchange_rate?: number;
   payment_date?: string;
   notes?: string | null;
 };
@@ -236,6 +239,7 @@ type RecordPurchasePaymentInput = {
 type InitialPaymentInput = {
   cashbox_id: number;
   amount: number;
+  exchange_rate?: number;
   payment_date?: string;
   notes?: string | null;
 };
@@ -478,6 +482,7 @@ interface Window {
       selectDirectory(): Promise<{ canceled: boolean; path: string | null }>;
       selectSaveFile(): Promise<{ canceled: boolean; path: string | null }>;
       selectOpenFile(): Promise<{ canceled: boolean; path: string | null }>;
+      saveCurrentPageAsPdf(input?: { fileName?: string }): Promise<{ canceled: boolean; path: string | null }>;
     };
     products: {
       list(): Promise<ProductApiRecord[]>;
@@ -543,6 +548,7 @@ interface Window {
       list(filters?: InvoiceListFilters, pagination?: PaginationInput): Promise<PaginatedInvoices<PurchaseInvoiceRecord>>;
       getDetails(id: number): Promise<PurchaseInvoiceDetails>;
       createFull(input: CreatePurchaseInvoiceInput): Promise<PurchaseInvoiceDetails>;
+      addItems(invoiceId: number, items: unknown): Promise<PurchaseInvoiceDetails>;
       cancel(id: number, reason: string): Promise<PurchaseInvoiceDetails>;
       recordPayment(input: RecordPurchasePaymentInput): Promise<{ payment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
       reversePayment(paymentId: number, reason: string): Promise<{ reversedPayment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;

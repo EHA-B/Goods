@@ -6,10 +6,12 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  PlayCircle,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { startFirstRunTour } from "../../components/onboarding/FirstRunTour";
 import { Card, Input, PageHeader } from "../../components/ui";
 import {
   helpArticles,
@@ -75,6 +77,16 @@ export default function HelpCenterPage() {
       <PageHeader
         title="المساعدة ودليل الاستخدام"
         description="ابحث عن شرح أي عملية أو راجع الخطوات والحالات الشائعة داخل StockLite."
+        actions={
+          <button
+            type="button"
+            onClick={startFirstRunTour}
+            className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-sm font-bold text-[var(--text-inverse)] transition-opacity hover:opacity-90"
+          >
+            <PlayCircle size={17} />
+            تشغيل الجولة التعريفية
+          </button>
+        }
       />
 
       <section className="relative mb-6 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-5 py-7 sm:px-8">

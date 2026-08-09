@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import ContextHelpButton from "../help/ContextHelpButton";
+import { useLocation } from "react-router-dom";
 
 type Props = {
   title: string;
@@ -13,6 +14,8 @@ export default function PageHeader({
   description,
   actions,
 }: Props) {
+  const location = useLocation();
+  const isSettingsSubPage = location.pathname.startsWith("/settings/");
   return (
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-5">
       <div>
@@ -28,8 +31,7 @@ export default function PageHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <ContextHelpButton />
-        {actions}
+        {!isSettingsSubPage && <ContextHelpButton />}        {actions}
       </div>
     </div>
   );

@@ -22,6 +22,7 @@ import {
   LogOut,
   History,
   CircleHelp,
+  BarChart3,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -36,11 +37,13 @@ const navigationItems = [
     label: "لوحة التحكم",
     path: PATHS.DASHBOARD,
     icon: LayoutDashboard,
+    tourKey: "dashboard",
   },
   {
     label: "المنتجات",
     path: PATHS.PRODUCTS,
     icon: Package,
+    tourKey: "products",
   },
   {
     label: "المخزون",
@@ -61,11 +64,13 @@ const navigationItems = [
     label: "المبيعات",
     path: PATHS.SALES,
     icon: ShoppingCart,
+    tourKey: "sales",
   },
   {
     label: "المشتريات",
     path: PATHS.PURCHASES,
     icon: Boxes,
+    tourKey: "purchases",
   },
   {
     label: "الصناديق",
@@ -78,6 +83,11 @@ const navigationItems = [
     icon: ReceiptText,
   },
   {
+    label: "التقارير",
+    path: PATHS.REPORTS,
+    icon: BarChart3,
+  },
+  {
     label: "سجل النشاط",
     path: PATHS.ACTIVITY_LOGS,
     icon: History,
@@ -86,6 +96,7 @@ const navigationItems = [
     label: "المساعدة",
     path: PATHS.HELP,
     icon: CircleHelp,
+    tourKey: "help",
   },
   {
     label: "الإعدادات",
@@ -320,6 +331,7 @@ function Sidebar() {
                   to={item.path}
                   end={item.path === PATHS.DASHBOARD}
                   aria-label={item.label}
+                  data-tour-key={item.tourKey}
                   onMouseEnter={(event) => {
                     if (!isCollapsed) {
                       return;

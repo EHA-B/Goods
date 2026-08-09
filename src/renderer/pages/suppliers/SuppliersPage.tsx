@@ -1,11 +1,28 @@
-import { notifyError, notifySuccess } from "../../lib/notifications";
-import { AlertCircle, Plus, RefreshCw, Truck } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  notifyError,
+  notifySuccess,
+} from "../../lib/notifications";
+
+import {
+  AlertCircle,
+  Plus,
+  RefreshCw,
+  Truck,
+} from "lucide-react";
+
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import { useNavigate } from "react-router-dom";
 
 import TableFooter from "../../components/common/TableFooter";
 import SuppliersTable from "../../components/suppliers/SuppliersTable";
 import SuppliersToolbar from "../../components/suppliers/SuppliersToolbar";
+
 import {
   Button,
   Card,
@@ -14,7 +31,9 @@ import {
   LoadingSpinner,
   PageHeader,
 } from "../../components/ui";
+
 import { PATHS } from "../../routes/path";
+
 import {
   getSupplierErrorMessage,
   suppliersService,
@@ -23,53 +42,123 @@ import {
 
 export default function SuppliersPage() {
   const navigate = useNavigate();
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [supplierToDelete, setSupplierToDelete] = useState<Supplier>();
-  const [isLoading, setIsLoading] = useState(true);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [loadError, setLoadError] = useState("");
 
-  const loadSuppliers = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setLoadError("");
-      setSuppliers(await suppliersService.list());
-    } catch (error) {
-      setLoadError(getSupplierErrorMessage(error));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const [
+    suppliers,
+    setSuppliers,
+  ] = useState<Supplier[]>([]);
+
+  const [
+    searchQuery,
+    setSearchQuery,
+  ] = useState("");
+
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] = useState("all");
+
+  const [
+    supplierToDelete,
+    setSupplierToDelete,
+  ] = useState<Supplier>();
+
+  const [
+    isLoading,
+    setIsLoading,
+  ] = useState(true);
+
+  const [
+    isDeleting,
+    setIsDeleting,
+  ] = useState(false);
+
+  const [
+    loadError,
+    setLoadError,
+  ] = useState("");
+
+  const loadSuppliers =
+    useCallback(async () => {
+      try {
+        setIsLoading(true);
+        setLoadError("");
+
+        setSuppliers(
+          await suppliersService.list(),
+        );
+      } catch (error) {
+        setLoadError(
+          getSupplierErrorMessage(
+            error,
+          ),
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    }, []);
 
   useEffect(() => {
     void loadSuppliers();
   }, [loadSuppliers]);
 
-  const filtered = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+  const filtered =
+    useMemo(() => {
+      const query =
+        searchQuery
+          .trim()
+          .toLowerCase();
 
-    return suppliers.filter((supplier) => {
-      const matchesSearch =
-        !query ||
-        [supplier.name, supplier.phone, supplier.email, supplier.address].some(
-          (value) => value.toLowerCase().includes(query),
-        );
+      return suppliers.filter(
+        (supplier) => {
+          const matchesSearch =
+            !query ||
+            [
+              supplier.name,
+              supplier.phone,
+              supplier.email,
+              supplier.address,
+            ].some((value) =>
+              value
+                .toLowerCase()
+                .includes(query),
+            );
 
-      const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "active" && supplier.isActive) ||
-        (statusFilter === "inactive" && !supplier.isActive) ||
-        (statusFilter === "payable" && supplier.balance > 0) ||
-        (statusFilter === "advance" && supplier.balance < 0);
+          const matchesStatus =
+            statusFilter ===
+              "all" ||
+            (statusFilter ===
+              "active" &&
+              supplier.isActive) ||
+            (statusFilter ===
+              "inactive" &&
+              !supplier.isActive) ||
+            (statusFilter ===
+              "payable" &&
+              supplier.balance >
+                0) ||
+            (statusFilter ===
+              "advance" &&
+              supplier.balance <
+                0);
 
-      return matchesSearch && matchesStatus;
-    });
-  }, [suppliers, searchQuery, statusFilter]);
+          return (
+            matchesSearch &&
+            matchesStatus
+          );
+        },
+      );
+    }, [
+      suppliers,
+      searchQuery,
+      statusFilter,
+    ]);
 
   const filtersAreActive =
-    Boolean(searchQuery.trim()) || statusFilter !== "all";
+    Boolean(
+      searchQuery.trim(),
+    ) ||
+    statusFilter !== "all";
 
   function clearFilters() {
     setSearchQuery("");
@@ -77,18 +166,40 @@ export default function SuppliersPage() {
   }
 
   async function handleConfirmDelete() {
-    if (!supplierToDelete) return;
+    if (!supplierToDelete) {
+      return;
+    }
 
     try {
       setIsDeleting(true);
-      await suppliersService.remove(supplierToDelete.id);
-      setSuppliers((current) =>
-        current.filter((supplier) => supplier.id !== supplierToDelete.id),
+
+      await suppliersService.remove(
+        supplierToDelete.id,
       );
-      notifySuccess("تم حذف المورد بنجاح");
-      setSupplierToDelete(undefined);
+
+      setSuppliers(
+        (current) =>
+          current.filter(
+            (supplier) =>
+              supplier.id !==
+              supplierToDelete.id,
+          ),
+      );
+
+      notifySuccess(
+        "تم حذف المورد بنجاح",
+      );
+
+      setSupplierToDelete(
+        undefined,
+      );
     } catch (error) {
-      notifyError(getSupplierErrorMessage(error));
+      notifyError(error, {
+        title:
+          "تعذر حذف المورد",
+        fallback:
+          "لا يمكن حذف المورد. تحقق من وجود فواتير شراء أو دفعات مخزون مرتبطة به.",
+      });
     } finally {
       setIsDeleting(false);
     }
@@ -98,11 +209,17 @@ export default function SuppliersPage() {
     <>
       <PageHeader
         title="الموردون"
-        description="إدارة بيانات الموردين وأرصدتهم وحالتهم داخل النظام."
+        description="إدارة بيانات الموردين وأرصدة حساباتهم داخل النظام."
         actions={
           <Button
-            startIcon={<Plus size={17} />}
-            onClick={() => navigate(PATHS.SUPPLIER_NEW)}
+            startIcon={
+              <Plus size={17} />
+            }
+            onClick={() =>
+              navigate(
+                PATHS.SUPPLIER_NEW,
+              )
+            }
           >
             إضافة مورد
           </Button>
@@ -111,58 +228,117 @@ export default function SuppliersPage() {
 
       <Card padding={false}>
         <SuppliersToolbar
-          searchQuery={searchQuery}
-          statusFilter={statusFilter}
-          filtersAreActive={filtersAreActive}
-          onSearchChange={setSearchQuery}
-          onStatusChange={setStatusFilter}
-          onClearFilters={clearFilters}
+          searchQuery={
+            searchQuery
+          }
+          statusFilter={
+            statusFilter
+          }
+          filtersAreActive={
+            filtersAreActive
+          }
+          onSearchChange={
+            setSearchQuery
+          }
+          onStatusChange={
+            setStatusFilter
+          }
+          onClearFilters={
+            clearFilters
+          }
         />
 
         {isLoading ? (
           <div className="flex min-h-72 flex-col items-center justify-center gap-3 text-[var(--text-muted)]">
-            <LoadingSpinner size="lg" />
-            <p className="text-sm font-medium">جاري تحميل الموردين...</p>
+            <LoadingSpinner
+              size="lg"
+            />
+
+            <p className="text-sm font-medium">
+              جاري تحميل الموردين...
+            </p>
           </div>
         ) : loadError ? (
           <EmptyState
-            icon={<AlertCircle size={26} />}
+            icon={
+              <AlertCircle
+                size={26}
+              />
+            }
             title="تعذر تحميل الموردين"
-            description={loadError}
+            description={
+              loadError
+            }
             action={
               <Button
                 variant="secondary"
-                startIcon={<RefreshCw size={16} />}
-                onClick={() => void loadSuppliers()}
+                startIcon={
+                  <RefreshCw
+                    size={16}
+                  />
+                }
+                onClick={() =>
+                  void loadSuppliers()
+                }
               >
                 إعادة المحاولة
               </Button>
             }
           />
-        ) : filtered.length > 0 ? (
+        ) : filtered.length >
+          0 ? (
           <>
             <SuppliersTable
               suppliers={filtered}
-              onView={(supplier) => navigate(`/suppliers/${supplier.id}`)}
-              onEdit={(supplier) => navigate(`/suppliers/${supplier.id}/edit`)}
-              onDelete={setSupplierToDelete}
+              onView={(
+                supplier,
+              ) =>
+                navigate(
+                  `/suppliers/${supplier.id}`,
+                )
+              }
+              onEdit={(
+                supplier,
+              ) =>
+                navigate(
+                  `/suppliers/${supplier.id}/edit`,
+                )
+              }
+              onDelete={
+                setSupplierToDelete
+              }
             />
 
             <TableFooter
-              visibleCount={filtered.length}
-              totalCount={suppliers.length}
+              visibleCount={
+                filtered.length
+              }
+              totalCount={
+                suppliers.length
+              }
               entityName="مورد"
             />
           </>
-        ) : suppliers.length === 0 ? (
+        ) : suppliers.length ===
+          0 ? (
           <EmptyState
-            icon={<Truck size={26} />}
+            icon={
+              <Truck size={26} />
+            }
             title="لا يوجد موردون"
             description="ابدأ بإضافة أول مورد لاستخدامه في المشتريات ودفعات المخزون."
             action={
               <Button
-                startIcon={<Plus size={16} />}
-                onClick={() => navigate(PATHS.SUPPLIER_NEW)}
+                startIcon={
+                  <Plus
+                    size={16}
+                  />
+                }
+                onClick={() =>
+                  navigate(
+                    PATHS.SUPPLIER_NEW,
+                  )
+                }
               >
                 إضافة أول مورد
               </Button>
@@ -170,11 +346,18 @@ export default function SuppliersPage() {
           />
         ) : (
           <EmptyState
-            icon={<Truck size={26} />}
+            icon={
+              <Truck size={26} />
+            }
             title="لا توجد نتائج مطابقة"
             description="لم نعثر على مورد يطابق البحث أو حالة الحساب المحددة."
             action={
-              <Button variant="secondary" onClick={clearFilters}>
+              <Button
+                variant="secondary"
+                onClick={
+                  clearFilters
+                }
+              >
                 عرض جميع الموردين
               </Button>
             }
@@ -183,7 +366,9 @@ export default function SuppliersPage() {
       </Card>
 
       <ConfirmDialog
-        open={Boolean(supplierToDelete)}
+        open={Boolean(
+          supplierToDelete,
+        )}
         title="حذف المورد"
         message={
           supplierToDelete
@@ -193,9 +378,15 @@ export default function SuppliersPage() {
         loading={isDeleting}
         confirmText="حذف المورد"
         onCancel={() => {
-          if (!isDeleting) setSupplierToDelete(undefined);
+          if (!isDeleting) {
+            setSupplierToDelete(
+              undefined,
+            );
+          }
         }}
-        onConfirm={() => void handleConfirmDelete()}
+        onConfirm={() =>
+          void handleConfirmDelete()
+        }
       />
     </>
   );

@@ -12,6 +12,7 @@ import {
 } from "../../components/ui";
 import { cashboxesService, translateCashboxError } from "./cashboxesService";
 import { formatMoney } from "./currency";
+import { transactionsService } from "../transactions/transactionsService";
 
 const money = (v: number | null, c = "SYP") => formatMoney(v, c);
 
@@ -47,7 +48,7 @@ const DIRECTION_OPTIONS = [
 const REVERSIBLE_TYPES = new Set(["income", "expense", "adjustment"]);
 
 type ReversalState = {
-  movementId: number | null;
+  movement: CashboxMovementRecord | null;
   transferGroupId: string | null;
   reason: string;
   submitting: boolean;
@@ -71,7 +72,7 @@ export default function CashboxMovementsPage() {
   const [page, setPage] = useState(1);
 
   const [reversal, setReversal] = useState<ReversalState>({
-    movementId: null, transferGroupId: null, reason: "", submitting: false, error: null,
+    movement: null, transferGroupId: null, reason: "", submitting: false, error: null,
   });
 
   const loadData = useCallback(async () => {
@@ -105,27 +106,93 @@ export default function CashboxMovementsPage() {
   }, [loadData]);
 
   const handleReverse = async () => {
-    const { movementId, transferGroupId, reason } = reversal;
+    const { movement, transferGroupId, reason } = reversal;
+
     if (!reason.trim()) {
-      setReversal((r) => ({ ...r, error: "يرجى إدخال سبب الإلغاء" }));
+      setReversal((current) => ({
+        ...current,
+        error: "يرجى إدخال سبب الإلغاء",
+      }));
       return;
     }
-    setReversal((r) => ({ ...r, submitting: true, error: null }));
+
+    setReversal((current) => ({
+      ...current,
+      submitting: true,
+      error: null,
+    }));
+
     try {
       if (transferGroupId) {
-        await cashboxesService.reverseTransfer(transferGroupId, reason.trim());
-      } else if (movementId) {
-        await cashboxesService.reverseMovement(movementId, reason.trim());
+        // التحويلات لها منطقها الذري الخاص.
+        await cashboxesService.reverseTransfer(
+          transferGroupId,
+          reason.trim(),
+        );
+      } else if (movement) {
+        if (
+          movement.reference_type === "income" ||
+          movement.reference_type === "expense"
+        ) {
+          /*
+           * مهم:
+           * حركة الصندوق الخاصة بالإيراد/المصروف مرتبطة
+           * بالمعاملة المالية الأصلية عبر reference_id.
+           *
+           * لا نستخدم reverseMovement هنا لأن ذلك يعكس
+           * الصندوق فقط ويترك transactions.status = active.
+           *
+           * نستخدم نفس منطق صفحة المعاملات المالية لكي:
+           * - تُلغى المعاملة.
+           * - تتغير حالتها إلى cancelled.
+           * - يُحفظ سبب الإلغاء.
+           * - يُعكس أثرها المالي مرة واحدة.
+           */
+          if (!movement.reference_id) {
+            throw {
+              code: "TRANSACTION_NOT_FOUND",
+              message: "Linked financial transaction was not found",
+            };
+          }
+
+          await transactionsService.cancel(
+            Number(movement.reference_id),
+            reason.trim(),
+          );
+        } else if (movement.reference_type === "adjustment") {
+          // التسويات اليدوية ليست Financial Transaction.
+          await cashboxesService.reverseMovement(
+            movement.id,
+            reason.trim(),
+          );
+        } else {
+          throw {
+            code: "NOT_REVERSIBLE",
+            message: "This movement cannot be reversed from the cashbox page",
+          };
+        }
       }
-      setReversal({ movementId: null, transferGroupId: null, reason: "", submitting: false, error: null });
+
+      setReversal({
+        movement: null,
+        transferGroupId: null,
+        reason: "",
+        submitting: false,
+        error: null,
+      });
+
       await loadData();
-    } catch (e) {
-      setReversal((r) => ({ ...r, submitting: false, error: translateCashboxError(e) }));
+    } catch (error) {
+      setReversal((current) => ({
+        ...current,
+        submitting: false,
+        error: translateCashboxError(error),
+      }));
     }
   };
 
   const currency = cashbox?.currency ?? "SYP";
-  const isReversalOpen = reversal.movementId !== null || reversal.transferGroupId !== null;
+  const isReversalOpen = reversal.movement !== null || reversal.transferGroupId !== null;
 
   const detailPath = `/cashboxes/${id}`;
 
@@ -258,7 +325,7 @@ export default function CashboxMovementsPage() {
                             size="sm"
                             variant="secondary"
                             startIcon={<RotateCcw size={13} />}
-                            onClick={() => setReversal({ movementId: m.id, transferGroupId: null, reason: "", submitting: false, error: null })}
+                            onClick={() => setReversal({ movement: m, transferGroupId: null, reason: "", submitting: false, error: null })}
                           >
                             إلغاء
                           </Button>
@@ -268,7 +335,7 @@ export default function CashboxMovementsPage() {
                             size="sm"
                             variant="secondary"
                             startIcon={<RotateCcw size={13} />}
-                            onClick={() => setReversal({ movementId: null, transferGroupId: m.transfer_group_id!, reason: "", submitting: false, error: null })}
+                            onClick={() => setReversal({ movement: null, transferGroupId: m.transfer_group_id!, reason: "", submitting: false, error: null })}
                           >
                             عكس التحويل
                           </Button>
@@ -314,12 +381,20 @@ export default function CashboxMovementsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl bg-[var(--surface)] p-6 shadow-xl">
             <h2 className="mb-1 text-lg font-bold">
-              {reversal.transferGroupId ? "عكس التحويل" : "إلغاء الحركة"}
+              {reversal.transferGroupId
+                ? "عكس التحويل"
+                : reversal.movement?.reference_type === "income" ||
+                    reversal.movement?.reference_type === "expense"
+                  ? "إلغاء المعاملة المالية"
+                  : "إلغاء الحركة"}
             </h2>
             <p className="mb-4 text-sm text-[var(--text-muted)]">
               {reversal.transferGroupId
                 ? "سيتم عكس كلا طرفي التحويل بشكل مجمّع وذري."
-                : "سيتم إنشاء حركة عكسية لإلغاء هذه الحركة."}
+                : reversal.movement?.reference_type === "income" ||
+                    reversal.movement?.reference_type === "expense"
+                  ? "سيتم إلغاء المعاملة المالية الأصلية بنفس منطق صفحة المعاملات المالية، وتحديث حالتها وسبب الإلغاء وعكس أثرها على الصندوق."
+                  : "سيتم إنشاء حركة عكسية لإلغاء هذه الحركة."}
             </p>
             <label className="block text-sm font-medium mb-1">سبب الإلغاء *</label>
             <textarea
@@ -338,7 +413,7 @@ export default function CashboxMovementsPage() {
               <Button
                 variant="secondary"
                 disabled={reversal.submitting}
-                onClick={() => setReversal({ movementId: null, transferGroupId: null, reason: "", submitting: false, error: null })}
+                onClick={() => setReversal({ movement: null, transferGroupId: null, reason: "", submitting: false, error: null })}
               >
                 إلغاء
               </Button>

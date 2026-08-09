@@ -1,20 +1,37 @@
 "use strict";
 const electron = require("electron");
 async function invokeApi(channel, ...args) {
-  const response = await electron.ipcRenderer.invoke(
-    channel,
-    ...args
-  );
-  if (!response || response.success !== true) {
+  try {
+    const response = await electron.ipcRenderer.invoke(
+      channel,
+      ...args
+    );
+    if (response && response.success === true) {
+      return response.data;
+    }
     const payload = response == null ? void 0 : response.error;
     const error = new Error(
       (payload == null ? void 0 : payload.message) || "حدث خطأ غير متوقع أثناء تنفيذ العملية."
     );
+    error.name = "StockLiteApiError";
     error.code = (payload == null ? void 0 : payload.code) || "UNKNOWN_ERROR";
     error.details = payload == null ? void 0 : payload.details;
+    error.field = payload == null ? void 0 : payload.field;
     throw error;
+  } catch (error) {
+    const current = error;
+    if ((current == null ? void 0 : current.name) === "StockLiteApiError") {
+      throw current;
+    }
+    const wrapped = new Error(
+      (current == null ? void 0 : current.message) || "تعذر التواصل مع خدمة التطبيق الداخلية."
+    );
+    wrapped.name = "StockLiteApiError";
+    wrapped.code = (current == null ? void 0 : current.code) || "IPC_ERROR";
+    wrapped.details = current == null ? void 0 : current.details;
+    wrapped.field = current == null ? void 0 : current.field;
+    throw wrapped;
   }
-  return response.data;
 }
 const crudApi = (entity, methodNames) => ({
   create: (input) => invokeApi(`api:${entity}:${methodNames.create}`, input),
@@ -48,7 +65,13 @@ const stockliteApi = {
     setAutoBackupConfig: (input) => invokeApi("api:system:setAutoBackupConfig", input),
     selectDirectory: () => invokeApi("api:system:selectDirectory"),
     selectSaveFile: () => invokeApi("api:system:selectSaveFile"),
-    selectOpenFile: () => invokeApi("api:system:selectOpenFile")
+    selectOpenFile: () => invokeApi("api:system:selectOpenFile"),
+    saveCurrentPageAsPdf: (input) => invokeApi("api:system:saveCurrentPageAsPdf", input)
+  },
+  license: {
+    getDeviceId: () => invokeApi("api:license:getDeviceId"),
+    getStatus: () => invokeApi("api:license:getStatus"),
+    import: (sourcePath) => invokeApi("api:license:import", sourcePath)
   },
   products: {
     ...crudApi("product", {
@@ -131,6 +154,7 @@ const stockliteApi = {
     list: (filters, pagination) => invokeApi("api:purchase:list", filters, pagination),
     getDetails: (id) => invokeApi("api:purchase:getDetails", id),
     createFull: (input) => invokeApi("api:purchase:createFull", input),
+    addItems: (invoiceId, items) => invokeApi("api:purchase:addItems", invoiceId, items),
     cancel: (id, reason) => invokeApi("api:purchase:cancel", id, reason),
     recordPayment: (input) => invokeApi("api:purchase:recordPayment", input),
     reversePayment: (paymentId, reason) => invokeApi("api:purchase:reversePayment", paymentId, reason),

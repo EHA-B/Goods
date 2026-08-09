@@ -5,12 +5,29 @@ import { useNavigate, useParams } from "react-router-dom";
 import { BackButton, Button, Card, FormField, Input, LoadingSpinner, NumberInput, PageHeader, Select, Textarea } from "../../components/ui";
 import { suppliersService, type Supplier } from "../suppliers/suppliersService";
 import { getInventoryErrorMessage, inventoryService, type InventoryItem } from "./inventoryService";
+import { purchasesService } from "../purchases/purchasesService";
 
 export default function StockBatchFormPage() {
   const { productId } = useParams(); const navigate = useNavigate(); const id = Number(productId);
   const [product, setProduct] = useState<InventoryItem>(); const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [batchCode, setBatchCode] = useState(""); const [supplierId, setSupplierId] = useState(""); const [quantity, setQuantity] = useState<number>(0); const [purchasePrice, setPurchasePrice] = useState<number>(0); const [receivedDate, setReceivedDate] = useState(new Date().toISOString().split("T")[0]); const [expiryDate, setExpiryDate] = useState(""); const [notes, setNotes] = useState("");
+  const [registrationMode, setRegistrationMode] = useState<"new" | "existing">("new");
+  const [existingInvoiceId, setExistingInvoiceId] = useState("");
+  const [supplierInvoices, setSupplierInvoices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true); const [isSaving, setIsSaving] = useState(false); const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (registrationMode === "existing" && supplierId) {
+      purchasesService.list({ supplier_id: Number(supplierId) }, { limit: 100 })
+        .then(res => {
+          setSupplierInvoices(res.items.filter((inv: any) => inv.status !== 'cancelled' && !(inv.invoice_type === 'consignment' && inv.settlement_status === 'settled')));
+        })
+        .catch(console.error);
+    } else {
+      setSupplierInvoices([]);
+      setExistingInvoiceId("");
+    }
+  }, [registrationMode, supplierId]);
 
   useEffect(() => { let cancelled = false; (async () => { try { const [details, supplierRows] = await Promise.all([inventoryService.productDetails(id), suppliersService.list()]); if (!cancelled) { setProduct(details.item); setSuppliers(supplierRows.filter((x) => x.isActive)); } } catch (e) { if (!cancelled) setError(getInventoryErrorMessage(e)); } finally { if (!cancelled) setIsLoading(false); } })(); return () => { cancelled = true; }; }, [id]);
 
@@ -20,8 +37,35 @@ export default function StockBatchFormPage() {
     if (quantity <= 0) return setError("أدخل كمية صحيحة.");
     if (purchasePrice < 0) return setError("أدخل سعر شراء صحيح.");
     if (!receivedDate) return setError("تاريخ الاستلام مطلوب.");
+    if (registrationMode === "existing" && !existingInvoiceId) return setError("يرجى اختيار فاتورة شراء.");
     if (expiryDate && expiryDate < receivedDate) { setError("تاريخ الانتهاء يجب أن يكون بعد تاريخ الاستلام."); notifyValidation("تاريخ الانتهاء يجب أن يكون بعد تاريخ الاستلام."); return; }
-    try { setIsSaving(true); setError(""); await inventoryService.createBatch({ product_id: id, supplier_id: Number(supplierId), batch_code: batchCode || null, quantity, purchase_price: purchasePrice, received_date: receivedDate, expiry_date: expiryDate || null, notes, isActive: 1 }); notifySuccess("تم إضافة الدفعة بنجاح"); navigate(`/inventory/${id}`); }
+    try { 
+      setIsSaving(true); setError(""); 
+      const item = {
+        product_id: id,
+        quantity,
+        purchase_price: purchasePrice,
+        batch_code: batchCode || undefined,
+        received_date: receivedDate || undefined,
+        expiry_date: expiryDate || undefined,
+        notes: notes || undefined,
+      };
+
+      if (registrationMode === "new") {
+        await purchasesService.createFull({
+          supplier_id: Number(supplierId),
+          invoice_type: "standard",
+          invoice_date: receivedDate,
+          currency: "SYP",
+          exchange_rate: 1,
+          items: [item]
+        });
+      } else {
+        await purchasesService.addItems(Number(existingInvoiceId), [item]);
+      }
+      notifySuccess("تم إضافة الدفعة بنجاح"); 
+      navigate(`/inventory/${id}`); 
+    }
     catch (e) { const message = getInventoryErrorMessage(e); setError(message); notifyError(message); } finally { setIsSaving(false); }
   }
 
@@ -33,6 +77,14 @@ export default function StockBatchFormPage() {
     <Card header="بيانات الدفعة"><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
       <FormField label="رقم الدفعة" hint="اختياري"><Input dir="ltr" value={batchCode} placeholder="مثال: BAT-2026-001" onChange={(e) => setBatchCode(e.target.value)} /></FormField>
       <FormField label="اسم المورد" required><Select value={supplierId} placeholder="اختر المورد" options={suppliers.map((s) => ({ value: String(s.id), label: s.name }))} onChange={(e) => setSupplierId(e.target.value)} /></FormField>
+      <FormField label="إجراء الشراء" required>
+        <Select value={registrationMode} options={[{ value: "new", label: "إنشاء فاتورة شراء جديدة" }, { value: "existing", label: "إضافة إلى فاتورة شراء حالية" }]} onChange={(e) => setRegistrationMode(e.target.value as "new" | "existing")} />
+      </FormField>
+      {registrationMode === "existing" && (
+        <FormField label="فاتورة الشراء" required>
+          <Select value={existingInvoiceId} placeholder="اختر الفاتورة" options={supplierInvoices.map((inv) => ({ value: String(inv.id), label: `${inv.invoice_number} (${inv.invoice_date})` }))} onChange={(e) => setExistingInvoiceId(e.target.value)} disabled={!supplierId || supplierInvoices.length === 0} />
+        </FormField>
+      )}
       <FormField label="الكمية" required><NumberInput min={0.001} step={0.001} value={String(quantity)} suffix={product.unit} onChange={(e) => setQuantity(Number(e.target.value))} /></FormField>
       <FormField label="سعر الشراء" required><NumberInput min={0} value={String(purchasePrice)} suffix="ل.س" onChange={(e) => setPurchasePrice(Number(e.target.value))} /></FormField>
       <FormField label="تاريخ الاستلام" required><Input type="date" dir="ltr" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} /></FormField>

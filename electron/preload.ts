@@ -1,39 +1,112 @@
-import { contextBridge, ipcRenderer } from "electron";
+import {
+  contextBridge,
+  ipcRenderer,
+} from "electron";
 
 type ApiErrorPayload = {
   code?: string;
   message?: string;
   details?: unknown;
+  field?: string;
 };
 
 type ApiResponse<T> =
-  | { success: true; data: T }
-  | { success: false; error?: ApiErrorPayload };
+  | {
+      success: true;
+      data: T;
+    }
+  | {
+      success: false;
+      error?: ApiErrorPayload;
+    };
+
+type StockLiteApiError = Error & {
+  code?: string;
+  details?: unknown;
+  field?: string;
+};
 
 async function invokeApi<T>(
   channel: string,
   ...args: unknown[]
 ): Promise<T> {
-  const response = (await ipcRenderer.invoke(
-    channel,
-    ...args,
-  )) as ApiResponse<T>;
+  try {
+    const response =
+      (await ipcRenderer.invoke(
+        channel,
+        ...args,
+      )) as ApiResponse<T>;
 
-  if (!response || response.success !== true) {
-    const payload = response?.error;
-    const error = new Error(
-      payload?.message || "حدث خطأ غير متوقع أثناء تنفيذ العملية.",
-    ) as Error & {
-      code?: string;
-      details?: unknown;
-    };
+    if (
+      response &&
+      response.success === true
+    ) {
+      return response.data;
+    }
 
-    error.code = payload?.code || "UNKNOWN_ERROR";
-    error.details = payload?.details;
+    const payload =
+      response?.error;
+
+    const error =
+      new Error(
+        payload?.message ||
+          "حدث خطأ غير متوقع أثناء تنفيذ العملية.",
+      ) as StockLiteApiError;
+
+    error.name =
+      "StockLiteApiError";
+
+    error.code =
+      payload?.code ||
+      "UNKNOWN_ERROR";
+
+    error.details =
+      payload?.details;
+
+    error.field =
+      payload?.field;
+
     throw error;
-  }
+  } catch (error) {
+    /*
+     * Errors already created from the structured
+     * backend response must pass through unchanged.
+     */
+    const current =
+      error as StockLiteApiError;
 
-  return response.data;
+    if (
+      current?.name ===
+      "StockLiteApiError"
+    ) {
+      throw current;
+    }
+
+    /*
+     * ipcRenderer.invoke itself may reject.
+     * Preserve as much information as possible.
+     */
+    const wrapped =
+      new Error(
+        current?.message ||
+          "تعذر التواصل مع خدمة التطبيق الداخلية.",
+      ) as StockLiteApiError;
+
+    wrapped.name =
+      "StockLiteApiError";
+
+    wrapped.code =
+      current?.code ||
+      "IPC_ERROR";
+
+    wrapped.details =
+      current?.details;
+
+    wrapped.field =
+      current?.field;
+
+    throw wrapped;
+  }
 }
 
 const crudApi = (entity: string, methodNames: {
@@ -91,6 +164,13 @@ const stockliteApi = {
       invokeApi("api:system:selectSaveFile"),
     selectOpenFile: () =>
       invokeApi("api:system:selectOpenFile"),
+    saveCurrentPageAsPdf: (input?: { fileName?: string }) =>
+      invokeApi("api:system:saveCurrentPageAsPdf", input),
+  },
+  license: {
+    getDeviceId: () => invokeApi("api:license:getDeviceId"),
+    getStatus: () => invokeApi("api:license:getStatus"),
+    import: (sourcePath: string) => invokeApi("api:license:import", sourcePath),
   },
   products: {
     ...crudApi("product", {
@@ -211,6 +291,8 @@ const stockliteApi = {
       invokeApi("api:purchase:getDetails", id),
     createFull: (input: unknown) =>
       invokeApi("api:purchase:createFull", input),
+    addItems: (invoiceId: number, items: unknown) =>
+      invokeApi("api:purchase:addItems", invoiceId, items),
     cancel: (id: number, reason: string) =>
       invokeApi("api:purchase:cancel", id, reason),
     recordPayment: (input: unknown) =>

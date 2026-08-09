@@ -68,7 +68,36 @@ export default function CustomerFormPage() {
         <FormField label="البريد الإلكتروني" htmlFor="customer-email"><Input id="customer-email" dir="ltr" type="email" value={form.email} placeholder="customer@example.com" onChange={(e) => update("email", e.target.value)} /></FormField>
         <FormField label="العنوان" htmlFor="customer-address"><Input id="customer-address" value={form.address} placeholder="المدينة، الحي، الشارع" onChange={(e) => update("address", e.target.value)} /></FormField>
         <FormField label="الرصيد الافتتاحي" htmlFor="customer-balance" hint="الموجب يعني أن على العميل مبلغًا، والسالب يعني أن له مبلغًا."><NumberInput id="customer-balance" value={form.balance} suffix="ل.س" onChange={(e) => update("balance", e.target.value)} /></FormField>
-        <div className="flex items-center justify-between self-end rounded-[var(--radius-sm)] border border-[var(--border)] px-4 py-3"><div><p className="text-sm font-bold text-[var(--text-primary)]">العميل نشط</p><p className="mt-1 text-xs text-[var(--text-muted)]">يمكن إيقاف العميل مع الاحتفاظ بسجله.</p></div><Switch checked={form.isActive} onChange={(e) => update("isActive", e.target.checked)} /></div>
+        <div
+          className={[
+            "flex items-center justify-between self-end rounded-[var(--radius-sm)] border px-4 py-3 transition-colors",
+            form.isActive
+              ? "border-[color-mix(in_srgb,var(--success)_45%,var(--border))] bg-[var(--success-subtle)]"
+              : "border-[color-mix(in_srgb,var(--danger)_45%,var(--border))] bg-[var(--danger-subtle)]",
+          ].join(" ")}
+        >
+          <div>
+            <p className="text-sm font-bold text-[var(--text-primary)]">
+              حالة العميل
+            </p>
+            <p
+              className={[
+                "mt-1 text-xs font-bold",
+                form.isActive
+                  ? "text-[var(--success)]"
+                  : "text-[var(--danger)]",
+              ].join(" ")}
+            >
+              {form.isActive ? "نشط" : "غير نشط"}
+            </p>
+          </div>
+
+          <Switch
+            checked={form.isActive}
+            onChange={(e) => update("isActive", e.target.checked)}
+            aria-label={form.isActive ? "تعطيل العميل" : "تفعيل العميل"}
+          />
+        </div>
         <div className="md:col-span-2"><FormField label="ملاحظات" htmlFor="customer-notes"><Textarea id="customer-notes" rows={5} value={form.notes} placeholder="ملاحظات عن العميل أو شروط التعامل..." onChange={(e) => update("notes", e.target.value)} /></FormField></div>
         {error && <p className="md:col-span-2 rounded-[var(--radius-sm)] bg-[var(--danger-subtle)] px-3 py-2 text-sm font-medium text-[var(--danger)]">{error}</p>}
       </div>

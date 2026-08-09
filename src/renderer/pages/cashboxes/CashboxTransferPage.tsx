@@ -20,6 +20,7 @@ export default function CashboxTransferPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [amount, setAmount] = useState(0);
+  const [exchangeRate, setExchangeRate] = useState(1);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
 
@@ -35,12 +36,12 @@ export default function CashboxTransferPage() {
   const toBox = cashboxes.find((c) => c.id === Number(to));
 
   // Frontend pre-validation hints
-  const currencyMismatch = fromBox && toBox && fromBox.currency !== toBox.currency;
+  const isCrossCurrency = Boolean(fromBox && toBox && fromBox.currency !== toBox.currency);
   const insufficientBalance = fromBox && amount > 0 && Number(fromBox.balance) < amount;
   const sameBox = from && to && from === to;
 
   const canSubmit =
-    from && to && amount > 0 && !sameBox && !currencyMismatch && !insufficientBalance && !saving;
+    from && to && amount > 0 && !sameBox && !insufficientBalance && (!isCrossCurrency || exchangeRate > 0) && !saving;
 
   const handleSave = async () => {
     setSaving(true);
@@ -50,6 +51,7 @@ export default function CashboxTransferPage() {
         from_cashbox_id: Number(from),
         to_cashbox_id: Number(to),
         amount,
+        exchange_rate: isCrossCurrency ? exchangeRate : undefined,
         transaction_date: date,
         notes: notes || null,
       });
@@ -118,6 +120,19 @@ export default function CashboxTransferPage() {
             />
           </FormField>
 
+          {isCrossCurrency && (
+            <FormField label="سعر الصرف">
+              <Input
+                type="number"
+                min="0.0001"
+                step="any"
+                value={exchangeRate || ""}
+                onChange={(e) => setExchangeRate(Number(e.target.value))}
+                placeholder="أدخل سعر الصرف"
+              />
+            </FormField>
+          )}
+
           <FormField label="التاريخ">
             <Input
               type="date"
@@ -135,10 +150,20 @@ export default function CashboxTransferPage() {
         {sameBox && (
           <p className="mt-3 text-sm text-[var(--warning)]">لا يمكن التحويل بين نفس الصندوق.</p>
         )}
-        {currencyMismatch && (
-          <p className="mt-3 text-sm text-[var(--warning)]">
-            عملة الصندوقين مختلفة ({currencyName(fromBox?.currency)} ≠ {currencyName(toBox?.currency)}).
-          </p>
+        {isCrossCurrency && (
+          <div className="mt-3 text-sm text-[var(--primary)] bg-[var(--primary-muted)] p-3 rounded-md">
+            عملة الصندوقين مختلفة ({currencyName(fromBox?.currency)} ← {currencyName(toBox?.currency)}).
+            {exchangeRate > 0 && (
+              <div className="mt-1 font-medium">
+                {fromBox?.currency === 'USD' && toBox?.currency === 'SYP' 
+                  ? `سيتم إيداع: ${formatMoney(amount * exchangeRate, toBox?.currency)}`
+                  : fromBox?.currency === 'SYP' && toBox?.currency === 'USD'
+                  ? `سيتم إيداع: ${formatMoney(amount / exchangeRate, toBox?.currency)}`
+                  : `سيتم إيداع: ${formatMoney(amount * exchangeRate, toBox?.currency)}`
+                }
+              </div>
+            )}
+          </div>
         )}
         {insufficientBalance && !sameBox && (
           <p className="mt-3 text-sm text-[var(--warning)]">

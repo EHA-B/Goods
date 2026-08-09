@@ -199,18 +199,33 @@ class PurchaseInvoiceController {
                 const cashbox = await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [payBox]);
                 if (!cashbox)          throw { code: 'CASHBOX_NOT_FOUND', message: 'الصندوق غير موجود' };
                 if (!cashbox.isActive)  throw { code: 'INACTIVE_CASHBOX', message: 'الصندوق غير نشط' };
-                assertCashboxCurrency(cashbox, invoiceCurrency);
-                if (cashbox.balance < payAmount - 0.001) throw { code: 'INSUFFICIENT_BALANCE', message: `رصيد الصندوق (${cashbox.balance}) غير كافٍ` };
+                
+                let paymentExchangeRate = invoiceRate;
+                let cashboxAmount = payAmount;
+                
+                if (cashbox.currency !== invoiceCurrency) {
+                    if (!initial_payment.exchange_rate) {
+                        throw { code: 'MISSING_EXCHANGE_RATE', message: 'سعر الصرف مطلوب عند اختلاف عملة الصندوق عن الفاتورة' };
+                    }
+                    paymentExchangeRate = normalizeExchangeRate(cashbox.currency, initial_payment.exchange_rate);
+                    const amountBaseFromInvoice = toBaseAmount(payAmount, invoiceRate);
+                    cashboxAmount = normalizeAmount(amountBaseFromInvoice / paymentExchangeRate);
+                } else {
+                    paymentExchangeRate = invoiceRate;
+                }
+                const payBaseAmountCashbox = toBaseAmount(cashboxAmount, paymentExchangeRate);
+                
+                if (cashbox.balance < cashboxAmount - 0.001) throw { code: 'INSUFFICIENT_BALANCE', message: `رصيد الصندوق (${cashbox.balance}) غير كافٍ` };
 
                 // Deduct cashbox
                 const balBefore = normalizeAmount(cashbox.balance);
-                const balAfter  = Math.round((balBefore - payAmount) * 100) / 100;
+                const balAfter  = Math.round((balBefore - cashboxAmount) * 100) / 100;
                 await dbRun(db, `UPDATE cashboxes SET balance = ?, updated_at = datetime('now') WHERE id = ?`, [balAfter, payBox]);
                 const { lastID: cbtId } = await dbRun(db,
                     `INSERT INTO cashbox_transactions
                        (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
                      VALUES (?, 'purchase', ?, ?, 'out', ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-                    [payBox, invoiceId, payAmount, balBefore, balAfter, payDate, `دفعة أولى فاتورة شراء #${invNumber}`]
+                    [payBox, invoiceId, cashboxAmount, balBefore, balAfter, payDate, `دفعة أولى فاتورة شراء #${invNumber}`]
                 );
 
                 // Create payment record
@@ -219,8 +234,8 @@ class PurchaseInvoiceController {
                        (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
                         status, cashbox_transaction_id, notes, created_at, updated_at)
                      VALUES ('supplier', ?, 'purchase', ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now'))`,
-                    [supplier_id, invoiceId, payBox, payAmount, invoiceCurrency, invoiceRate,
-                     toBaseAmount(payAmount, invoiceRate), payDate, cbtId, initial_payment.notes ?? null]
+                    [supplier_id, invoiceId, payBox, cashboxAmount, cashbox.currency, paymentExchangeRate,
+                     payBaseAmountCashbox, payDate, cbtId, initial_payment.notes ?? null]
                 );
 
                 // Reduce supplier balance by payment amount
@@ -253,6 +268,146 @@ class PurchaseInvoiceController {
         }
     }
 
+    // ─── addItemsToPurchaseInvoice ─────────────────────────────────────────
+
+    async addItemsToPurchaseInvoice(invoiceId, items) {
+        if (!invoiceId) throw { code: 'VALIDATION_ERROR', message: 'ID الفاتورة مطلوب' };
+        if (!Array.isArray(items) || items.length === 0) throw { code: 'PURCHASE_ITEM_INVALID', message: 'يجب إضافة صنف واحد على الأقل' };
+
+        const db = await dbmanager.init();
+
+        try {
+            await dbRun(db, 'BEGIN TRANSACTION');
+
+            // 1. Validate invoice
+            const invoice = await dbGet(db, 'SELECT * FROM purchase_invoices WHERE id = ?', [invoiceId]);
+            if (!invoice) throw { code: 'NOT_FOUND', message: 'فاتورة الشراء غير موجودة' };
+            if (invoice.status === 'cancelled') throw { code: 'PURCHASE_ALREADY_CANCELLED', message: 'لا يمكن التعديل على فاتورة ملغاة' };
+            if (invoice.invoice_type === 'consignment' && invoice.settlement_status === 'settled') {
+                throw { code: 'CONSIGNMENT_ALREADY_CLOSED', message: 'لا يمكن إضافة أصناف لفاتورة أمانة تم إغلاقها' };
+            }
+
+            // 2. Validate supplier
+            const supplier = await dbGet(db, 'SELECT * FROM suppliers WHERE id = ?', [invoice.supplier_id]);
+            if (!supplier) throw { code: 'SUPPLIER_NOT_FOUND', message: 'المورد غير موجود' };
+            if (!supplier.isActive) throw { code: 'INACTIVE_SUPPLIER', message: 'المورد غير نشط' };
+
+            // 3. Map new items to common shape
+            const mappedItems = items.map((item, index) => ({
+                ...item,
+                product_id: item.product_id,
+                quantity: Number(item.quantity ?? 0),
+                price: Number(item.purchase_price ?? item.unit_price ?? item.price ?? 0),
+                purchase_price: Number(item.purchase_price ?? item.unit_price ?? item.price ?? 0),
+            }));
+
+            // 4. Validate products and prevent ambiguous duplicate product rows in this batch.
+            const seenProductIds = new Set();
+            for (let i = 0; i < mappedItems.length; i++) {
+                const productId = Number(mappedItems[i].product_id);
+                if (seenProductIds.has(productId)) {
+                    throw { code: 'DUPLICATE_PURCHASE_PRODUCT', message: `المنتج في السطر ${i + 1} مكرر. اجمع الكمية في سطر واحد.` };
+                }
+                seenProductIds.add(productId);
+                const product = await dbGet(db, 'SELECT id, name, isActive FROM products WHERE id = ?', [productId]);
+                if (!product) throw { code: 'PRODUCT_NOT_FOUND', message: `المنتج في السطر ${i + 1} غير موجود` };
+                if (!product.isActive) throw { code: 'INACTIVE_PRODUCT', message: `المنتج ${product.name} غير نشط` };
+            }
+
+            // 5. Calculate totals for new items
+            const { normalizedItems, subtotal: newItemsSubtotal, totalAmount: newItemsTotal } = calculateInvoiceTotals(mappedItems, 0);
+
+            const invoiceCurrency = normalizeCurrency(invoice.currency);
+            const invoiceRate = normalizeExchangeRate(invoiceCurrency, invoice.exchange_rate);
+
+            // 6. Insert items + create stock batches + stock movements
+            for (let i = 0; i < normalizedItems.length; i++) {
+                const item = normalizedItems[i];
+
+                // Validate item received_date
+                const receivedDate = validateDate(item.received_date ?? invoice.invoice_date, `item[${i}].received_date`);
+                const expiryDate = item.expiry_date ? validateDate(item.expiry_date, `item[${i}].expiry_date`) : null;
+                if (expiryDate && expiryDate < receivedDate) {
+                    throw { code: 'VALIDATION_ERROR', message: `الصنف رقم ${i + 1}: تاريخ الانتهاء لا يمكن أن يسبق تاريخ الاستلام` };
+                }
+
+                // Insert purchase invoice item
+                await dbRun(db,
+                    `INSERT INTO purchase_invoice_items
+                       (purchase_invoice_id, product_id, quantity, unit_price, line_total, notes, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+                    [invoiceId, item.product_id, item.quantity, item.purchase_price, item.lineTotal, item.notes ?? null]
+                );
+
+                // Generate batch code if not provided
+                // Try to format it based on invoice_number and some suffix
+                // To avoid collisions we will use current timestamp or query max stock batches
+                let batchCode = item.batch_code?.trim();
+                if (!batchCode) {
+                    const cntRes = await dbGet(db, 'SELECT COUNT(*) as c FROM stock_batches WHERE purchase_invoice_id = ?', [invoiceId]);
+                    batchCode = `${invoice.invoice_number}-B${String(Number(cntRes.c) + 1).padStart(2, '0')}`;
+                }
+                // Check batch code uniqueness if provided
+                if (batchCode) {
+                    const dupBatch = await dbGet(db, 'SELECT id FROM stock_batches WHERE batch_code = ?', [batchCode]);
+                    if (dupBatch) throw { code: 'DUPLICATE_BATCH_CODE', message: `كود الدفعة ${batchCode} مستخدم مسبقًا` };
+                }
+
+                // Insert stock batch
+                const { lastID: batchId } = await dbRun(db,
+                    `INSERT INTO stock_batches
+                       (product_id, supplier_id, purchase_invoice_id, batch_code,
+                        quantity, remaining_quantity, purchase_price, purchase_currency,
+                        purchase_exchange_rate, purchase_price_base, received_date,
+                        expiry_date, notes, isActive, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
+                    [item.product_id, invoice.supplier_id, invoiceId, batchCode,
+                     item.quantity, item.quantity, item.purchase_price, invoiceCurrency,
+                     invoiceRate, toBaseAmount(item.purchase_price, invoiceRate), receivedDate,
+                     expiryDate, item.batch_notes ?? null]
+                );
+
+                // Create stock movement (purchase_in)
+                await dbRun(db,
+                    `INSERT INTO stock_movements
+                       (product_id, stock_batch_id, movement_type, quantity, quantity_before, quantity_after,
+                        reference_type, reference_id, reference_number, supplier_id, notes, created_at)
+                     VALUES (?, ?, 'purchase_in', ?, 0, ?, 'purchase_invoice', ?, ?, ?, ?, datetime('now'))`,
+                    [item.product_id, batchId, item.quantity, item.quantity, invoiceId, invoice.invoice_number, invoice.supplier_id, `إضافة لفاتورة شراء ${invoice.invoice_number}`]
+                );
+            }
+
+            // 7. Increase supplier payable balance by new items total
+            const supplierBaseAmount = toBaseAmount(newItemsTotal, invoiceRate);
+            await dbRun(db,
+                `UPDATE suppliers SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`,
+                [supplierBaseAmount, invoice.supplier_id]
+            );
+
+            // 8. Update invoice paid/remaining/status
+            const newSubtotal = normalizeAmount(invoice.subtotal + newItemsSubtotal);
+            const newTotal = normalizeAmount(invoice.total + newItemsTotal);
+            // Re-evaluate payment status
+            const { remainingAmount, status: finalStatus } = calculatePaymentState(newTotal, invoice.paid_amount);
+
+            await dbRun(db,
+                `UPDATE purchase_invoices SET subtotal = ?, total = ?, remaining_amount = ?, status = ?, updated_at = datetime('now') WHERE id = ?`,
+                [newSubtotal, newTotal, remainingAmount, finalStatus, invoiceId]
+            );
+
+            // 9. Activity log
+            await logActivity(db, 'purchase_items_added', 'purchase_invoices', invoiceId, { invoice_number: invoice.invoice_number, added_items: normalizedItems.length, added_total: newItemsTotal });
+
+            await dbRun(db, 'COMMIT');
+
+            return this.getPurchaseInvoiceDetails(invoiceId);
+
+        } catch (err) {
+            await new Promise((res) => db.run('ROLLBACK', () => res()));
+            throw err;
+        }
+    }
+
     // ─── getPurchaseInvoiceDetails ─────────────────────────────────────────
 
     async getPurchaseInvoiceDetails(id) {
@@ -264,18 +419,42 @@ class PurchaseInvoiceController {
 
         const supplier = await dbGet(db, 'SELECT * FROM suppliers WHERE id = ?', [invoice.supplier_id]);
 
-        const items = await dbAll(db,
+        const invoiceItems = await dbAll(db,
             `SELECT pii.*,
-                    p.name as product_name, p.unit as product_unit,
-                    sb.batch_code, sb.remaining_quantity, sb.received_date as batch_received_date,
-                    sb.expiry_date as batch_expiry_date, sb.isActive as batch_active, sb.id as stock_batch_id
+                    p.name as product_name, p.unit as product_unit
              FROM purchase_invoice_items pii
              LEFT JOIN products p ON pii.product_id = p.id
-             LEFT JOIN stock_batches sb ON sb.purchase_invoice_id = pii.purchase_invoice_id AND sb.product_id = pii.product_id
              WHERE pii.purchase_invoice_id = ?
              ORDER BY pii.id`,
             [id]
         );
+
+        const stockBatches = await dbAll(db,
+            `SELECT * FROM stock_batches WHERE purchase_invoice_id = ? ORDER BY id`,
+            [id]
+        );
+
+        const batchTracker = {};
+        for (const batch of stockBatches) {
+            if (!batchTracker[batch.product_id]) {
+                batchTracker[batch.product_id] = [];
+            }
+            batchTracker[batch.product_id].push(batch);
+        }
+
+        const items = invoiceItems.map(item => {
+            const batchList = batchTracker[item.product_id];
+            const batch = batchList && batchList.length > 0 ? batchList.shift() : null;
+            return {
+                ...item,
+                batch_code: batch?.batch_code ?? null,
+                remaining_quantity: batch?.remaining_quantity ?? null,
+                batch_received_date: batch?.received_date ?? null,
+                batch_expiry_date: batch?.expiry_date ?? null,
+                batch_active: batch?.isActive ?? null,
+                stock_batch_id: batch?.id ?? null,
+            };
+        });
 
         const payments = await dbAll(db,
             `SELECT p.*, c.name as cashbox_name
@@ -580,7 +759,7 @@ class PurchaseInvoiceController {
                 sb.quantity AS received_quantity,
                 COALESCE(SUM(CASE WHEN si.status != 'cancelled' THEN sii.quantity ELSE 0 END), 0) AS sold_quantity,
                 sb.remaining_quantity,
-                COALESCE(SUM(CASE WHEN si.status != 'cancelled' THEN sii.line_total ELSE 0 END), 0) AS total_sales_amount,
+                COALESCE(SUM(CASE WHEN si.status != 'cancelled' THEN sii.line_total * COALESCE(si.exchange_rate, 1) ELSE 0 END), 0) / ? AS total_sales_amount,
                 sb.expiry_date
             FROM stock_batches sb
             JOIN products p ON p.id = sb.product_id
@@ -589,7 +768,7 @@ class PurchaseInvoiceController {
             WHERE sb.purchase_invoice_id = ?
             GROUP BY sb.id, sb.product_id, p.name, sb.batch_code, sb.quantity, sb.remaining_quantity, sb.expiry_date
             ORDER BY sb.id ASC
-        `, [invoiceId]);
+        `, [invoice.exchange_rate || 1, invoiceId]);
 
         const salesCountRow = await dbGet(db, `
             SELECT COUNT(DISTINCT si.id) AS sales_count
@@ -695,23 +874,34 @@ class PurchaseInvoiceController {
             LIMIT 1
         `);
         const invoiceCurrency = currencySetting?.setting_value || 'SYP';
+        
+        let paymentExchangeRate = 1;
         if (cashbox.currency !== invoiceCurrency) {
-            throw { code: 'CASHBOX_CURRENCY_MISMATCH', message: 'عملة الصندوق لا تطابق عملة التسوية' };
+            if (!input.exchange_rate) {
+                throw { code: 'MISSING_EXCHANGE_RATE', message: 'سعر الصرف مطلوب عند اختلاف عملة الصندوق' };
+            }
+            paymentExchangeRate = normalizeExchangeRate(cashbox.currency, input.exchange_rate);
         }
 
         const salesTotalRow = await dbGet(db, `
-            SELECT SUM(sii.line_total) AS total_sales
+            SELECT SUM(sii.line_total * si.exchange_rate) AS total_sales_base
             FROM sale_invoice_items sii
             JOIN sale_invoices si ON sii.sale_invoice_id = si.id
             JOIN stock_batches sb ON sii.stock_batch_id = sb.id
             WHERE sb.purchase_invoice_id = ? AND si.status != 'cancelled'
         `, [invoiceId]);
-        const totalSalesAmount = normalizeAmount(salesTotalRow?.total_sales ?? 0);
+        const totalSalesAmount = normalizeAmount(salesTotalRow?.total_sales_base ?? 0);
         const commissionAmount = normalizeAmount((totalSalesAmount * commPct) / 100);
-        const supplierShare = normalizeAmount(totalSalesAmount - commissionAmount);
+        const supplierShareBase = normalizeAmount(totalSalesAmount - commissionAmount);
+        
+        let supplierShareCashbox = supplierShareBase;
+        if (cashbox.currency !== invoiceCurrency) {
+             supplierShareCashbox = normalizeAmount(supplierShareBase / paymentExchangeRate);
+        }
+        
         const cashboxBalance = normalizeAmount(cashbox.balance);
 
-        if (supplierShare > cashboxBalance) {
+        if (supplierShareCashbox > cashboxBalance) {
             throw { code: 'INSUFFICIENT_BALANCE', message: 'الرصيد في الصندوق لا يكفي للدفع للمورد' };
         }
 
@@ -725,11 +915,11 @@ class PurchaseInvoiceController {
             total_sales_amount: totalSalesAmount,
             commission_percentage: commPct,
             commission_amount: commissionAmount,
-            supplier_share: supplierShare,
+            supplier_share: supplierShareBase,
             remaining_quantity: remainingQuantity,
             currency: invoiceCurrency,
             cashbox_balance: cashboxBalance,
-            balance_after_settlement: normalizeAmount(cashboxBalance - supplierShare),
+            balance_after_settlement: normalizeAmount(cashboxBalance - supplierShareCashbox),
             can_submit: true,
             warnings: [],
             calculation_hash: calculationHash
@@ -766,25 +956,36 @@ class PurchaseInvoiceController {
 
             const currencySetting = await dbGet(db, `SELECT setting_value FROM settings WHERE setting_key IN ('default_currency', 'currency') ORDER BY CASE setting_key WHEN 'default_currency' THEN 0 ELSE 1 END LIMIT 1`);
             const invoiceCurrency = currencySetting?.setting_value || 'SYP';
-            if (cashbox.currency !== invoiceCurrency) throw { code: 'CASHBOX_CURRENCY_MISMATCH', message: 'عملة الصندوق لا تطابق عملة التسوية' };
+            
+            let paymentExchangeRate = 1;
+            if (cashbox.currency !== invoiceCurrency) {
+                if (!input.exchange_rate) {
+                    throw { code: 'MISSING_EXCHANGE_RATE', message: 'سعر الصرف مطلوب عند اختلاف عملة الصندوق' };
+                }
+                paymentExchangeRate = normalizeExchangeRate(cashbox.currency, input.exchange_rate);
+            }
 
             const salesTotalRow = await dbGet(db, `
-                SELECT SUM(sii.line_total) AS total_sales
+                SELECT SUM(sii.line_total * si.exchange_rate) AS total_sales_base
                 FROM sale_invoice_items sii
                 JOIN sale_invoices si ON sii.sale_invoice_id = si.id
                 JOIN stock_batches sb ON sii.stock_batch_id = sb.id
                 WHERE sb.purchase_invoice_id = ? AND si.status != 'cancelled'
             `, [invoiceId]);
-            const totalSalesAmount = normalizeAmount(salesTotalRow?.total_sales ?? 0);
+            const totalSalesAmount = normalizeAmount(salesTotalRow?.total_sales_base ?? 0);
             const remainingRow = await dbGet(db, 'SELECT SUM(remaining_quantity) AS remaining FROM stock_batches WHERE purchase_invoice_id = ?', [invoiceId]);
             const remainingQuantity = Number(remainingRow?.remaining ?? 0);
             const expectedHash = require('crypto').createHash('sha256').update(`${invoiceId}_${totalSalesAmount}_${remainingQuantity}_${remaining_stock_policy}`).digest('hex');
             if (calculation_hash !== expectedHash) throw { code: 'CONSIGNMENT_SALES_CHANGED', message: 'المبيعات أو المخزون تغير منذ آخر معاينة. يرجى التحديث والمحاولة مرة أخرى.' };
 
             const commissionAmount = normalizeAmount((totalSalesAmount * commPct) / 100);
-            const supplierShare = normalizeAmount(totalSalesAmount - commissionAmount);
+            const supplierShareBase = normalizeAmount(totalSalesAmount - commissionAmount);
+            let supplierShareCashbox = supplierShareBase;
+            if (cashbox.currency !== invoiceCurrency) {
+                 supplierShareCashbox = normalizeAmount(supplierShareBase / paymentExchangeRate);
+            }
             const balanceBefore = normalizeAmount(cashbox.balance);
-            if (supplierShare > balanceBefore) throw { code: 'INSUFFICIENT_BALANCE', message: 'الرصيد في الصندوق لا يكفي للدفع للمورد' };
+            if (supplierShareCashbox > balanceBefore) throw { code: 'INSUFFICIENT_BALANCE', message: 'الرصيد في الصندوق لا يكفي للدفع للمورد' };
 
             const countRow = await dbGet(db, 'SELECT COUNT(*) AS count FROM consignment_settlements');
             const settlementNumber = `SET-${String(Number(countRow?.count ?? 0) + 1).padStart(6, '0')}`;
@@ -827,23 +1028,25 @@ class PurchaseInvoiceController {
 
             let paymentId = null;
             let cashboxTransactionId = null;
-            if (supplierShare > 0) {
-                const { lastID: payId } = await dbRun(db, `
-                    INSERT INTO payments
-                    (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, payment_date, payment_method, status, notes, created_at, updated_at)
-                    VALUES ('supplier', ?, 'purchase', ?, ?, ?, ?, 'cash', 'active', ?, datetime('now'), datetime('now'))
-                `, [invoice.supplier_id, invoiceId, cashbox_id, supplierShare, settlement_date, `تسوية أمانة ${settlementNumber}`]);
-                paymentId = payId;
-
-                const balanceAfter = normalizeAmount(balanceBefore - supplierShare);
+            if (supplierShareBase > 0) {
+                const balanceAfter = normalizeAmount(balanceBefore - supplierShareCashbox);
                 await dbRun(db, 'UPDATE cashboxes SET balance = ?, updated_at = datetime("now") WHERE id = ?', [balanceAfter, cashbox_id]);
                 const { lastID: movementId } = await dbRun(db, `
                     INSERT INTO cashbox_transactions
                     (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
                     VALUES (?, 'purchase', ?, ?, 'out', ?, ?, ?, ?, datetime('now'), datetime('now'))
-                `, [cashbox_id, invoiceId, supplierShare, balanceBefore, balanceAfter, settlement_date, `تسوية أمانة ${settlementNumber}`]);
+                `, [cashbox_id, invoiceId, supplierShareCashbox, balanceBefore, balanceAfter, settlement_date, `تسوية أمانة ${settlementNumber}`]);
                 cashboxTransactionId = movementId;
-                await dbRun(db, 'UPDATE payments SET cashbox_transaction_id = ?, balance_before = ?, balance_after = ? WHERE id = ?', [movementId, balanceBefore, balanceAfter, paymentId]);
+
+                const { lastID: payId } = await dbRun(db, `
+                    INSERT INTO payments
+                    (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date, payment_method, status, cashbox_transaction_id, notes, created_at, updated_at)
+                    VALUES ('supplier', ?, 'purchase', ?, ?, ?, ?, ?, ?, ?, 'cash', 'active', ?, ?, datetime('now'), datetime('now'))
+                `, [invoice.supplier_id, invoiceId, cashbox_id, supplierShareCashbox, cashbox.currency, paymentExchangeRate, supplierShareBase, settlement_date, movementId, `تسوية أمانة ${settlementNumber}`]);
+                paymentId = payId;
+
+                // We don't deduct supplier balance here because we didn't add the invoice total to the supplier balance
+                // for consignment invoices initially. Or did we? In closeCommission, it doesn't update supplier balance.
             }
 
             await dbRun(db, 'UPDATE consignment_settlements SET payment_id = ?, cashbox_transaction_id = ? WHERE id = ?', [paymentId, cashboxTransactionId, settlementId]);

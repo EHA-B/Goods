@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import electron from "vite-plugin-electron/simple";
-import obfuscator from "vite-plugin-obfuscator";
+import { viteObfuscateFile as obfuscator } from "vite-plugin-obfuscator";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

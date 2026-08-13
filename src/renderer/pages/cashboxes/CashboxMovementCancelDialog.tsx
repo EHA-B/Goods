@@ -123,19 +123,19 @@ export default function CashboxMovementCancelDialog({
       setError("");
 
       await executeCashboxMovementAction(
-        movement,
+        movement!,
         reason,
       );
 
       if (
-        action.kind ===
+        action!.kind ===
         "financial_transaction_cancel"
       ) {
         notifySuccess(
           "تم إلغاء المعاملة المالية وعكس أثرها على الصندوق بنجاح.",
         );
       } else if (
-        action.kind === "transfer_reverse"
+        action!.kind === "transfer_reverse"
       ) {
         notifySuccess(
           "تم عكس التحويل وتحديث أرصدة الصناديق بنجاح.",

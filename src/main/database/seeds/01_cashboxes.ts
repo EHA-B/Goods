@@ -12,7 +12,7 @@ export async function seed(knex: Knex): Promise<void> {
   }
 
   // 1. Create main cashbox (SYP)
-  const [sypCashboxId] = await knex('cashboxes').insert({
+  await knex('cashboxes').insert({
     name: 'الصندوق الرئيسي (ل.س)',
     parent_id: null,
     initial_balance: 0,

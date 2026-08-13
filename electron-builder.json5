@@ -1,9 +1,10 @@
 // @see - https://www.electron.build/configuration/configuration
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
+  "appId": "com.stocklite.app",
   "asar": true,
-  "productName": "YourAppName",
+  "productName": "StockLite",
+  "icon": "public/icon.ico",
   "directories": {
     "output": "release/${version}"
   },
@@ -20,6 +21,7 @@
     "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
   },
   "win": {
+    "sign": null,
     "target": [
       {
         "target": "nsis",

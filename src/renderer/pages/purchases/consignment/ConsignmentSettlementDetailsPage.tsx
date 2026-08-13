@@ -44,7 +44,7 @@ export default function ConsignmentSettlementDetailsPage() {
   if (!settlement) return <EmptyState icon={<ReceiptText size={32} />} title="لا توجد تسوية مسجلة" description={error || "لم يتم إغلاق فاتورة الأمانة بعد."} action={<Button onClick={() => navigate(`/purchases/${id}/close-consignment`)}>بدء التسوية</Button>} />;
 
   return <div className="print:bg-white">
-    <PageHeader title={`تسوية الأمانة ${settlement.settlement_number}`} description="تفاصيل نتيجة إغلاق وتسوية فاتورة الأمانة." actions={<div className="flex flex-wrap gap-2 print:hidden"><BackButton to={`/purchases/${id}`} /><Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/print/consignment/${id}`)}>طباعة</Button>{settlement.status === "completed" && <Button variant="danger" startIcon={<RotateCcw size={17} />} loading={reversing} onClick={() => void reverse()}>عكس التسوية</Button>}</div>} />
+    <PageHeader title={`تسوية الأمانة ${settlement.settlement_number}`} description="تفاصيل نتيجة إغلاق وتسوية فاتورة الأمانة." actions={<div className="flex flex-wrap gap-2 print:hidden"><BackButton to={`/purchases/${id}`} /><Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/print/consignment/${id}`)}>طباعة</Button>{settlement.status === "completed" && <Button variant="danger" startIcon={<RotateCcw size={17} />} isLoading={reversing} onClick={() => void reverse()}>عكس التسوية</Button>}</div>} />
     {error && <div className="mb-4 rounded-lg border border-[var(--danger)] bg-[var(--danger-subtle)] p-3 text-sm font-bold text-[var(--danger)]">{error}</div>}
     <ConsignmentSettlementResult settlement={settlement} />
   </div>;

@@ -141,7 +141,7 @@ export default function BackupSettingsPage() {
         }));
       }
     } catch (error) {
-      notifyError(readableError(error));
+      notifyError(error instanceof Error ? error.message : String(error));
     }
   }
 

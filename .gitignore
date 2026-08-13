@@ -150,3 +150,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+release/
+dist-electron/

@@ -2,7 +2,6 @@ import {
   AlertTriangle,
   ArrowDownLeft,
   ArrowUpRight,
-  Banknote,
   Package,
   ShoppingCart,
   TrendingUp,

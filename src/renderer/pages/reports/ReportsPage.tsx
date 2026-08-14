@@ -889,6 +889,114 @@ export default function ReportsPage() {
               description="اضبط الفلاتر ثم اضغط عرض التقرير."
             />
           </div>
+        ) : result.sections && result.sections.length > 0 ? (
+          <div className="flex flex-col">
+            {result.sections.map((section, sectionIndex) => (
+              <div key={sectionIndex} className="border-b border-[var(--border)] last:border-0">
+                <div className="bg-[var(--surface-subtle)] px-5 py-4 font-bold text-[var(--text-primary)]">
+                  {section.title}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-sm">
+                    <thead>
+                      <tr>
+                        {section.columns.map((column) => (
+                          <th
+                            key={column.key}
+                            className={[
+                              "whitespace-nowrap px-5 py-3 font-bold text-[var(--text-secondary)]",
+                              isNumericColumn(column) ? "text-left" : "text-right",
+                            ].join(" ")}
+                          >
+                            {column.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {section.rows.length > 0 ? section.rows.map((row, index) => (
+                        <tr
+                          key={index}
+                          className={[
+                            "border-t border-[var(--border)] transition-colors hover:bg-[var(--surface-hover)]",
+                            index % 2 === 1 ? "bg-[var(--surface-subtle)]/45" : "bg-[var(--surface)]",
+                          ].join(" ")}
+                        >
+                          {section.columns.map((column) => (
+                            <td
+                              key={column.key}
+                              className={[
+                                "px-5 py-3 text-[var(--text-primary)]",
+                                isNumericColumn(column) ? "whitespace-nowrap text-left font-medium tabular-nums" : "text-right",
+                              ].join(" ")}
+                              dir={isNumericColumn(column) ? "ltr" : undefined}
+                            >
+                              {isStatusColumn(column.key) ? renderStatus(row[column.key]) : formatCell(row, column)}
+                            </td>
+                          ))}
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan={section.columns.length} className="px-5 py-6 text-center text-sm text-[var(--text-muted)] border-t border-[var(--border)]">
+                            لا توجد بيانات
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {section.summary && section.summary.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-end gap-6 border-t border-[var(--border)] bg-[var(--surface-subtle)]/50 px-5 py-3">
+                    {section.summary.map((item, i) => (
+                      <div key={i} className="flex items-center gap-2 text-sm">
+                        <span className="text-[var(--text-secondary)] font-medium">{item.label}:</span>
+                        <strong className="text-[var(--text-primary)] font-bold text-base" dir="ltr">{String(item.value)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            
+            {result.summary && result.summary.length > 0 && (
+              <div className="bg-[var(--surface-subtle)] p-5">
+                <h3 className="font-bold text-[var(--text-primary)] mb-4">الملخص النهائي</h3>
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {result.summary.map((item) => (
+                    <div
+                      key={item.label}
+                      className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]"
+                    >
+                      <div className="absolute inset-y-0 right-0 w-1 bg-[var(--primary)]" />
+                      <div className="pr-2 text-xs font-medium leading-5 text-[var(--text-muted)]">
+                        {item.label}
+                      </div>
+                      <div
+                        dir="ltr"
+                        className="mt-2 pr-2 text-right text-lg font-bold tabular-nums text-[var(--text-primary)]"
+                      >
+                        {String(item.value)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface-subtle)] px-5 py-3 text-xs text-[var(--text-muted)]">
+               <span>
+                 عدد النتائج:{" "}
+                 <strong className="text-[var(--text-primary)]">
+                   {result.totalRows ?? result.sections.reduce((acc, sec) => acc + sec.rows.length, 0)}
+                 </strong>
+               </span>
+               <span>
+                 {isProfit
+                   ? "الأرباح والتكاليف معروضة بالقيمة الأساسية للنظام."
+                   : ""}
+               </span>
+            </div>
+          </div>
         ) : result.summary?.length ||
           result.rows.length ? (
           <>

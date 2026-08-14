@@ -630,132 +630,133 @@ class ReportController {
         filters.date_to,
     });
 
-    const summary =
-      detailed.summary || {};
+    const summary = detailed.summary || {};
 
-    const rows = [
+    const revenuesColumns = [
+      { key: "metric", label: "البيان", format: "text" },
+      { key: "category", label: "التصنيف", format: "text" },
+      { key: "date", label: "التاريخ", format: "date" },
+      { key: "amount", label: "القيمة", format: "currency" },
+    ];
+    
+    const revenuesRows = [
       {
-        metric: "إجمالي إيراد المبيعات",
-        amount: number(
-          summary.total_revenue_base,
-        ),
-        result: "إيراد",
+        metric: "إجمالي إيراد المبيعات (الأساسي)",
+        category: "إيراد مبيعات",
+        date: "—",
+        amount: number(summary.total_revenue_base),
+        currency: "SYP", // Base currency
+      }
+    ];
+    
+    for (const item of detailed.other_income.details) {
+      revenuesRows.push({
+        metric: item.description || item.notes || "إيراد غير مسمى",
+        category: item.category_name || "إيرادات أخرى",
+        date: item.transaction_date,
+        amount: item.amount,
+        currency: item.currency,
+      });
+    }
+
+    const expensesColumns = [
+      { key: "metric", label: "البيان", format: "text" },
+      { key: "category", label: "التصنيف", format: "text" },
+      { key: "date", label: "التاريخ", format: "date" },
+      { key: "amount", label: "القيمة", format: "currency" },
+    ];
+    
+    const expensesRows = [
+      {
+        metric: "إجمالي تكلفة البضاعة المباعة",
+        category: "تكلفة مبيعات",
+        date: "—",
+        amount: number(summary.total_cogs_base),
+        currency: "SYP", // Base currency
       },
       {
-        metric: "تكلفة البضاعة المباعة",
-        amount: number(
-          summary.total_cogs_base,
-        ),
-        result: "تكلفة",
+        metric: "مدفوعات موردي الأمانة (حصة الموردين)",
+        category: "مدفوعات أمانة",
+        date: "—",
+        amount: number(summary.total_consignment_payout_base),
+        currency: "SYP", // Base currency
+      }
+    ];
+
+    for (const item of detailed.expenses.details) {
+      expensesRows.push({
+        metric: item.description || item.notes || "مصروف غير مسمى",
+        category: item.category_name || "المصروفات العامة",
+        date: item.transaction_date,
+        amount: item.amount,
+        currency: item.currency,
+      });
+    }
+
+    for (const item of detailed.stock_losses.details) {
+      expensesRows.push({
+        metric: `تعديل مخزون (${item.product_name}): ${item.reason || item.notes || ''}`,
+        category: "خسائر مخزون",
+        date: item.adjustment_date,
+        amount: item.loss_amount,
+        currency: "SYP", // Base currency based on purchase price
+      });
+    }
+
+    const sections = [
+      {
+        title: "الإيرادات",
+        columns: revenuesColumns,
+        rows: revenuesRows,
+        summary: [
+          {
+            label: "إجمالي الإيرادات (بدون المبيعات)",
+            value: `${number(summary.total_other_income_native).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
+          },
+          {
+            label: "إجمالي إيراد المبيعات",
+            value: `${number(summary.total_revenue_base).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
+          }
+        ]
       },
       {
-        metric: "إجمالي ربح المبيعات",
-        amount: number(
-          summary.gross_profit_base,
-        ),
-        result:
-          number(
-            summary.gross_profit_base,
-          ) >= 0
-            ? "ربح"
-            : "خسارة",
-      },
-      {
-        metric: "إيرادات أخرى",
-        amount: number(
-          summary.total_other_income_native,
-        ),
-        result: "إيراد",
-      },
-      {
-        metric: "المصروفات العامة",
-        amount: number(
-          summary.total_expenses_native,
-        ),
-        result: "مصروف",
-      },
-      {
-        metric: "مدفوعات موردي الأمانة",
-        amount: number(
-          summary.total_consignment_payout_base,
-        ),
-        result: "معلومة",
-      },
-      {
-        metric: "صافي الربح / الخسارة",
-        amount: number(
-          summary.net_profit_base,
-        ),
-        result:
-          summary.is_profit
-            ? "ربح"
-            : "خسارة",
-      },
+        title: "التكاليف والمصروفات",
+        columns: expensesColumns,
+        rows: expensesRows,
+        summary: [
+          {
+            label: "إجمالي التكلفة (مبيعات وأمانة)",
+            value: `${(number(summary.total_cogs_base) + number(summary.total_consignment_payout_base)).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
+          },
+          {
+            label: "المصروفات العامة وخسائر المخزون",
+            value: `${(number(summary.total_expenses_native) + number(summary.total_stock_loss_base)).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
+          }
+        ]
+      }
     ];
 
     return {
       title: "أرباح وخسائر",
-      generatedAt:
-        new Date().toISOString(),
-      columns: [
-        {
-          key: "metric",
-          label: "البيان",
-          format: "text",
-        },
-        {
-          key: "amount",
-          label: "القيمة",
-          format: "currency",
-        },
-        {
-          key: "result",
-          label: "التصنيف",
-          format: "text",
-        },
-      ],
-      rows,
+      generatedAt: new Date().toISOString(),
+      columns: [],
+      rows: [],
+      sections: sections,
       summary: [
         {
-          label:
-            "إجمالي إيراد المبيعات",
-          value: `${number(
-            summary.total_revenue_base,
-          ).toLocaleString("en-US", {
-            maximumFractionDigits: 2,
-          })} ل.س`,
+          label: "إجمالي إيراد المبيعات",
+          value: `${number(summary.total_revenue_base).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
         },
         {
-          label:
-            "إجمالي التكلفة",
-          value: `${number(
-            summary.total_cogs_base,
-          ).toLocaleString("en-US", {
-            maximumFractionDigits: 2,
-          })} ل.س`,
+          label: "إجمالي التكلفة والمصروفات",
+          value: `${(number(summary.total_cogs_base) + number(summary.total_expenses_native) + number(summary.total_stock_loss_base)).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
         },
         {
-          label:
-            "المصروفات العامة",
-          value: `${number(
-            summary.total_expenses_native,
-          ).toLocaleString("en-US", {
-            maximumFractionDigits: 2,
-          })} ل.س`,
-        },
-        {
-          label:
-            "صافي الربح / الخسارة",
-          value: `${number(
-            summary.net_profit_base,
-          ).toLocaleString("en-US", {
-            maximumFractionDigits: 2,
-          })} ل.س`,
+          label: "صافي الربح / الخسارة",
+          value: `${number(summary.net_profit_base).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
         },
       ],
-      totalRows: rows.length,
-
-      // Keep the complete accounting payload from the parallel branch.
+      totalRows: revenuesRows.length + expensesRows.length,
       details: detailed,
     };
   }
@@ -839,13 +840,19 @@ class ReportController {
       // 5. GENERAL EXPENSES (wages, overheads, spoilage write-offs, etc.)
       //    From transactions table. cashbox_id may be NULL for non-cash write-offs.
       // ────────────────────────────────────────────────────────────────────
+      // ────────────────────────────────────────────────────────────────────
+      // 5. GENERAL EXPENSES (Detailed)
+      //    From transactions table. cashbox_id may be NULL for non-cash write-offs.
+      // ────────────────────────────────────────────────────────────────────
       const expenseRows = await all(db, `
           SELECT
+              t.id,
+              t.transaction_date,
+              t.description,
+              t.notes,
               COALESCE(c.currency, 'non_cash') AS currency,
-              COALESCE(SUM(t.amount), 0)       AS expense_native,
-              tc.name                          AS category_name,
-              tc.id                            AS category_id,
-              COUNT(*)                         AS count
+              t.amount AS expense_native,
+              tc.name AS category_name
           FROM transactions t
           LEFT JOIN cashboxes c ON c.id = t.cashbox_id
           LEFT JOIN transaction_categories tc ON tc.id = t.category_id
@@ -853,20 +860,21 @@ class ReportController {
             AND t.status = 'active'
             AND t.transaction_date >= ?
             AND t.transaction_date <= ?
-          GROUP BY tc.id, COALESCE(c.currency, 'non_cash')
-          ORDER BY expense_native DESC
+          ORDER BY t.transaction_date DESC, t.id DESC
       `, [dateFrom, dateTo]);
 
       // ────────────────────────────────────────────────────────────────────
-      // 6. GENERAL INCOME (non-sale income transactions)
+      // 6. GENERAL INCOME (Detailed)
       // ────────────────────────────────────────────────────────────────────
       const incomeRows = await all(db, `
           SELECT
+              t.id,
+              t.transaction_date,
+              t.description,
+              t.notes,
               COALESCE(c.currency, 'non_cash') AS currency,
-              COALESCE(SUM(t.amount), 0)       AS income_native,
-              tc.name                          AS category_name,
-              tc.id                            AS category_id,
-              COUNT(*)                         AS count
+              t.amount AS income_native,
+              tc.name AS category_name
           FROM transactions t
           LEFT JOIN cashboxes c ON c.id = t.cashbox_id
           LEFT JOIN transaction_categories tc ON tc.id = t.category_id
@@ -874,8 +882,28 @@ class ReportController {
             AND t.status = 'active'
             AND t.transaction_date >= ?
             AND t.transaction_date <= ?
-          GROUP BY tc.id, COALESCE(c.currency, 'non_cash')
-          ORDER BY income_native DESC
+          ORDER BY t.transaction_date DESC, t.id DESC
+      `, [dateFrom, dateTo]);
+
+      // ────────────────────────────────────────────────────────────────────
+      // 6.5. STOCK ADJUSTMENT LOSSES (negative adjustments)
+      // ────────────────────────────────────────────────────────────────────
+      const stockLossRows = await all(db, `
+          SELECT
+              sa.quantity,
+              sb.purchase_price,
+              (ABS(sa.quantity) * sb.purchase_price) AS loss_amount,
+              p.name AS product_name,
+              DATE(sa.created_at) as adjustment_date,
+              sa.reason,
+              sa.notes
+          FROM stock_adjustments sa
+          JOIN stock_batches sb ON sb.id = sa.stock_batch_id
+          JOIN products p ON p.id = sb.product_id
+          WHERE sa.quantity < 0
+            AND DATE(sa.created_at) >= ?
+            AND DATE(sa.created_at) <= ?
+          ORDER BY sa.created_at DESC
       `, [dateFrom, dateTo]);
 
       // ────────────────────────────────────────────────────────────────────
@@ -924,13 +952,14 @@ class ReportController {
       const totalConsignmentPayoutBase   = consignmentPayoutRows.reduce((s, r) => s + number(r.payout_base), 0);
       const totalExpensesNative          = expenseRows.reduce((s, r) => s + number(r.expense_native), 0);
       const totalIncomeNative            = incomeRows.reduce((s, r) => s + number(r.income_native), 0);
+      const totalStockLossBase           = stockLossRows.reduce((s, r) => s + number(r.loss_amount), 0);
 
-      // Net profit = gross profit from sales + other income − other expenses.
+      // Net profit = gross profit from sales + other income − other expenses - stock loss.
       // Consignment commission is already embedded in grossProfitBase because:
       //   gross_profit = sale_revenue_base − cogs_base
       // and the COGS for consignment batches is the purchase_price_base per unit.
       const netProfitBase = Math.round(
-          (totalGrossProfitBase + totalIncomeNative - totalExpensesNative) * 100
+          (totalGrossProfitBase + totalIncomeNative - totalExpensesNative - totalStockLossBase) * 100
       ) / 100;
 
       return {
@@ -963,25 +992,42 @@ class ReportController {
           },
 
           expenses: {
-              by_category: expenseRows.map(r => ({
-                  category_id: r.category_id,
-                  category:    r.category_name || 'غير مصنف',
+              details: expenseRows.map(r => ({
+                  id:          r.id,
+                  transaction_date: r.transaction_date,
+                  category_name: r.category_name,
+                  description: r.description,
+                  notes:       r.notes,
                   currency:    r.currency,
                   amount:      number(r.expense_native),
-                  count:       r.count,
               })),
               total_native: number(totalExpensesNative),
           },
 
           other_income: {
-              by_category: incomeRows.map(r => ({
-                  category_id: r.category_id,
-                  category:    r.category_name || 'غير مصنف',
+              details: incomeRows.map(r => ({
+                  id:          r.id,
+                  transaction_date: r.transaction_date,
+                  category_name: r.category_name,
+                  description: r.description,
+                  notes:       r.notes,
                   currency:    r.currency,
                   amount:      number(r.income_native),
-                  count:       r.count,
               })),
               total_native: number(totalIncomeNative),
+          },
+          
+          stock_losses: {
+              details: stockLossRows.map(r => ({
+                  quantity: r.quantity,
+                  purchase_price: number(r.purchase_price),
+                  loss_amount: number(r.loss_amount),
+                  product_name: r.product_name,
+                  adjustment_date: r.adjustment_date,
+                  reason: r.reason,
+                  notes: r.notes
+              })),
+              total_base: number(totalStockLossBase),
           },
 
           spoilage_summary: spoilageRows.map(r => ({
@@ -1006,6 +1052,7 @@ class ReportController {
               total_consignment_payout_base:   number(totalConsignmentPayoutBase),
               total_expenses_native:           number(totalExpensesNative),
               total_other_income_native:       number(totalIncomeNative),
+              total_stock_loss_base:           number(totalStockLossBase),
               net_profit_base:                 number(netProfitBase),
               is_profit:                       netProfitBase >= 0,
           },

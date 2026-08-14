@@ -24,6 +24,7 @@ import * as consignmentExpectedPurchasePriceMigration from './migrations/2026080
 import * as consignmentPrepaidAmountMigration from './migrations/20260809000000_consignment_prepaid_amount';
 import * as addWorkersTableMigration from './migrations/20260809100000_add_workers_table';
 import * as linkWorkerPaymentsFinancialTransactionsMigration from './migrations/20260810113000_link_worker_payments_financial_transactions';
+import * as consignmentSettlementMonetaryValuesMigration from './migrations/20260814000000_consignment_settlement_monetary_values';
 import * as cashboxesSeed from './seeds/01_cashboxes';
 import * as usersSeed from './seeds/02_users';
 
@@ -53,6 +54,7 @@ class MigrationSource {
       '20260809000000_consignment_prepaid_amount.ts',
       '20260809100000_add_workers_table.ts',
       '20260810113000_link_worker_payments_financial_transactions.ts',
+      '20260814000000_consignment_settlement_monetary_values.ts',
     ]);
   }
   getMigrationName(migration: string) {
@@ -118,6 +120,9 @@ class MigrationSource {
     }
     if (migration === '20260810113000_link_worker_payments_financial_transactions.ts') {
       return linkWorkerPaymentsFinancialTransactionsMigration;
+    }
+    if (migration === '20260814000000_consignment_settlement_monetary_values.ts') {
+      return consignmentSettlementMonetaryValuesMigration;
     }
     if (migration === '20260804_sales_purchases_hardening.ts') {
       return sales_purchases_hardening;

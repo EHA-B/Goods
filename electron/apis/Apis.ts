@@ -107,6 +107,7 @@ const dashboardController = require(path.join(__dirname, '../../src/controllers'
 const printController = require(path.join(__dirname, '../../src/controllers', 'printController.js'));
 const notificationController = require(path.join(__dirname, '../../src/controllers', 'notificationController.js'));
 const workerController = require(path.join(__dirname, '../../src/controllers', 'workerController.js'));
+const reportController = require(path.join(__dirname, '../../src/controllers', 'reportController.js'));
 
 
 /**
@@ -221,6 +222,22 @@ ipcMain.handle('api:notification:dismiss', async (_event,id) => { try { return s
 ipcMain.handle('api:dashboard:get', async () => {
   try { return success(await dashboardController.getDashboard()); }
   catch (e) { return failure(e.code || 'DASHBOARD_LOAD_FAILED', e.message || 'Failed to load dashboard', e.details); }
+});
+
+/**
+ * Endpoint: api:report:getProfitLoss
+ * Description: Returns a date-filtered Profit & Loss (Gains & Losses) report.
+ *              Includes: gross revenue, COGS, gross profit, consignment supplier payouts,
+ *              general expenses (wages, spoilage write-offs, overheads), other income,
+ *              and a net profit summary — all without double-counting commission.
+ */
+ipcMain.handle('api:report:getProfitLoss', async (_event, filters) => {
+  try {
+    const result = await reportController.getProfitLossReport(filters ?? {});
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'REPORT_LOAD_FAILED', e.message || 'Failed to generate report', e.details);
+  }
 });
 
 /**

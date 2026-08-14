@@ -486,6 +486,24 @@ async updateStockProduct(id, input) {
             if (after < 0) throw { code: 'INSUFFICIENT_STOCK', message: 'الكمية المطلوب خصمها أكبر من رصيد الدفعة.' };
             await new Promise((resolve, reject) => db.run(`INSERT INTO stock_adjustments (stock_batch_id, quantity, quantity_before, quantity_after, reason, notes, created_at, updated_at) VALUES (?,?,?,?,?,?, datetime('now'), datetime('now'))`, [batchId, signed, before, after, String(input.reason).trim(), input.notes || null], function(err){ err ? reject(err) : resolve(this.lastID); }));
             await new Promise((resolve, reject) => db.run(`UPDATE stock_batches SET remaining_quantity = ?, updated_at = datetime('now') WHERE id = ?`, [after, batchId], function(err){ err ? reject(err) : resolve(this.changes); }));
+
+            if (signed < 0) {
+                const lostValue = Math.abs(signed) * Number(batch.purchase_price || 0);
+                if (lostValue > 0) {
+                    const adjustCat = await new Promise((resolve) => db.get(`SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 AND name LIKE '%تسوية مخزون%' LIMIT 1`, [], (err, row) => resolve(row)))
+                                   ?? await new Promise((resolve) => db.get(`SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 ORDER BY id ASC LIMIT 1`, [], (err, row) => resolve(row)));
+                    
+                    if (adjustCat) {
+                        await new Promise((resolve, reject) => db.run(`
+                            INSERT INTO transactions
+                            (category_id, cashbox_id, amount, direction, transaction_date,
+                             description, reference_number, notes, status, created_at, updated_at)
+                            VALUES (?, NULL, ?, 'expense', date('now'), ?, ?, ?, 'active', datetime('now'), datetime('now'))
+                        `, [adjustCat.id, lostValue, 'تسوية نقص مخزون', String(batchId), input.notes ?? `تسوية خسارة ${Math.abs(signed)} وحدة`], function(err) { err ? reject(err) : resolve(); }));
+                    }
+                }
+            }
+
             await new Promise((resolve, reject) => db.run('COMMIT', err => err ? reject(err) : resolve()));
             return this.getProductWithStock(productId);
         } catch (error) {

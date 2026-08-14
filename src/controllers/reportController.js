@@ -104,8 +104,8 @@ class ReportController {
         const consignmentPayoutRows = await all(db, `
             SELECT
                 p.currency,
-                COALESCE(SUM(p.amount), 0)      AS payout_native,
-                COALESCE(SUM(p.amount_base), 0) AS payout_base
+                COALESCE(SUM(p.amount - COALESCE(cs.spoilage_value, 0)), 0)      AS payout_native,
+                COALESCE(SUM(p.amount_base - COALESCE(cs.spoilage_value * p.exchange_rate, 0)), 0) AS payout_base
             FROM payments p
             INNER JOIN consignment_settlements cs
                 ON cs.purchase_invoice_id = p.invoice_id

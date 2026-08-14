@@ -1156,6 +1156,8 @@ class PurchaseInvoiceController {
             returned_quantity: Number(settlement.returned_quantity ?? 0),
             spoilage_quantity: Number(settlement.spoilage_quantity ?? 0),
             carried_quantity: Number(settlement.carried_quantity ?? 0),
+            spoilage_value: normalizeAmount(settlement.spoilage_value ?? 0),
+            return_value: normalizeAmount(settlement.return_value ?? 0),
             cashbox_name: settlement.cashbox_name || '—',
             items
         };

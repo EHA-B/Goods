@@ -32,6 +32,8 @@ export type ConsignmentSettlement = {
   spoilage_quantity: number;
   returned_quantity: number;
   carried_quantity: number;
+  spoilage_value: number;
+  return_value: number;
   status: "completed" | "reversed";
   reversal_reason?: string | null;
   notes: string | null;
@@ -75,8 +77,14 @@ export type ConsignmentClosingPreview = {
   total_sales_amount: number;
   commission_percentage: number;
   commission_amount: number;
-  /** Gross supplier share (before subtracting pre-payments) */
-  supplier_share: number;
+  /** Supplier share from sales only (before leftover adjustments) */
+  supplier_share_base: number;
+  /** Value of leftover stock marked as spoilage */
+  spoilage_value: number;
+  /** Value of leftover stock returned to supplier */
+  return_value: number;
+  /** Gross supplier share (sales share + spoilage compensation) */
+  adjusted_supplier_share: number;
   /** Amount already paid to the supplier before closing */
   prepaid_amount: number;
   /** Net amount still owed — what will actually be deducted from the cashbox */

@@ -872,39 +872,62 @@ class PurchaseInvoiceController {
         const commissionAmount = normalizeAmount((totalSalesAmount * commPct) / 100);
         const supplierShareBase = normalizeAmount(totalSalesAmount - commissionAmount);
 
-        // The supplier may have already received partial payments during the consignment.
-        // We only need to pay the remaining balance from the cashbox.
-        const prepaidAmount = normalizeAmount(invoice.paid_amount ?? 0);
-        const netSupplierPayout = normalizeAmount(Math.max(0, supplierShareBase - prepaidAmount));
-        
-        const netSupplierPayoutCashbox = netSupplierPayout;
-        const cashboxBalance = normalizeAmount(cashbox.balance);
+        // ── Leftover stock monetary value ──────────────────────────────────
+        // Calculated from the purchase cost of every remaining (unsold) batch.
+        // Spoilage policy: value is ADDED to supplier payout — we compensate the
+        //   supplier for goods damaged while in our custody.
+        // Return policy:   value stays on our side — we track it as recovered
+        //   income (physical goods go back, no extra cash paid to supplier).
+        const leftoverBatches = await dbAll(db, `
+            SELECT remaining_quantity,
+                   COALESCE(purchase_price_base, purchase_price, 0) AS cost_per_unit
+            FROM stock_batches
+            WHERE purchase_invoice_id = ? AND remaining_quantity > 0
+        `, [invoiceId]);
+        const leftoverValue = normalizeAmount(
+            leftoverBatches.reduce((s, b) => s + Number(b.remaining_quantity) * Number(b.cost_per_unit), 0)
+        );
 
-        if (netSupplierPayoutCashbox > cashboxBalance + 0.001) {
+        const spoilageValue = remaining_stock_policy === 'spoilage'          ? leftoverValue : 0;
+        const returnValue   = remaining_stock_policy === 'return_to_supplier' ? leftoverValue : 0;
+
+        // Adjusted supplier share: base commission share + spoilage compensation
+        const adjustedSupplierShare = normalizeAmount(supplierShareBase + spoilageValue);
+
+        // The supplier may have already received partial payments during the consignment.
+        const prepaidAmount = normalizeAmount(invoice.paid_amount ?? 0);
+        const netSupplierPayout = normalizeAmount(Math.max(0, adjustedSupplierShare - prepaidAmount));
+
+        const cashboxBalance = normalizeAmount(cashbox.balance);
+        if (netSupplierPayout > cashboxBalance + 0.001) {
             throw { code: 'INSUFFICIENT_BALANCE', message: 'الرصيد في الصندوق لا يكفي للدفع للمورد' };
         }
 
         const remainingRow = await dbGet(db, 'SELECT SUM(remaining_quantity) AS remaining FROM stock_batches WHERE purchase_invoice_id = ?', [invoiceId]);
         const remainingQuantity = Number(remainingRow?.remaining ?? 0);
-        // Include prepaidAmount in hash so stale previews (recorded before a payment was made) are rejected
+
+        // Hash covers leftoverValue so any price-change or stock-change invalidates the preview
         const calculationHash = require('crypto').createHash('sha256').update(
-            `${invoiceId}_${totalSalesAmount}_${remainingQuantity}_${remaining_stock_policy}_${prepaidAmount}_${commPct}_${invoiceCurrency}_${invoiceRate}`
+            `${invoiceId}_${totalSalesAmount}_${remainingQuantity}_${remaining_stock_policy}_${prepaidAmount}_${commPct}_${invoiceCurrency}_${invoiceRate}_${leftoverValue}`
         ).digest('hex');
 
         return {
-            total_sales_amount: totalSalesAmount,
-            commission_percentage: commPct,
-            commission_amount: commissionAmount,
-            supplier_share: supplierShareBase,
-            prepaid_amount: prepaidAmount,
-            net_supplier_payout: netSupplierPayout,
-            remaining_quantity: remainingQuantity,
-            currency: invoiceCurrency,
-            cashbox_balance: cashboxBalance,
-            balance_after_settlement: normalizeAmount(cashboxBalance - netSupplierPayoutCashbox),
-            can_submit: true,
-            warnings: [],
-            calculation_hash: calculationHash
+            total_sales_amount:      totalSalesAmount,
+            commission_percentage:   commPct,
+            commission_amount:       commissionAmount,
+            supplier_share_base:     supplierShareBase,
+            spoilage_value:          spoilageValue,
+            return_value:            returnValue,
+            adjusted_supplier_share: adjustedSupplierShare,
+            prepaid_amount:          prepaidAmount,
+            net_supplier_payout:     netSupplierPayout,
+            remaining_quantity:      remainingQuantity,
+            currency:                invoiceCurrency,
+            cashbox_balance:         cashboxBalance,
+            balance_after_settlement: normalizeAmount(cashboxBalance - netSupplierPayout),
+            can_submit:              true,
+            warnings:                [],
+            calculation_hash:        calculationHash
         };
     }
 
@@ -952,29 +975,50 @@ class PurchaseInvoiceController {
             const remainingRow = await dbGet(db, 'SELECT SUM(remaining_quantity) AS remaining FROM stock_batches WHERE purchase_invoice_id = ?', [invoiceId]);
             const remainingQuantity = Number(remainingRow?.remaining ?? 0);
 
+            // ── Leftover stock monetary value ──────────────────────────────────
+            const leftoverBatches = await dbAll(db, `
+                SELECT remaining_quantity,
+                       COALESCE(purchase_price_base, purchase_price, 0) AS cost_per_unit
+                FROM stock_batches
+                WHERE purchase_invoice_id = ? AND remaining_quantity > 0
+            `, [invoiceId]);
+            const leftoverValue = normalizeAmount(
+                leftoverBatches.reduce((s, b) => s + Number(b.remaining_quantity) * Number(b.cost_per_unit), 0)
+            );
+
+            const spoilageValue = remaining_stock_policy === 'spoilage'          ? leftoverValue : 0;
+            const returnValue   = remaining_stock_policy === 'return_to_supplier' ? leftoverValue : 0;
+
             // Re-read the invoice inside the transaction to get the freshest paid_amount
             const prepaidAmount = normalizeAmount(invoice.paid_amount ?? 0);
 
             // Validate hash (includes prepaidAmount so stale previews are rejected)
-            const expectedHash = require('crypto').createHash('sha256').update(`${invoiceId}_${totalSalesAmount}_${remainingQuantity}_${remaining_stock_policy}_${prepaidAmount}_${commPct}_${invoiceCurrency}_${invoiceRate}`).digest('hex');
+            const expectedHash = require('crypto').createHash('sha256').update(
+                `${invoiceId}_${totalSalesAmount}_${remainingQuantity}_${remaining_stock_policy}_${prepaidAmount}_${commPct}_${invoiceCurrency}_${invoiceRate}_${leftoverValue}`
+            ).digest('hex');
             if (calculation_hash !== expectedHash) throw { code: 'CONSIGNMENT_SALES_CHANGED', message: 'المبيعات أو المخزون أو المبالغ المدفوعة تغيّرت منذ آخر معاينة. يرجى التحديث والمحاولة مرة أخرى.' };
 
             const commissionAmount = normalizeAmount((totalSalesAmount * commPct) / 100);
             const supplierShareBase = normalizeAmount(totalSalesAmount - commissionAmount);
+            const adjustedSupplierShare = normalizeAmount(supplierShareBase + spoilageValue);
 
             // Net amount still owed to supplier after deducting pre-payments
-            const netSupplierPayout = normalizeAmount(Math.max(0, supplierShareBase - prepaidAmount));
+            const netSupplierPayout = normalizeAmount(Math.max(0, adjustedSupplierShare - prepaidAmount));
             const netSupplierPayoutCashbox = netSupplierPayout;
-            const balanceBefore = normalizeAmount(cashbox.balance);
-            if (netSupplierPayoutCashbox > balanceBefore + 0.001) throw { code: 'INSUFFICIENT_BALANCE', message: 'الرصيد في الصندوق لا يكفي للدفع للمورد' };
+
+            // Compute net cashbox impact from this settlement
+            // Supplier payout is cash OUT. Return value is cash IN.
+            const netCashboxChange = normalizeAmount(returnValue - netSupplierPayoutCashbox);
+            let currentBalance = normalizeAmount(cashbox.balance);
+            if (netCashboxChange < 0 && Math.abs(netCashboxChange) > currentBalance + 0.001) throw { code: 'INSUFFICIENT_BALANCE', message: 'الرصيد في الصندوق لا يكفي لإتمام هذه العملية' };
 
             const countRow = await dbGet(db, 'SELECT COUNT(*) AS count FROM consignment_settlements');
             const settlementNumber = `SET-${String(Number(countRow?.count ?? 0) + 1).padStart(6, '0')}`;
             const { lastID: settlementId } = await dbRun(db, `
                 INSERT INTO consignment_settlements
-                (purchase_invoice_id, settlement_number, settlement_date, total_sales_amount, commission_percentage, commission_amount, supplier_share, prepaid_amount, cashbox_id, currency, remaining_stock_policy, returned_quantity, spoilage_quantity, carried_quantity, status, notes, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'completed', ?, datetime('now'), datetime('now'))
-            `, [invoiceId, settlementNumber, settlement_date, totalSalesAmount, commPct, commissionAmount, supplierShareBase, prepaidAmount, cashbox_id, invoiceCurrency, remaining_stock_policy, remaining_stock_policy === 'return_to_supplier' ? remainingQuantity : 0, remaining_stock_policy === 'spoilage' ? remainingQuantity : 0, notes ?? null]);
+                (purchase_invoice_id, settlement_number, settlement_date, total_sales_amount, commission_percentage, commission_amount, supplier_share, prepaid_amount, cashbox_id, currency, remaining_stock_policy, returned_quantity, spoilage_quantity, carried_quantity, spoilage_value, return_value, status, notes, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'completed', ?, datetime('now'), datetime('now'))
+            `, [invoiceId, settlementNumber, settlement_date, totalSalesAmount, commPct, commissionAmount, supplierShareBase, prepaidAmount, cashbox_id, invoiceCurrency, remaining_stock_policy, remaining_stock_policy === 'return_to_supplier' ? remainingQuantity : 0, remaining_stock_policy === 'spoilage' ? remainingQuantity : 0, spoilageValue, returnValue, notes ?? null]);
 
             const batches = await dbAll(db, 'SELECT * FROM stock_batches WHERE purchase_invoice_id = ? ORDER BY id ASC', [invoiceId]);
             for (const batch of batches) {
@@ -1007,27 +1051,66 @@ class PurchaseInvoiceController {
                 `, [settlementId, batch.product_id, batch.id, Number(batch.quantity ?? 0), soldQty, resolvedQuantity, salesAmount, remaining_stock_policy, resolvedQuantity, adjustmentId, notes ?? null]);
             }
 
+            // ── Spoilage expense transaction ─────────────────────────────────
+            // Value is already added to supplier payout. We record the expense for bookkeeping.
+            if (spoilageValue > 0) {
+                const spoilageCat = await dbGet(db, `SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 AND name LIKE '%تلف%' LIMIT 1`) 
+                                 ?? await dbGet(db, `SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 ORDER BY id ASC LIMIT 1`);
+                if (spoilageCat) {
+                    await dbRun(db, `
+                        INSERT INTO transactions
+                        (category_id, cashbox_id, amount, direction, transaction_date,
+                         description, reference_number, notes, status, created_at, updated_at)
+                        VALUES (?, ?, ?, 'expense', ?, ?, ?, ?, 'active', datetime('now'), datetime('now'))
+                    `, [spoilageCat.id, cashbox_id, spoilageValue, settlement_date, `تلف بضاعة — تسوية أمانة ${settlementNumber}`, settlementNumber, notes ?? `إغلاق فاتورة أمانة — تلف ${remainingQuantity} وحدة`]);
+                }
+            }
+
+            // ── Return income transaction ──────────────────────────────────
+            // If goods are returned, user requested to add value as income to cashbox.
+            let returnIncomeTransactionId = null;
+            if (returnValue > 0) {
+                const returnCat = await dbGet(db, `SELECT id FROM transaction_categories WHERE type = 'income' AND isActive = 1 AND name LIKE '%مرتجع%' LIMIT 1`)
+                               ?? await dbGet(db, `SELECT id FROM transaction_categories WHERE type = 'income' AND isActive = 1 ORDER BY id ASC LIMIT 1`);
+                
+                // Update cashbox balance and record cashbox_transaction
+                const balanceAfterReturn = normalizeAmount(currentBalance + returnValue);
+                await dbRun(db, 'UPDATE cashboxes SET balance = ?, updated_at = datetime("now") WHERE id = ?', [balanceAfterReturn, cashbox_id]);
+                const { lastID: returnMovementId } = await dbRun(db, `
+                    INSERT INTO cashbox_transactions (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
+                    VALUES (?, 'settlement_return', ?, ?, 'in', ?, ?, ?, ?, datetime('now'), datetime('now'))
+                `, [cashbox_id, settlementId, returnValue, currentBalance, balanceAfterReturn, settlement_date, `مرتجع تسوية أمانة ${settlementNumber}`]);
+                currentBalance = balanceAfterReturn;
+
+                if (returnCat) {
+                    const { lastID: returnTxId } = await dbRun(db, `
+                        INSERT INTO transactions (category_id, cashbox_id, amount, direction, transaction_date, description, reference_number, notes, status, cashbox_transaction_id, created_at, updated_at)
+                        VALUES (?, ?, ?, 'income', ?, ?, ?, ?, 'active', ?, datetime('now'), datetime('now'))
+                    `, [returnCat.id, cashbox_id, returnValue, settlement_date, `مرتجع بضاعة أمانة ${settlementNumber}`, settlementNumber, notes ?? `إغلاق فاتورة أمانة — استرداد ${remainingQuantity} وحدة`, returnMovementId]);
+                    returnIncomeTransactionId = returnTxId;
+                }
+            }
+
             let paymentId = null;
             let cashboxTransactionId = null;
             if (netSupplierPayout > 0) {
-                const balanceAfter = normalizeAmount(balanceBefore - netSupplierPayoutCashbox);
-                await dbRun(db, 'UPDATE cashboxes SET balance = ?, updated_at = datetime("now") WHERE id = ?', [balanceAfter, cashbox_id]);
-                const { lastID: movementId } = await dbRun(db, `
+                const balanceAfterPayout = normalizeAmount(currentBalance - netSupplierPayoutCashbox);
+                await dbRun(db, 'UPDATE cashboxes SET balance = ?, updated_at = datetime("now") WHERE id = ?', [balanceAfterPayout, cashbox_id]);
+                const { lastID: payoutMovementId } = await dbRun(db, `
                     INSERT INTO cashbox_transactions
                     (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
                     VALUES (?, 'purchase', ?, ?, 'out', ?, ?, ?, ?, datetime('now'), datetime('now'))
-                `, [cashbox_id, invoiceId, netSupplierPayoutCashbox, balanceBefore, balanceAfter, settlement_date, `تسوية أمانة ${settlementNumber}`]);
-                cashboxTransactionId = movementId;
+                `, [cashbox_id, invoiceId, netSupplierPayoutCashbox, currentBalance, balanceAfterPayout, settlement_date, `تسوية أمانة ${settlementNumber}`]);
+                cashboxTransactionId = payoutMovementId;
+                currentBalance = balanceAfterPayout;
 
                 const { lastID: payId } = await dbRun(db, `
                     INSERT INTO payments
                     (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date, payment_method, status, cashbox_transaction_id, notes, created_at, updated_at)
                     VALUES ('supplier', ?, 'purchase', ?, ?, ?, ?, ?, ?, ?, 'cash', 'active', ?, ?, datetime('now'), datetime('now'))
-                `, [invoice.supplier_id, invoiceId, cashbox_id, netSupplierPayoutCashbox, invoiceCurrency, invoiceRate, toBaseAmount(netSupplierPayout, invoiceRate), settlement_date, movementId, `تسوية أمانة ${settlementNumber}`]);
+                `, [invoice.supplier_id, invoiceId, cashbox_id, netSupplierPayoutCashbox, invoiceCurrency, invoiceRate, toBaseAmount(netSupplierPayout, invoiceRate), settlement_date, payoutMovementId, `تسوية أمانة ${settlementNumber}`]);
                 paymentId = payId;
 
-                // Reduce supplier payable balance by the final payout amount.
-                // (Partial payments during the consignment already reduced the balance via recordPurchasePayment.)
                 const netPayoutBase = toBaseAmount(netSupplierPayout, invoiceRate);
                 await dbRun(db,
                     `UPDATE suppliers SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`,
@@ -1035,7 +1118,7 @@ class PurchaseInvoiceController {
                 );
             }
 
-            await dbRun(db, 'UPDATE consignment_settlements SET payment_id = ?, cashbox_transaction_id = ? WHERE id = ?', [paymentId, cashboxTransactionId, settlementId]);
+            await dbRun(db, 'UPDATE consignment_settlements SET payment_id = ?, cashbox_transaction_id = ?, return_income_transaction_id = ? WHERE id = ?', [paymentId, cashboxTransactionId, returnIncomeTransactionId, settlementId]);
             await dbRun(db, 'UPDATE purchase_invoices SET settlement_status = "settled", paid_amount = total, remaining_amount = 0, status = "paid", settled_at = ?, consignment_settlement_id = ?, updated_at = datetime("now") WHERE id = ?', [settlement_date, settlementId, invoiceId]);
             await logActivity(db, 'purchase_commission_closed', 'purchase_invoices', invoiceId, { settlement_id: settlementId });
             await dbRun(db, 'COMMIT');
@@ -1073,6 +1156,8 @@ class PurchaseInvoiceController {
             returned_quantity: Number(settlement.returned_quantity ?? 0),
             spoilage_quantity: Number(settlement.spoilage_quantity ?? 0),
             carried_quantity: Number(settlement.carried_quantity ?? 0),
+            spoilage_value: normalizeAmount(settlement.spoilage_value ?? 0),
+            return_value: normalizeAmount(settlement.return_value ?? 0),
             cashbox_name: settlement.cashbox_name || '—',
             items
         };

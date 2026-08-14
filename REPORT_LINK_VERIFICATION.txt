@@ -1,0 +1,22 @@
+Report integration verification
+===============================
+
+Fixed:
+- Replaced all stale n(...) calls in src/controllers/reportController.js with number(...).
+- Removed the unused _status destructuring ESLint warning.
+- Declared CommonJS globals for this CommonJS controller.
+- Confirmed no Git conflict markers remain in src/ and electron/.
+- node --check src/controllers/reportController.js: PASS.
+
+Verified current renderer -> backend chain:
+1. src/renderer/pages/reports/ReportsPage.tsx calls reportsService.generate(...)
+2. src/renderer/pages/reports/reportsService.ts calls window.stockliteApi.reports.generate(...)
+3. electron/preload.ts exposes reports.generate -> api:report:generate
+4. electron/apis/Apis.ts handles api:report:generate
+5. Apis.ts calls reportController.generate(input)
+6. src/controllers/reportController.js dispatches:
+   - sales-profit -> generateSalesProfit -> getProfitLossReport
+   - consignment-commission -> generateConsignmentCommission
+
+There is also a colleague-added direct IPC endpoint api:report:getProfitLoss in Apis.ts.
+It is preserved, but the current reports frontend does not need it because it uses the generic generate path above.

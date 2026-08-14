@@ -1,0 +1,778 @@
+const path = require("node:path");
+const dbmanager = require(path.join(__dirname, "../database/databaseManager"));
+
+function all(db, sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (error, rows) => {
+      if (error) reject(error);
+      else resolve(rows || []);
+    });
+  });
+}
+
+function number(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeCurrency(value) {
+  return String(value || "SYP").trim().toUpperCase() === "USD"
+    ? "USD"
+    : "SYP";
+}
+
+function currencyLabel(currency) {
+  return normalizeCurrency(currency) === "USD" ? "دولار" : "ل.س";
+}
+
+function settlementStatus(row) {
+  if (String(row.invoice_status || "").toLowerCase() === "cancelled") {
+    return "cancelled";
+  }
+
+  if (String(row.settlement_record_status || "").toLowerCase() === "reversed") {
+    return "reversed";
+  }
+
+  if (
+    String(row.settlement_status || "").toLowerCase() === "settled" ||
+    String(row.settlement_record_status || "").toLowerCase() === "completed"
+  ) {
+    return "settled";
+  }
+
+  return "pending";
+}
+
+function settlementStatusLabel(status) {
+  switch (status) {
+    case "settled":
+      return "تمت التسوية";
+    case "reversed":
+      return "معكوسة";
+    case "cancelled":
+      return "ملغاة";
+    case "pending":
+    default:
+      return "بانتظار التسوية";
+  }
+}
+
+function addFilter(where, params, condition, value) {
+  if (
+    value !== undefined &&
+    value !== null &&
+    String(value).trim() !== "" &&
+    String(value) !== "all"
+  ) {
+    where.push(condition);
+    params.push(value);
+  }
+}
+
+class ReportController {
+  async getOptions() {
+    const db = await dbmanager.init();
+
+    const [customers, suppliers, products, cashboxes] = await Promise.all([
+      all(
+        db,
+        `SELECT id, name
+         FROM customers
+         ORDER BY name COLLATE NOCASE ASC`,
+      ),
+      all(
+        db,
+        `SELECT id, name
+         FROM suppliers
+         ORDER BY name COLLATE NOCASE ASC`,
+      ),
+      all(
+        db,
+        `SELECT id, name
+         FROM products
+         ORDER BY name COLLATE NOCASE ASC`,
+      ),
+      all(
+        db,
+        `SELECT id, name
+         FROM cashboxes
+         ORDER BY name COLLATE NOCASE ASC`,
+      ),
+    ]);
+
+    const mapOptions = (rows) =>
+      rows.map((row) => ({
+        value: String(row.id),
+        label: row.name || `#${row.id}`,
+      }));
+
+    return {
+      customers: mapOptions(customers),
+      suppliers: mapOptions(suppliers),
+      products: mapOptions(products),
+      cashboxes: mapOptions(cashboxes),
+    };
+  }
+
+  async generate({ reportId, filters = {} } = {}) {
+    if (reportId === "consignment-commission") {
+      return this.generateConsignmentCommission(filters);
+    }
+
+    if (reportId === "sales-profit") {
+      return this.generateSalesProfit(filters);
+    }
+
+    return {
+      title: "",
+      generatedAt: new Date().toISOString(),
+      columns: [],
+      rows: [],
+      summary: [],
+      totalRows: 0,
+    };
+  }
+
+  async generateConsignmentCommission(filters = {}) {
+    const db = await dbmanager.init();
+
+    const where = [
+      `pi.invoice_type = 'consignment'`,
+    ];
+    const params = [];
+
+    if (filters.fromDate) {
+      where.push(`date(pi.invoice_date) >= date(?)`);
+      params.push(filters.fromDate);
+    }
+
+    if (filters.toDate) {
+      where.push(`date(pi.invoice_date) <= date(?)`);
+      params.push(filters.toDate);
+    }
+
+    addFilter(
+      where,
+      params,
+      `pi.supplier_id = ?`,
+      filters.supplierId,
+    );
+
+    addFilter(
+      where,
+      params,
+      `pii.product_id = ?`,
+      filters.productId,
+    );
+
+    if (
+      filters.currency &&
+      filters.currency !== "all"
+    ) {
+      where.push(`UPPER(COALESCE(pi.currency, 'SYP')) = ?`);
+      params.push(normalizeCurrency(filters.currency));
+    }
+
+    const rawRows = await all(
+      db,
+      `
+        SELECT
+          pi.id AS purchase_invoice_id,
+          pi.invoice_number,
+          pi.invoice_date,
+          pi.status AS invoice_status,
+          pi.settlement_status,
+          UPPER(COALESCE(pi.currency, 'SYP')) AS currency,
+          COALESCE(NULLIF(pi.exchange_rate, 0), 1) AS invoice_exchange_rate,
+
+          s.id AS supplier_id,
+          s.name AS supplier_name,
+
+          p.id AS product_id,
+          p.name AS product_name,
+
+          COALESCE(
+            MAX(NULLIF(pii.unit_price, 0)),
+            (
+              SELECT MAX(NULLIF(sb_price.purchase_price, 0))
+              FROM stock_batches sb_price
+              WHERE sb_price.purchase_invoice_id = pi.id
+                AND sb_price.product_id = p.id
+            ),
+            0
+          ) AS marketing_price,
+
+          COALESCE(
+            (
+              SELECT SUM(sb.quantity)
+              FROM stock_batches sb
+              WHERE sb.purchase_invoice_id = pi.id
+                AND sb.product_id = p.id
+            ),
+            SUM(pii.quantity),
+            0
+          ) AS live_received_quantity,
+
+          COALESCE(
+            (
+              SELECT SUM(sb.remaining_quantity)
+              FROM stock_batches sb
+              WHERE sb.purchase_invoice_id = pi.id
+                AND sb.product_id = p.id
+            ),
+            0
+          ) AS live_remaining_quantity,
+
+          COALESCE(
+            (
+              SELECT SUM(
+                CASE
+                  WHEN si.status <> 'cancelled'
+                  THEN sii.quantity
+                  ELSE 0
+                END
+              )
+              FROM sale_invoice_items sii
+              JOIN sale_invoices si
+                ON si.id = sii.sale_invoice_id
+              JOIN stock_batches sb
+                ON sb.id = sii.stock_batch_id
+              WHERE sb.purchase_invoice_id = pi.id
+                AND sb.product_id = p.id
+            ),
+            0
+          ) AS live_sold_quantity,
+
+          COALESCE(
+            (
+              SELECT SUM(
+                CASE
+                  WHEN si.status <> 'cancelled'
+                  THEN sii.line_total * COALESCE(NULLIF(si.exchange_rate, 0), 1)
+                  ELSE 0
+                END
+              )
+              FROM sale_invoice_items sii
+              JOIN sale_invoices si
+                ON si.id = sii.sale_invoice_id
+              JOIN stock_batches sb
+                ON sb.id = sii.stock_batch_id
+              WHERE sb.purchase_invoice_id = pi.id
+                AND sb.product_id = p.id
+            ),
+            0
+          ) / COALESCE(NULLIF(pi.exchange_rate, 0), 1) AS live_sales_amount,
+
+          cs.id AS settlement_id,
+          cs.settlement_number,
+          cs.settlement_date,
+          cs.status AS settlement_record_status,
+          cs.commission_percentage,
+
+          COALESCE(
+            (
+              SELECT SUM(csi.received_quantity)
+              FROM consignment_settlement_items csi
+              WHERE csi.settlement_id = cs.id
+                AND csi.product_id = p.id
+            ),
+            0
+          ) AS settled_received_quantity,
+
+          COALESCE(
+            (
+              SELECT SUM(csi.sold_quantity)
+              FROM consignment_settlement_items csi
+              WHERE csi.settlement_id = cs.id
+                AND csi.product_id = p.id
+            ),
+            0
+          ) AS settled_sold_quantity,
+
+          COALESCE(
+            (
+              SELECT SUM(csi.remaining_quantity)
+              FROM consignment_settlement_items csi
+              WHERE csi.settlement_id = cs.id
+                AND csi.product_id = p.id
+            ),
+            0
+          ) AS settled_remaining_quantity,
+
+          COALESCE(
+            (
+              SELECT SUM(csi.sales_amount)
+              FROM consignment_settlement_items csi
+              WHERE csi.settlement_id = cs.id
+                AND csi.product_id = p.id
+            ),
+            0
+          ) AS settled_sales_amount
+
+        FROM purchase_invoice_items pii
+        JOIN purchase_invoices pi
+          ON pi.id = pii.purchase_invoice_id
+        JOIN suppliers s
+          ON s.id = pi.supplier_id
+        JOIN products p
+          ON p.id = pii.product_id
+        LEFT JOIN consignment_settlements cs
+          ON cs.id = (
+            SELECT cs2.id
+            FROM consignment_settlements cs2
+            WHERE cs2.purchase_invoice_id = pi.id
+            ORDER BY cs2.id DESC
+            LIMIT 1
+          )
+
+        WHERE ${where.join(" AND ")}
+
+        GROUP BY
+          pi.id,
+          s.id,
+          p.id,
+          cs.id
+
+        ORDER BY
+          date(pi.invoice_date) DESC,
+          pi.id DESC,
+          p.name COLLATE NOCASE ASC
+      `,
+      params,
+    );
+
+    const requestedStatus =
+      filters.status &&
+      filters.status !== "all"
+        ? String(filters.status)
+        : null;
+
+    const rows = rawRows
+      .map((row) => {
+        const status = settlementStatus(row);
+        const hasSettlement = number(row.settlement_id) > 0;
+
+        const receivedQuantity = hasSettlement
+          ? number(row.settled_received_quantity)
+          : number(row.live_received_quantity);
+
+        const soldQuantity = hasSettlement
+          ? number(row.settled_sold_quantity)
+          : number(row.live_sold_quantity);
+
+        const remainingQuantity = hasSettlement
+          ? number(row.settled_remaining_quantity)
+          : number(row.live_remaining_quantity);
+
+        const salesAmount = hasSettlement
+          ? number(row.settled_sales_amount)
+          : number(row.live_sales_amount);
+
+        const commissionPercentage = hasSettlement
+          ? number(row.commission_percentage)
+          : 0;
+
+        const commissionAmount =
+          Math.round(
+            ((salesAmount * commissionPercentage) / 100) * 100,
+          ) / 100;
+
+        const supplierShare =
+          Math.round(
+            (salesAmount - commissionAmount) * 100,
+          ) / 100;
+
+        const marketingPrice =
+          number(row.marketing_price);
+
+        const marketingValue =
+          Math.round(
+            receivedQuantity * marketingPrice * 100,
+          ) / 100;
+
+        return {
+          purchase_invoice_id: number(row.purchase_invoice_id),
+          invoice_number: row.invoice_number || `#${row.purchase_invoice_id}`,
+          invoice_date: row.invoice_date,
+          supplier_name: row.supplier_name || "—",
+          product_name: row.product_name || "—",
+          marketing_price: marketingPrice,
+          marketing_value: marketingValue,
+          received_quantity: receivedQuantity,
+          sold_quantity: soldQuantity,
+          remaining_quantity: remainingQuantity,
+          sales_amount: salesAmount,
+          commission_percentage: hasSettlement
+            ? `${commissionPercentage.toLocaleString("en-US", {
+                maximumFractionDigits: 2,
+              })}%`
+            : "—",
+          commission_amount: commissionAmount,
+          supplier_share: supplierShare,
+          currency: normalizeCurrency(row.currency),
+          settlement_status: settlementStatusLabel(status),
+          settlement_date: row.settlement_date || null,
+          _status: status,
+        };
+      })
+      .filter(
+        (row) =>
+          !requestedStatus ||
+          row._status === requestedStatus,
+      );
+
+    const invoiceIds = new Set(
+      rows.map((row) => row.purchase_invoice_id),
+    );
+
+    const totalReceived = rows.reduce(
+      (sum, row) => sum + row.received_quantity,
+      0,
+    );
+    const totalSold = rows.reduce(
+      (sum, row) => sum + row.sold_quantity,
+      0,
+    );
+    const totalRemaining = rows.reduce(
+      (sum, row) => sum + row.remaining_quantity,
+      0,
+    );
+
+    const currencies = [...new Set(rows.map((row) => row.currency))];
+
+    const summary = [
+      {
+        label: "عدد فواتير الأمانة",
+        value: invoiceIds.size,
+      },
+      {
+        label: "إجمالي الكمية المستلمة",
+        value: totalReceived.toLocaleString("en-US", {
+          maximumFractionDigits: 3,
+        }),
+      },
+      {
+        label: "إجمالي الكمية المباعة",
+        value: totalSold.toLocaleString("en-US", {
+          maximumFractionDigits: 3,
+        }),
+      },
+      {
+        label: "إجمالي الكمية المتبقية",
+        value: totalRemaining.toLocaleString("en-US", {
+          maximumFractionDigits: 3,
+        }),
+      },
+    ];
+
+    for (const currency of currencies) {
+      const currencyRows = rows.filter(
+        (row) => row.currency === currency,
+      );
+
+      const sales = currencyRows.reduce(
+        (sum, row) => sum + row.sales_amount,
+        0,
+      );
+      const commission = currencyRows.reduce(
+        (sum, row) => sum + row.commission_amount,
+        0,
+      );
+      const supplierShare = currencyRows.reduce(
+        (sum, row) => sum + row.supplier_share,
+        0,
+      );
+
+      const unit = currencyLabel(currency);
+
+      summary.push(
+        {
+          label: `إجمالي مبيعات الأمانة (${currency})`,
+          value: `${sales.toLocaleString("en-US", {
+            maximumFractionDigits: 2,
+          })} ${unit}`,
+        },
+        {
+          label: `إجمالي العمولة (${currency})`,
+          value: `${commission.toLocaleString("en-US", {
+            maximumFractionDigits: 2,
+          })} ${unit}`,
+        },
+        {
+          label: `إجمالي حصة الموردين (${currency})`,
+          value: `${supplierShare.toLocaleString("en-US", {
+            maximumFractionDigits: 2,
+          })} ${unit}`,
+        },
+      );
+    }
+
+    return {
+      title: "تقرير الكومسيون والأمانات",
+      generatedAt: new Date().toISOString(),
+      columns: [
+        {
+          key: "invoice_number",
+          label: "فاتورة الأمانة",
+          format: "text",
+        },
+        {
+          key: "invoice_date",
+          label: "تاريخ الفاتورة",
+          format: "date",
+        },
+        {
+          key: "supplier_name",
+          label: "المورد",
+          format: "text",
+        },
+        {
+          key: "product_name",
+          label: "البضاعة",
+          format: "text",
+        },
+        {
+          key: "marketing_price",
+          label: "سعر التسويق",
+          format: "currency",
+        },
+        {
+          key: "marketing_value",
+          label: "القيمة التسويقية",
+          format: "currency",
+        },
+        {
+          key: "received_quantity",
+          label: "المستلم",
+          format: "number",
+        },
+        {
+          key: "sold_quantity",
+          label: "المباع",
+          format: "number",
+        },
+        {
+          key: "remaining_quantity",
+          label: "المتبقي",
+          format: "number",
+        },
+        {
+          key: "sales_amount",
+          label: "قيمة المبيعات",
+          format: "currency",
+        },
+        {
+          key: "commission_percentage",
+          label: "نسبة العمولة",
+          format: "text",
+        },
+        {
+          key: "commission_amount",
+          label: "قيمة العمولة",
+          format: "currency",
+        },
+        {
+          key: "supplier_share",
+          label: "حصة المورد",
+          format: "currency",
+        },
+        {
+          key: "currency",
+          label: "العملة",
+          format: "text",
+        },
+        {
+          key: "settlement_status",
+          label: "حالة التسوية",
+          format: "text",
+        },
+        {
+          key: "settlement_date",
+          label: "تاريخ التسوية",
+          format: "date",
+        },
+      ],
+      rows: rows.map(({ _status, ...row }) => row),
+      summary,
+      totalRows: rows.length,
+    };
+  }
+
+  async generateSalesProfit(filters = {}) {
+    const db = await dbmanager.init();
+
+    const where = [
+      `COALESCE(si.status, 'active') <> 'cancelled'`,
+    ];
+    const params = [];
+
+    if (filters.fromDate) {
+      where.push(`date(si.invoice_date) >= date(?)`);
+      params.push(filters.fromDate);
+    }
+
+    if (filters.toDate) {
+      where.push(`date(si.invoice_date) <= date(?)`);
+      params.push(filters.toDate);
+    }
+
+    addFilter(
+      where,
+      params,
+      `sb.product_id = ?`,
+      filters.productId,
+    );
+
+    const groupBy = String(filters.groupBy || "day");
+
+    let groupExpression = `date(si.invoice_date)`;
+    let groupLabel = "اليوم";
+
+    if (groupBy === "month") {
+      groupExpression = `strftime('%Y-%m', si.invoice_date)`;
+      groupLabel = "الشهر";
+    } else if (groupBy === "product") {
+      groupExpression = `p.id`;
+      groupLabel = "الصنف";
+    }
+
+    const rows = await all(
+      db,
+      `
+        SELECT
+          ${groupExpression} AS group_key,
+          CASE
+            WHEN ? = 'product' THEN p.name
+            WHEN ? = 'month' THEN strftime('%Y-%m', si.invoice_date)
+            ELSE date(si.invoice_date)
+          END AS group_label,
+
+          COUNT(DISTINCT si.id) AS invoices_count,
+
+          COALESCE(
+            SUM(
+              sii.line_total *
+              COALESCE(NULLIF(si.exchange_rate, 0), 1)
+            ),
+            0
+          ) AS revenue,
+
+          COALESCE(
+            SUM(
+              sii.cost_price * sii.quantity
+            ),
+            0
+          ) AS cost,
+
+          COALESCE(
+            SUM(sii.profit),
+            0
+          ) AS profit
+
+        FROM sale_invoice_items sii
+        JOIN sale_invoices si
+          ON si.id = sii.sale_invoice_id
+        JOIN stock_batches sb
+          ON sb.id = sii.stock_batch_id
+        JOIN products p
+          ON p.id = sb.product_id
+
+        WHERE ${where.join(" AND ")}
+
+        GROUP BY ${groupExpression}
+        ORDER BY group_key DESC
+      `,
+      [groupBy, groupBy, ...params],
+    );
+
+    const normalizedRows = rows.map((row) => {
+      const revenue = number(row.revenue);
+      const cost = number(row.cost);
+      const profit = number(row.profit);
+
+      return {
+        period: row.group_label || row.group_key || "—",
+        invoices_count: number(row.invoices_count),
+        revenue,
+        cost,
+        profit,
+        result: profit >= 0 ? "ربح" : "خسارة",
+      };
+    });
+
+    const totalRevenue = normalizedRows.reduce(
+      (sum, row) => sum + row.revenue,
+      0,
+    );
+    const totalCost = normalizedRows.reduce(
+      (sum, row) => sum + row.cost,
+      0,
+    );
+    const totalProfit = normalizedRows.reduce(
+      (sum, row) => sum + row.profit,
+      0,
+    );
+
+    return {
+      title: "أرباح وخسائر",
+      generatedAt: new Date().toISOString(),
+      columns: [
+        {
+          key: "period",
+          label: groupLabel,
+          format: "text",
+        },
+        {
+          key: "invoices_count",
+          label: "عدد الفواتير",
+          format: "number",
+        },
+        {
+          key: "revenue",
+          label: "إيراد المبيعات",
+          format: "currency",
+        },
+        {
+          key: "cost",
+          label: "تكلفة البضاعة",
+          format: "currency",
+        },
+        {
+          key: "profit",
+          label: "الربح / الخسارة",
+          format: "currency",
+        },
+        {
+          key: "result",
+          label: "النتيجة",
+          format: "text",
+        },
+      ],
+      rows: normalizedRows,
+      summary: [
+        {
+          label: "إجمالي الإيراد",
+          value: `${totalRevenue.toLocaleString("en-US", {
+            maximumFractionDigits: 2,
+          })} ل.س`,
+        },
+        {
+          label: "إجمالي التكلفة",
+          value: `${totalCost.toLocaleString("en-US", {
+            maximumFractionDigits: 2,
+          })} ل.س`,
+        },
+        {
+          label: "صافي ربح / خسارة المبيعات",
+          value: `${totalProfit.toLocaleString("en-US", {
+            maximumFractionDigits: 2,
+          })} ل.س`,
+        },
+      ],
+      totalRows: normalizedRows.length,
+    };
+  }
+}
+
+module.exports = new ReportController();

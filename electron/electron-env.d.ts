@@ -582,6 +582,38 @@ interface Window {
       cancel(id: number, reason: string): Promise<any>;
       summary(filters?: any): Promise<any>;
     };
+    reports: {
+      options(): Promise<{
+        customers: Array<{ value: string; label: string }>;
+        suppliers: Array<{ value: string; label: string }>;
+        products: Array<{ value: string; label: string }>;
+        cashboxes: Array<{ value: string; label: string }>;
+      }>;
+      generate(input: {
+        reportId: string;
+        filters: Record<string, unknown>;
+      }): Promise<{
+        title: string;
+        generatedAt: string;
+        columns: Array<{
+          key: string;
+          label: string;
+          format?: "text" | "number" | "currency" | "date";
+        }>;
+        rows: Array<Record<string, unknown>>;
+        summary?: Array<{ label: string; value: string | number }>;
+        totalRows?: number;
+      }>;
+      export(input: {
+        reportId: string;
+        filters: Record<string, unknown>;
+        format: "pdf" | "excel";
+      }): Promise<{
+        success: boolean;
+        filePath?: string;
+        canceled?: boolean;
+      }>;
+    };
     activityLogs: {
       list: (filters?: unknown, pagination?: unknown) => Promise<unknown>;
       get: (id: number) => Promise<unknown>;

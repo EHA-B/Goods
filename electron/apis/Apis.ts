@@ -83,6 +83,282 @@ function failure(code, message, details) {
   };
 }
 
+function escapeReportHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function normalizeLatinDigits(value) {
+  return String(value ?? '')
+    .replace(/[٠-٩]/g, (digit) =>
+      String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)),
+    )
+    .replace(/[۰-۹]/g, (digit) =>
+      String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)),
+    );
+}
+
+function formatReportExportCell(value, format, row) {
+  if (value === null || value === undefined || value === '') return '—';
+
+  if (format === 'number') {
+    const numeric = Number(value);
+
+    return normalizeLatinDigits(
+      Number.isFinite(numeric)
+        ? numeric.toLocaleString('en-US', {
+            maximumFractionDigits: 3,
+          })
+        : String(value),
+    );
+  }
+
+  if (format === 'currency') {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) {
+      return normalizeLatinDigits(String(value));
+    }
+
+    const currency =
+      String(row?.currency || 'SYP').toUpperCase() === 'USD'
+        ? 'USD'
+        : 'ل.س';
+
+    return normalizeLatinDigits(
+      `${numeric.toLocaleString('en-US', {
+        maximumFractionDigits: 2,
+      })} ${currency}`,
+    );
+  }
+
+  if (format === 'date') {
+    const parsed = new Date(String(value));
+
+    return normalizeLatinDigits(
+      Number.isNaN(parsed.getTime())
+        ? String(value)
+        : parsed.toLocaleDateString('en-US'),
+    );
+  }
+
+  return normalizeLatinDigits(String(value));
+}
+
+function renderReportHtml(report) {
+  const columns = Array.isArray(report?.columns) ? report.columns : [];
+  const rows = Array.isArray(report?.rows) ? report.rows : [];
+  const summary = Array.isArray(report?.summary) ? report.summary : [];
+
+  const summaryHtml = summary.length
+    ? `<section class="summary">${summary.map((item) => `
+        <div class="summary-card">
+          <div class="summary-label">${escapeReportHtml(item.label)}</div>
+          <div class="summary-value">${escapeReportHtml(normalizeLatinDigits(item.value))}</div>
+        </div>
+      `).join('')}</section>`
+    : '';
+
+  const tableHead = columns
+    .map((column) => `<th>${escapeReportHtml(column.label)}</th>`)
+    .join('');
+
+  const tableRows = rows
+    .map((row) => `
+      <tr>
+        ${columns.map((column) => `
+          <td class="${column.format === 'currency' || column.format === 'number' ? 'numeric' : ''}">${escapeReportHtml(formatReportExportCell(row?.[column.key], column.format, row))}</td>
+        `).join('')}
+      </tr>
+    `)
+    .join('');
+
+  return `<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeReportHtml(report?.title || 'تقرير')}</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 14px;
+      direction: rtl;
+      font-family: Arial, Tahoma, sans-serif;
+      color: #17211f;
+      background: #ffffff;
+      font-size: 9px;
+    }
+
+    .report-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      border-bottom: 2px solid #1f7664;
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      color: #153e35;
+    }
+
+    .meta {
+      margin-top: 6px;
+      color: #71807c;
+      font-size: 10px;
+    }
+
+    .brand {
+      border: 1px solid #d9e5e1;
+      border-radius: 9px;
+      padding: 8px 12px;
+      color: #1f7664;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .summary-card {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid #dfe7e4;
+      border-radius: 9px;
+      padding: 10px 12px;
+      background: #f8fbfa;
+    }
+
+    .summary-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 3px;
+      background: #1f7664;
+    }
+
+    .summary-label {
+      color: #71807c;
+      font-size: 9px;
+      padding-right: 4px;
+    }
+
+    .summary-value {
+      margin-top: 5px;
+      padding-right: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #17211f;
+    }
+
+    .table-wrap {
+      width: 100%;
+      overflow: hidden;
+      border: 1px solid #cfdad6;
+      border-radius: 7px;
+    }
+
+    table {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      font-size: 7.4px;
+    }
+
+    th,
+    td {
+      border: 1px solid #cfdad6;
+      padding: 5px 4px;
+      text-align: right;
+      vertical-align: middle;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      line-height: 1.35;
+    }
+
+    th {
+      background: #eef5f2;
+      color: #40534e;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: #fafcfb;
+    }
+
+    td.numeric {
+      direction: ltr;
+      unicode-bidi: isolate;
+      text-align: center;
+      font-variant-numeric: tabular-nums lining-nums;
+      white-space: normal;
+    }
+
+    .summary-value,
+    .meta,
+    .footer {
+      font-variant-numeric: tabular-nums lining-nums;
+    }
+
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 10px;
+      color: #71807c;
+      font-size: 9px;
+    }
+
+    @page {
+      size: A4 portrait;
+      margin: 8mm;
+    }
+  </style>
+</head>
+<body>
+  <div class="report-header">
+    <div>
+      <h1>${escapeReportHtml(report?.title || 'تقرير')}</h1>
+      <div class="meta">تم التوليد: ${escapeReportHtml(normalizeLatinDigits(new Date(report?.generatedAt || Date.now()).toLocaleString('en-US')))}</div>
+    </div>
+    <div class="brand">StockLite</div>
+  </div>
+
+  ${summaryHtml}
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr>${tableHead}</tr></thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <span>عدد النتائج: ${escapeReportHtml(normalizeLatinDigits(report?.totalRows ?? rows.length))}</span>
+    <span>تقرير صادر إلكترونيًا من StockLite</span>
+  </div>
+</body>
+</html>`;
+}
+
 const authController = require(path.join(__dirname, '../../src/controllers', 'authController.js'));
 const activityLogController = require(path.join(__dirname, '../../src/controllers', 'activityLogController.js'));
 const cashboxController = require(path.join(__dirname, '../../src/controllers', 'cashboxController.js'));
@@ -107,6 +383,7 @@ const dashboardController = require(path.join(__dirname, '../../src/controllers'
 const printController = require(path.join(__dirname, '../../src/controllers', 'printController.js'));
 const notificationController = require(path.join(__dirname, '../../src/controllers', 'notificationController.js'));
 const workerController = require(path.join(__dirname, '../../src/controllers', 'workerController.js'));
+const reportController = require(path.join(__dirname, '../../src/controllers', 'reportController.js'));
 
 
 /**
@@ -209,6 +486,116 @@ ipcMain.handle('api:print:customerStatement', async (_event,id)=>{ try{return su
 ipcMain.handle('api:print:supplierStatement', async (_event,id)=>{ try{return success(await printController.getSupplierStatement(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
 ipcMain.handle('api:print:cashboxStatement', async (_event,id)=>{ try{return success(await printController.getCashboxStatement(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
 ipcMain.handle('api:print:consignment', async (_event,id)=>{ try{return success(await printController.getConsignmentDocument(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
+
+/** Reports endpoints. */
+ipcMain.handle('api:report:options', async () => {
+  try {
+    return success(await reportController.getOptions());
+  } catch (e) {
+    return failure(e.code || 'REPORT_LOAD_FAILED', e.message || 'تعذر تحميل خيارات التقارير', e.details);
+  }
+});
+
+ipcMain.handle('api:report:generate', async (_event, input) => {
+  try {
+    return success(await reportController.generate(input || {}));
+  } catch (e) {
+    return failure(e.code || 'REPORT_GENERATE_FAILED', e.message || 'تعذر توليد التقرير', e.details);
+  }
+});
+
+ipcMain.handle('api:report:export', async (event, input) => {
+  let exportWindow = null;
+
+  try {
+    const format = input?.format;
+    if (!['pdf', 'excel'].includes(format)) {
+      return failure('VALIDATION_ERROR', 'صيغة التصدير غير مدعومة');
+    }
+
+    const report = await reportController.generate({
+      reportId: input?.reportId,
+      filters: input?.filters || {},
+    });
+
+    const parentWindow = BrowserWindow.fromWebContents(event.sender);
+    const safeTitle = String(report?.title || 'report')
+      .replace(/[\/:*?"<>|]+/g, '-')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 100) || 'report';
+
+    if (format === 'excel') {
+      const result = await dialog.showSaveDialog(parentWindow || undefined, {
+        title: 'تصدير التقرير إلى Excel',
+        defaultPath: `${safeTitle}.xls`,
+        filters: [{ name: 'Excel', extensions: ['xls'] }],
+      });
+
+      if (result.canceled || !result.filePath) {
+        return success({ success: false, canceled: true });
+      }
+
+      const html = renderReportHtml(report);
+      await writeFile(result.filePath, `\ufeff${html}`, 'utf8');
+
+      return success({
+        success: true,
+        filePath: result.filePath,
+      });
+    }
+
+    const result = await dialog.showSaveDialog(parentWindow || undefined, {
+      title: 'تصدير التقرير إلى PDF',
+      defaultPath: `${safeTitle}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+
+    if (result.canceled || !result.filePath) {
+      return success({ success: false, canceled: true });
+    }
+
+    exportWindow = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+
+    const html = renderReportHtml(report);
+    await exportWindow.loadURL(
+      `data:text/html;charset=utf-8,${encodeURIComponent(html)}`,
+    );
+
+    const pdf = await exportWindow.webContents.printToPDF({
+      printBackground: true,
+      landscape: false,
+      pageSize: 'A4',
+      margins: {
+        top: 0.28,
+        bottom: 0.28,
+        left: 0.28,
+        right: 0.28,
+      },
+      preferCSSPageSize: true,
+    });
+
+    await writeFile(result.filePath, pdf);
+
+    return success({
+      success: true,
+      filePath: result.filePath,
+    });
+  } catch (e) {
+    return failure(e.code || 'REPORT_EXPORT_FAILED', e.message || 'تعذر تصدير التقرير', e.details);
+  } finally {
+    if (exportWindow && !exportWindow.isDestroyed()) {
+      exportWindow.destroy();
+    }
+  }
+});
 
 /** Notification center endpoints. */
 ipcMain.handle('api:notification:list', async (_event,input) => { try { return success(await notificationController.list(input)); } catch(e) { return failure(e.code||'NOTIFICATIONS_LOAD_FAILED',e.message||'Failed to load notifications',e.details); } });

@@ -378,6 +378,15 @@ const stockliteApi = {
       invokeApi("api:transaction:getSummary", filters),
   },
 
+  reports: {
+    options: () =>
+      invokeApi("api:report:options"),
+    generate: (input: unknown) =>
+      invokeApi("api:report:generate", input),
+    export: (input: unknown) =>
+      invokeApi("api:report:export", input),
+  },
+
   activityLogs: {
     list: (filters?: unknown, pagination?: unknown) => invokeApi("api:activityLog:list", filters, pagination),
     get: (id: number) => invokeApi("api:activityLog:get", id),

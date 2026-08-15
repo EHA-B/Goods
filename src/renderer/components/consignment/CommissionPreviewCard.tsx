@@ -76,8 +76,30 @@ export default function CommissionPreviewCard({ preview, loading = false, policy
             />
             <SummaryRow
               icon={<HandCoins size={16} />}
-              label="حصة المورد الإجمالية"
-              value={money(preview.supplier_share, preview.currency)}
+              label="حصة المورد من المبيعات"
+              value={money(preview.supplier_share_base, preview.currency)}
+              muted
+            />
+            {preview.spoilage_value > 0 && (
+              <SummaryRow
+                icon={<Calculator size={16} />}
+                label="قيمة التلف (تعويض للمورد)"
+                value={money(preview.spoilage_value, preview.currency)}
+                danger
+              />
+            )}
+            {preview.return_value > 0 && (
+              <SummaryRow
+                icon={<Landmark size={16} />}
+                label="قيمة المرتجع (مستردة للصندوق)"
+                value={money(preview.return_value, preview.currency)}
+                emphasis
+              />
+            )}
+            <SummaryRow
+              icon={<HandCoins size={16} />}
+              label="إجمالي استحقاق المورد"
+              value={money(preview.adjusted_supplier_share, preview.currency)}
               muted
             />
             {preview.prepaid_amount > 0 && (

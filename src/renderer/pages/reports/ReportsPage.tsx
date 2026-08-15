@@ -6,11 +6,16 @@ import {
 import {
   ArrowRight,
   BadgeDollarSign,
+  BanknoteArrowDown,
+  BanknoteArrowUp,
   CalendarDays,
+  CircleDollarSign,
   Download,
   FileSpreadsheet,
   FileText,
   Play,
+  PackageMinus,
+  ReceiptText,
   Search,
   SlidersHorizontal,
   TrendingDown,
@@ -211,6 +216,377 @@ function isNumericColumn(
   return (
     column.format === "number" ||
     column.format === "currency"
+  );
+}
+
+
+function summaryItemValue(
+  result: ReportResult,
+  label: string,
+) {
+  return (
+    result.summary?.find(
+      (item) => item.label === label,
+    )?.value ?? "0 ل.س"
+  );
+}
+
+function numericSummaryValue(
+  value: unknown,
+) {
+  const normalized = String(value ?? "")
+    .replace(/,/g, "")
+    .replace(/[^\d.-]/g, "");
+
+  const parsed = Number(normalized);
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0;
+}
+
+function ProfitLossPreview({
+  result,
+}: {
+  result: ReportResult;
+}) {
+  const revenueSection =
+    result.sections?.find(
+      (section) =>
+        section.title === "الإيرادات",
+    );
+
+  const expenseSection =
+    result.sections?.find(
+      (section) =>
+        section.title ===
+        "التكاليف والمصروفات",
+    );
+
+  const netValue = numericSummaryValue(
+    summaryItemValue(
+      result,
+      "صافي الربح / الخسارة",
+    ),
+  );
+
+  const isNetProfit = netValue >= 0;
+
+  const cards = [
+    {
+      label: "إيراد المبيعات",
+      value: summaryItemValue(
+        result,
+        "إجمالي إيراد المبيعات",
+      ),
+      icon: BanknoteArrowUp,
+      tone:
+        "border-[color-mix(in_srgb,var(--success)_34%,var(--border))] bg-[color-mix(in_srgb,var(--success)_7%,var(--surface))]",
+      iconClass:
+        "bg-[color-mix(in_srgb,var(--success)_14%,transparent)] text-[var(--success)]",
+    },
+    {
+      label: "التكلفة والمصروفات",
+      value: summaryItemValue(
+        result,
+        "إجمالي التكلفة والمصروفات",
+      ),
+      icon: BanknoteArrowDown,
+      tone:
+        "border-[color-mix(in_srgb,var(--danger)_30%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_5%,var(--surface))]",
+      iconClass:
+        "bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] text-[var(--danger)]",
+    },
+    {
+      label: "صافي النتيجة",
+      value: summaryItemValue(
+        result,
+        "صافي الربح / الخسارة",
+      ),
+      icon: isNetProfit
+        ? TrendingUp
+        : TrendingDown,
+      tone: isNetProfit
+        ? "border-[color-mix(in_srgb,var(--success)_42%,var(--border))] bg-[color-mix(in_srgb,var(--success)_8%,var(--surface))]"
+        : "border-[color-mix(in_srgb,var(--danger)_42%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_8%,var(--surface))]",
+      iconClass: isNetProfit
+        ? "bg-[color-mix(in_srgb,var(--success)_16%,transparent)] text-[var(--success)]"
+        : "bg-[color-mix(in_srgb,var(--danger)_16%,transparent)] text-[var(--danger)]",
+    },
+  ];
+
+  const renderRows = (
+    section:
+      | NonNullable<
+          ReportResult["sections"]
+        >[number]
+      | undefined,
+    kind: "income" | "expense",
+  ) => {
+    if (!section?.rows.length) {
+      return (
+        <div className="flex min-h-36 items-center justify-center px-5 py-8 text-sm text-[var(--text-muted)]">
+          لا توجد حركات ضمن الفترة المحددة.
+        </div>
+      );
+    }
+
+    return (
+      <div className="divide-y divide-[var(--border)]">
+        {section.rows.map(
+          (row, index) => (
+            <div
+              key={index}
+              className="grid gap-3 px-5 py-4 transition-colors hover:bg-[var(--surface-hover)] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+            >
+              <div dir="rtl" className="min-w-0 text-right">
+                <div className="flex flex-wrap items-center gap-2">
+                  <strong dir="rtl" className="text-right text-sm text-[var(--text-primary)]">
+                    {String(
+                      row.metric ??
+                        "—",
+                    )}
+                  </strong>
+
+                  {row.category ? (
+                    <span dir="rtl" className="rounded-full border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-0.5 text-right text-[11px] font-bold text-[var(--text-muted)]">
+                      {String(
+                        row.category,
+                      )}
+                    </span>
+                  ) : null}
+                </div>
+
+                {row.date &&
+                row.date !== "—" ? (
+                  <div
+                    dir="rtl"
+                    className="mt-1.5 flex items-center gap-1.5 text-right text-xs text-[var(--text-muted)]"
+                  >
+                    <CalendarDays
+                      size={13}
+                    />
+                    <bdi
+                      dir="ltr"
+                      className="tabular-nums"
+                    >
+                      {formatCell(
+                        row,
+                        {
+                          key: "date",
+                          label: "التاريخ",
+                          format: "date",
+                        },
+                      )}
+                    </bdi>
+                  </div>
+                ) : null}
+              </div>
+
+              <div
+                dir="ltr"
+                className={[
+                  "text-left text-base font-extrabold tabular-nums [unicode-bidi:isolate]",
+                  kind === "income"
+                    ? "text-[var(--success)]"
+                    : "text-[var(--danger)]",
+                ].join(" ")}
+              >
+                {formatCell(
+                  row,
+                  {
+                    key: "amount",
+                    label: "القيمة",
+                    format: "currency",
+                  },
+                )}
+              </div>
+            </div>
+          ),
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div dir="rtl" className="p-5 text-right">
+      <div className="grid gap-4 md:grid-cols-3">
+        {cards.map((card) => {
+          const Icon = card.icon;
+
+          return (
+            <div
+              key={card.label}
+              className={[
+                "rounded-[var(--radius-lg)] border p-5 shadow-[var(--shadow-sm)]",
+                card.tone,
+              ].join(" ")}
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-xs font-bold text-[var(--text-muted)]">
+                    {card.label}
+                  </div>
+                  <div
+                    dir="ltr"
+                    className="mt-2 text-right text-xl font-extrabold tabular-nums [unicode-bidi:isolate] text-[var(--text-primary)]"
+                  >
+                    {String(
+                      card.value,
+                    )}
+                  </div>
+                </div>
+
+                <span
+                  className={[
+                    "flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)]",
+                    card.iconClass,
+                  ].join(" ")}
+                >
+                  <Icon size={21} />
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div
+        className={[
+          "mt-4 overflow-hidden rounded-[var(--radius-lg)] border p-5",
+          isNetProfit
+            ? "border-[color-mix(in_srgb,var(--success)_48%,var(--border))] bg-[color-mix(in_srgb,var(--success)_7%,var(--surface))]"
+            : "border-[color-mix(in_srgb,var(--danger)_48%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_7%,var(--surface))]",
+        ].join(" ")}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span
+              className={[
+                "flex h-12 w-12 items-center justify-center rounded-full",
+                isNetProfit
+                  ? "bg-[color-mix(in_srgb,var(--success)_16%,transparent)] text-[var(--success)]"
+                  : "bg-[color-mix(in_srgb,var(--danger)_16%,transparent)] text-[var(--danger)]",
+              ].join(" ")}
+            >
+              {isNetProfit ? (
+                <TrendingUp
+                  size={24}
+                />
+              ) : (
+                <TrendingDown
+                  size={24}
+                />
+              )}
+            </span>
+
+            <div>
+              <div className="text-xs font-bold text-[var(--text-muted)]">
+                النتيجة النهائية للفترة
+              </div>
+              <div className="mt-1 text-lg font-extrabold text-[var(--text-primary)]">
+                {isNetProfit
+                  ? "صافي ربح"
+                  : "صافي خسارة"}
+              </div>
+            </div>
+          </div>
+
+          <div
+            dir="ltr"
+            className={[
+              "text-2xl font-black tabular-nums [unicode-bidi:isolate]",
+              isNetProfit
+                ? "text-[var(--success)]"
+                : "text-[var(--danger)]",
+            ].join(" ")}
+          >
+            {String(
+              summaryItemValue(
+                result,
+                "صافي الربح / الخسارة",
+              ),
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-5 xl:grid-cols-2">
+        <section dir="rtl" className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]">
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--success)_5%,var(--surface-subtle))] px-5 py-4">
+            <div className="flex items-center gap-2">
+              <CircleDollarSign
+                size={18}
+                className="text-[var(--success)]"
+              />
+              <h3 dir="rtl" className="text-right font-extrabold text-[var(--text-primary)]">
+                الإيرادات
+              </h3>
+            </div>
+
+            <span
+              dir="ltr"
+              className="text-sm font-extrabold tabular-nums [unicode-bidi:isolate] text-[var(--success)]"
+            >
+              {String(
+                revenueSection
+                  ?.summary?.find(
+                    (item) =>
+                      item.label ===
+                      "إجمالي إيراد المبيعات",
+                  )?.value ?? "0 ل.س",
+              )}
+            </span>
+          </div>
+
+          {renderRows(
+            revenueSection,
+            "income",
+          )}
+        </section>
+
+        <section dir="rtl" className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]">
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--danger)_5%,var(--surface-subtle))] px-5 py-4">
+            <div className="flex items-center gap-2">
+              <ReceiptText
+                size={18}
+                className="text-[var(--danger)]"
+              />
+              <h3 dir="rtl" className="text-right font-extrabold text-[var(--text-primary)]">
+                التكاليف والمصروفات
+              </h3>
+            </div>
+
+            <span className="flex items-center gap-1 text-xs font-bold text-[var(--text-muted)]">
+              <PackageMinus
+                size={14}
+              />
+              تشمل خسائر المخزون
+            </span>
+          </div>
+
+          {renderRows(
+            expenseSection,
+            "expense",
+          )}
+        </section>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3 text-xs text-[var(--text-muted)]">
+        <span>
+          عدد بنود التقرير:{" "}
+          <strong className="text-[var(--text-primary)]">
+            {result.totalRows ??
+              0}
+          </strong>
+        </span>
+
+        <span>
+          خسائر المخزون تخصم من صافي
+          النتيجة ولا تغيّر رصيد الصندوق.
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -857,7 +1233,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {result?.rows.length ? (
+          {result && ((result.rows?.length ?? 0) > 0 || (result.sections?.length ?? 0) > 0) ? (
             <Button
               size="sm"
               variant="secondary"
@@ -888,6 +1264,121 @@ export default function ReportsPage() {
               title="لم يتم توليد التقرير بعد"
               description="اضبط الفلاتر ثم اضغط عرض التقرير."
             />
+          </div>
+        ) : isProfit &&
+          result.sections &&
+          result.sections.length > 0 ? (
+          <ProfitLossPreview
+            result={result}
+          />
+        ) : result.sections &&
+          result.sections.length > 0 ? (
+          <div className="flex flex-col">
+            {result.sections.map((section, sectionIndex) => (
+              <div key={sectionIndex} className="border-b border-[var(--border)] last:border-0">
+                <div className="bg-[var(--surface-subtle)] px-5 py-4 font-bold text-[var(--text-primary)]">
+                  {section.title}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-sm">
+                    <thead>
+                      <tr>
+                        {section.columns.map((column) => (
+                          <th
+                            key={column.key}
+                            className={[
+                              "whitespace-nowrap px-5 py-3 font-bold text-[var(--text-secondary)]",
+                              isNumericColumn(column) ? "text-left" : "text-right",
+                            ].join(" ")}
+                          >
+                            {column.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {section.rows.length > 0 ? section.rows.map((row, index) => (
+                        <tr
+                          key={index}
+                          className={[
+                            "border-t border-[var(--border)] transition-colors hover:bg-[var(--surface-hover)]",
+                            index % 2 === 1 ? "bg-[var(--surface-subtle)]/45" : "bg-[var(--surface)]",
+                          ].join(" ")}
+                        >
+                          {section.columns.map((column) => (
+                            <td
+                              key={column.key}
+                              className={[
+                                "px-5 py-3 text-[var(--text-primary)]",
+                                isNumericColumn(column) ? "whitespace-nowrap text-left font-medium tabular-nums" : "text-right",
+                              ].join(" ")}
+                              dir={isNumericColumn(column) ? "ltr" : undefined}
+                            >
+                              {isStatusColumn(column.key) ? renderStatus(row[column.key]) : formatCell(row, column)}
+                            </td>
+                          ))}
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan={section.columns.length} className="px-5 py-6 text-center text-sm text-[var(--text-muted)] border-t border-[var(--border)]">
+                            لا توجد بيانات
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {section.summary && section.summary.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-end gap-6 border-t border-[var(--border)] bg-[var(--surface-subtle)]/50 px-5 py-3">
+                    {section.summary.map((item, i) => (
+                      <div key={i} className="flex items-center gap-2 text-sm">
+                        <span className="text-[var(--text-secondary)] font-medium">{item.label}:</span>
+                        <strong className="text-[var(--text-primary)] font-bold text-base" dir="ltr">{String(item.value)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            
+            {result.summary && result.summary.length > 0 && (
+              <div className="bg-[var(--surface-subtle)] p-5">
+                <h3 className="font-bold text-[var(--text-primary)] mb-4">الملخص النهائي</h3>
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {result.summary.map((item) => (
+                    <div
+                      key={item.label}
+                      className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]"
+                    >
+                      <div className="absolute inset-y-0 right-0 w-1 bg-[var(--primary)]" />
+                      <div className="pr-2 text-xs font-medium leading-5 text-[var(--text-muted)]">
+                        {item.label}
+                      </div>
+                      <div
+                        dir="ltr"
+                        className="mt-2 pr-2 text-right text-lg font-bold tabular-nums text-[var(--text-primary)]"
+                      >
+                        {String(item.value)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface-subtle)] px-5 py-3 text-xs text-[var(--text-muted)]">
+               <span>
+                 عدد النتائج:{" "}
+                 <strong className="text-[var(--text-primary)]">
+                   {result.totalRows ?? result.sections.reduce((acc, sec) => acc + sec.rows.length, 0)}
+                 </strong>
+               </span>
+               <span>
+                 {isProfit
+                   ? "الأرباح والتكاليف معروضة بالقيمة الأساسية للنظام."
+                   : ""}
+               </span>
+            </div>
           </div>
         ) : result.summary?.length ||
           result.rows.length ? (

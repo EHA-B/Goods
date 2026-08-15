@@ -330,7 +330,7 @@ export default function CloseConsignmentPage() {
           preview?.total_sales_amount ?? 0,
           summary.invoice.currency,
         )}، وعمولة ${commission}%، وحصة مورد إجمالية ${money(
-          preview?.supplier_share ?? 0,
+          preview?.adjusted_supplier_share ?? 0,
           summary.invoice.currency,
         )}${
           (preview?.prepaid_amount ?? 0) > 0

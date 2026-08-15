@@ -23,7 +23,9 @@ import * as notificationsLifecycleHardeningMigration from './migrations/20260805
 import * as consignmentExpectedPurchasePriceMigration from './migrations/20260807233500_consignment_expected_purchase_price';
 import * as consignmentPrepaidAmountMigration from './migrations/20260809000000_consignment_prepaid_amount';
 import * as addWorkersTableMigration from './migrations/20260809100000_add_workers_table';
-import * as linkWorkerPaymentsFinancialTransactionsMigration from './migrations/20260810113000_link_worker_payments_financial_transactions';
+import * as m20260810113000_link_worker_payments_financial_transactions from './migrations/20260810113000_link_worker_payments_financial_transactions';
+import * as m20260814000000_consignment_settlement_monetary_values from './migrations/20260814000000_consignment_settlement_monetary_values';
+import * as m20260814000001_make_transaction_cashbox_nullable from './migrations/20260814000001_make_transaction_cashbox_nullable';
 import * as cashboxesSeed from './seeds/01_cashboxes';
 import * as usersSeed from './seeds/02_users';
 
@@ -53,6 +55,8 @@ class MigrationSource {
       '20260809000000_consignment_prepaid_amount.ts',
       '20260809100000_add_workers_table.ts',
       '20260810113000_link_worker_payments_financial_transactions.ts',
+      '20260814000000_consignment_settlement_monetary_values.ts',
+      '20260814000001_make_transaction_cashbox_nullable.ts',
     ]);
   }
   getMigrationName(migration: string) {
@@ -117,7 +121,13 @@ class MigrationSource {
       return addWorkersTableMigration;
     }
     if (migration === '20260810113000_link_worker_payments_financial_transactions.ts') {
-      return linkWorkerPaymentsFinancialTransactionsMigration;
+      return { name: '20260810113000_link_worker_payments_financial_transactions.ts', up: m20260810113000_link_worker_payments_financial_transactions.up, down: m20260810113000_link_worker_payments_financial_transactions.down };
+    }
+    if (migration === '20260814000000_consignment_settlement_monetary_values.ts') {
+      return { name: '20260814000000_consignment_settlement_monetary_values.ts', up: m20260814000000_consignment_settlement_monetary_values.up, down: m20260814000000_consignment_settlement_monetary_values.down };
+    }
+    if (migration === '20260814000001_make_transaction_cashbox_nullable.ts') {
+      return { name: '20260814000001_make_transaction_cashbox_nullable.ts', up: m20260814000001_make_transaction_cashbox_nullable.up, down: m20260814000001_make_transaction_cashbox_nullable.down };
     }
     if (migration === '20260804_sales_purchases_hardening.ts') {
       return sales_purchases_hardening;

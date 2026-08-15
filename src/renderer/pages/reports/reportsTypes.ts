@@ -37,6 +37,13 @@ export type ReportSummaryItem = {
   value: string | number;
 };
 
+export type ReportSection = {
+  title: string;
+  columns: ReportColumn[];
+  rows: Record<string, unknown>[];
+  summary?: ReportSummaryItem[];
+};
+
 export type ReportResult = {
   title: string;
   generatedAt: string;
@@ -44,6 +51,7 @@ export type ReportResult = {
   rows: Record<string, unknown>[];
   summary?: ReportSummaryItem[];
   totalRows?: number;
+  sections?: ReportSection[];
 };
 
 export type ReportOption = { value: string; label: string };

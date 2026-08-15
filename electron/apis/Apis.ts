@@ -150,9 +150,18 @@ function formatReportExportCell(value, format, row) {
 }
 
 function renderReportHtml(report) {
-  const columns = Array.isArray(report?.columns) ? report.columns : [];
-  const rows = Array.isArray(report?.rows) ? report.rows : [];
-  const summary = Array.isArray(report?.summary) ? report.summary : [];
+  const columns = Array.isArray(report?.columns)
+    ? report.columns
+    : [];
+  const rows = Array.isArray(report?.rows)
+    ? report.rows
+    : [];
+  const summary = Array.isArray(report?.summary)
+    ? report.summary
+    : [];
+  const sections = Array.isArray(report?.sections)
+    ? report.sections
+    : [];
 
   const summaryHtml = summary.length
     ? `<section class="summary">${summary.map((item) => `
@@ -163,19 +172,101 @@ function renderReportHtml(report) {
       `).join('')}</section>`
     : '';
 
-  const tableHead = columns
-    .map((column) => `<th>${escapeReportHtml(column.label)}</th>`)
-    .join('');
+  const renderTable = (tableColumns, tableRows) => {
+    if (!Array.isArray(tableColumns) || !tableColumns.length) {
+      return '';
+    }
 
-  const tableRows = rows
-    .map((row) => `
-      <tr>
-        ${columns.map((column) => `
-          <td class="${column.format === 'currency' || column.format === 'number' ? 'numeric' : ''}">${escapeReportHtml(formatReportExportCell(row?.[column.key], column.format, row))}</td>
-        `).join('')}
-      </tr>
-    `)
-    .join('');
+    const tableHead = tableColumns
+      .map((column) =>
+        `<th>${escapeReportHtml(column.label)}</th>`,
+      )
+      .join('');
+
+    const body = Array.isArray(tableRows) && tableRows.length
+      ? tableRows
+          .map((row) => `
+            <tr>
+              ${tableColumns.map((column) => `
+                <td class="${
+                  column.format === 'currency' ||
+                  column.format === 'number'
+                    ? 'numeric'
+                    : ''
+                }">${escapeReportHtml(
+                  formatReportExportCell(
+                    row?.[column.key],
+                    column.format,
+                    row,
+                  ),
+                )}</td>
+              `).join('')}
+            </tr>
+          `)
+          .join('')
+      : `<tr><td class="empty" colspan="${tableColumns.length}">لا توجد بيانات</td></tr>`;
+
+    return `
+      <div class="table-wrap">
+        <table>
+          <thead><tr>${tableHead}</tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    `;
+  };
+
+  const sectionsHtml = sections.length
+    ? sections.map((section) => {
+        const sectionSummary = Array.isArray(section?.summary)
+          ? section.summary
+          : [];
+
+        const sectionSummaryHtml = sectionSummary.length
+          ? `<div class="section-summary">
+              ${sectionSummary.map((item) => `
+                <div>
+                  <span>${escapeReportHtml(item.label)}</span>
+                  <strong>${escapeReportHtml(normalizeLatinDigits(item.value))}</strong>
+                </div>
+              `).join('')}
+            </div>`
+          : '';
+
+        return `
+          <section class="report-section">
+            <div class="section-title">${escapeReportHtml(section?.title || '')}</div>
+            ${renderTable(section?.columns || [], section?.rows || [])}
+            ${sectionSummaryHtml}
+          </section>
+        `;
+      }).join('')
+    : renderTable(columns, rows);
+
+  const isProfitLoss =
+    String(report?.title || '').includes('أرباح') ||
+    String(report?.title || '').includes('خسائر');
+
+  const netItem = summary.find((item) =>
+    String(item?.label || '').includes('صافي الربح'),
+  );
+
+  const netValue = Number(
+    String(netItem?.value ?? '')
+      .replace(/,/g, '')
+      .replace(/[^\d.-]/g, ''),
+  );
+
+  const netHtml =
+    isProfitLoss && netItem
+      ? `<section class="net-result ${Number.isFinite(netValue) && netValue < 0 ? 'loss' : 'profit'}">
+          <div>
+            <span class="net-caption">النتيجة النهائية للفترة</span>
+            <strong>${Number.isFinite(netValue) && netValue < 0 ? 'صافي خسارة' : 'صافي ربح'}</strong>
+          </div>
+          <div class="net-number">${escapeReportHtml(normalizeLatinDigits(netItem.value))}</div>
+        </section>`
+      : '';
 
   return `<!doctype html>
 <html lang="ar" dir="rtl">
@@ -196,31 +287,37 @@ function renderReportHtml(report) {
     }
 
     .report-header {
+      direction: rtl;
+      text-align: right;
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
       gap: 20px;
       border-bottom: 2px solid #1f7664;
-      padding-bottom: 14px;
-      margin-bottom: 16px;
+      padding-bottom: 12px;
+      margin-bottom: 14px;
     }
 
     h1 {
+      direction: rtl;
+      text-align: right;
       margin: 0;
       font-size: 18px;
       color: #153e35;
     }
 
     .meta {
-      margin-top: 6px;
+      direction: rtl;
+      text-align: right;
+      margin-top: 5px;
       color: #71807c;
-      font-size: 10px;
+      font-size: 9px;
     }
 
     .brand {
       border: 1px solid #d9e5e1;
-      border-radius: 9px;
-      padding: 8px 12px;
+      border-radius: 8px;
+      padding: 7px 10px;
       color: #1f7664;
       font-weight: 700;
       white-space: nowrap;
@@ -228,17 +325,17 @@ function renderReportHtml(report) {
 
     .summary {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      margin-bottom: 16px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+      margin-bottom: 12px;
     }
 
     .summary-card {
       position: relative;
       overflow: hidden;
       border: 1px solid #dfe7e4;
-      border-radius: 9px;
-      padding: 10px 12px;
+      border-radius: 8px;
+      padding: 9px 10px;
       background: #f8fbfa;
     }
 
@@ -253,37 +350,110 @@ function renderReportHtml(report) {
     }
 
     .summary-label {
+      direction: rtl;
+      text-align: right;
       color: #71807c;
-      font-size: 9px;
+      font-size: 8px;
       padding-right: 4px;
     }
 
     .summary-value {
-      margin-top: 5px;
+      direction: ltr;
+      unicode-bidi: isolate;
+      text-align: right;
+      margin-top: 4px;
       padding-right: 4px;
       font-size: 11px;
       font-weight: 700;
       color: #17211f;
+      font-variant-numeric: tabular-nums lining-nums;
+    }
+
+    .net-result {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border: 1px solid #9ccdbf;
+      border-radius: 8px;
+      background: #f1faf7;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+
+    .net-result.loss {
+      border-color: #e2b4b4;
+      background: #fff6f6;
+    }
+
+    .net-caption {
+      display: block;
+      margin-bottom: 3px;
+      color: #71807c;
+      font-size: 8px;
+    }
+
+    .net-result strong {
+      font-size: 12px;
+      color: #153e35;
+    }
+
+    .net-result.loss strong,
+    .net-result.loss .net-number {
+      color: #9f2f2f;
+    }
+
+    .latin {
+      direction: ltr;
+      unicode-bidi: isolate;
+      display: inline-block;
+      font-variant-numeric: tabular-nums lining-nums;
+    }
+
+    .net-number {
+      direction: ltr;
+      font-size: 15px;
+      font-weight: 800;
+      color: #1f7664;
+      font-variant-numeric: tabular-nums lining-nums;
+    }
+
+    .report-section {
+      margin-top: 12px;
+      break-inside: auto;
+    }
+
+    .section-title {
+      direction: rtl;
+      text-align: right;
+      border: 1px solid #cfdad6;
+      border-bottom: 0;
+      border-radius: 7px 7px 0 0;
+      background: #eef5f2;
+      padding: 7px 9px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #294b43;
     }
 
     .table-wrap {
       width: 100%;
       overflow: hidden;
       border: 1px solid #cfdad6;
-      border-radius: 7px;
+      border-radius: 0 0 7px 7px;
     }
 
     table {
       width: 100%;
       table-layout: fixed;
       border-collapse: collapse;
-      font-size: 7.4px;
+      font-size: 7.2px;
     }
 
     th,
     td {
       border: 1px solid #cfdad6;
-      padding: 5px 4px;
+      padding: 4px 4px;
       text-align: right;
       vertical-align: middle;
       white-space: normal;
@@ -293,7 +463,7 @@ function renderReportHtml(report) {
     }
 
     th {
-      background: #eef5f2;
+      background: #f4f8f6;
       color: #40534e;
       font-weight: 700;
       text-align: center;
@@ -308,23 +478,58 @@ function renderReportHtml(report) {
       unicode-bidi: isolate;
       text-align: center;
       font-variant-numeric: tabular-nums lining-nums;
-      white-space: normal;
     }
 
-    .summary-value,
-    .meta,
-    .footer {
+    td.empty {
+      text-align: center;
+      color: #71807c;
+      padding: 10px;
+    }
+
+    .section-summary {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 12px;
+      border: 1px solid #cfdad6;
+      border-top: 0;
+      border-radius: 0 0 7px 7px;
+      background: #f8fbfa;
+      padding: 6px 8px;
+      margin-top: -1px;
+    }
+
+    .section-summary div {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .section-summary span {
+      direction: rtl;
+      text-align: right;
+      color: #71807c;
+      font-size: 7.5px;
+    }
+
+    .section-summary strong {
+      direction: ltr;
+      unicode-bidi: isolate;
+      text-align: left;
+      font-size: 8.5px;
       font-variant-numeric: tabular-nums lining-nums;
     }
 
     .footer {
+      direction: rtl;
+      text-align: right;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
       margin-top: 10px;
       color: #71807c;
-      font-size: 9px;
+      font-size: 8px;
     }
 
     @page {
@@ -337,22 +542,31 @@ function renderReportHtml(report) {
   <div class="report-header">
     <div>
       <h1>${escapeReportHtml(report?.title || 'تقرير')}</h1>
-      <div class="meta">تم التوليد: ${escapeReportHtml(normalizeLatinDigits(new Date(report?.generatedAt || Date.now()).toLocaleString('en-US')))}</div>
+      <div class="meta">
+        <span>تم التوليد:</span>
+        <span class="latin">${escapeReportHtml(
+          normalizeLatinDigits(
+            new Date(
+              report?.generatedAt || Date.now(),
+            ).toLocaleString('en-US'),
+          ),
+        )}</span>
+      </div>
     </div>
     <div class="brand">StockLite</div>
   </div>
 
   ${summaryHtml}
-
-  <div class="table-wrap">
-    <table>
-      <thead><tr>${tableHead}</tr></thead>
-      <tbody>${tableRows}</tbody>
-    </table>
-  </div>
+  ${netHtml}
+  ${sectionsHtml}
 
   <div class="footer">
-    <span>عدد النتائج: ${escapeReportHtml(normalizeLatinDigits(report?.totalRows ?? rows.length))}</span>
+    <span>عدد النتائج: ${escapeReportHtml(
+      normalizeLatinDigits(
+        report?.totalRows ??
+        rows.length,
+      ),
+    )}</span>
     <span>تقرير صادر إلكترونيًا من StockLite</span>
   </div>
 </body>
@@ -608,6 +822,22 @@ ipcMain.handle('api:notification:dismiss', async (_event,id) => { try { return s
 ipcMain.handle('api:dashboard:get', async () => {
   try { return success(await dashboardController.getDashboard()); }
   catch (e) { return failure(e.code || 'DASHBOARD_LOAD_FAILED', e.message || 'Failed to load dashboard', e.details); }
+});
+
+/**
+ * Endpoint: api:report:getProfitLoss
+ * Description: Returns a date-filtered Profit & Loss (Gains & Losses) report.
+ *              Includes: gross revenue, COGS, gross profit, consignment supplier payouts,
+ *              general expenses (wages, spoilage write-offs, overheads), other income,
+ *              and a net profit summary — all without double-counting commission.
+ */
+ipcMain.handle('api:report:getProfitLoss', async (_event, filters) => {
+  try {
+    const result = await reportController.getProfitLossReport(filters ?? {});
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'REPORT_LOAD_FAILED', e.message || 'Failed to generate report', e.details);
+  }
 });
 
 /**

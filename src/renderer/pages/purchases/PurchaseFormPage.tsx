@@ -22,6 +22,10 @@ import {
   getProductErrorMessage,
   productsService,
 } from "../products/productsService";
+import {
+  suppliersService,
+  getSupplierErrorMessage,
+} from "../suppliers/suppliersService";
 
 type PurchaseItemForm = {
   product_id: number;
@@ -119,6 +123,12 @@ export default function PurchaseFormPage() {
     category: "",
     description: "",
   });
+
+  // ── Quick supplier dialog state ───────────────────────────────────────────
+  const [quickSupplierOpen, setQuickSupplierOpen] = useState(false);
+  const [quickSupplierSaving, setQuickSupplierSaving] = useState(false);
+  const [quickSupplierError, setQuickSupplierError] = useState("");
+  const [quickSupplier, setQuickSupplier] = useState({ name: "", phone: "", notes: "" });
 
   const [lookups, setLookups] = useState<{
     suppliers: PartyApiRecord[];
@@ -321,6 +331,56 @@ export default function PurchaseFormPage() {
       );
     } finally {
       setQuickProductSaving(false);
+    }
+  };
+
+  const openQuickSupplier = () => {
+    setQuickSupplierOpen(true);
+    setQuickSupplierError("");
+    setQuickSupplier({ name: "", phone: "", notes: "" });
+  };
+
+  const createQuickSupplier = async () => {
+    if (!quickSupplier.name.trim()) {
+      setQuickSupplierError("اسم المورد مطلوب.");
+      return;
+    }
+    try {
+      setQuickSupplierSaving(true);
+      setQuickSupplierError("");
+      const created = await suppliersService.create({
+        name: quickSupplier.name,
+        phone: quickSupplier.phone,
+        notes: quickSupplier.notes,
+        isActive: true,
+      });
+      const newRecord: PartyApiRecord = {
+        id: created.id, name: created.name,
+        phone: null,
+        email: null,
+        address: null,
+        balance: null,
+        notes: null,
+        isActive: 0,
+        created_at: null,
+        updated_at: null
+      };
+      setLookups((curr) =>
+        curr
+          ? {
+              ...curr,
+              suppliers: [...curr.suppliers, newRecord].sort((a, b) =>
+                a.name.localeCompare(b.name, "ar"),
+              ),
+            }
+          : curr,
+      );
+      setSupplierId(created.id);
+      setQuickSupplierOpen(false);
+    } catch (err) {
+      setQuickSupplierError(getSupplierErrorMessage(err));
+    } finally {
+      setQuickSupplierSaving(false);
     }
   };
 
@@ -680,36 +740,49 @@ export default function PurchaseFormPage() {
               htmlFor="supplier"
               required
             >
-              <SearchableSelect
-                id="supplier"
-                value={String(supplierId)}
-                disabled={lookupsLoading}
-                placeholder={
-                  lookupsLoading
-                    ? "جاري تحميل الموردين..."
-                    : "اختر المورد"
-                }
-                searchPlaceholder="ابحث باسم المورد..."
-                emptyMessage="لا يوجد مورد مطابق للبحث"
-                options={[
-                  {
-                    value: "0",
-                    label: "اختر المورد",
-                  },
-                  ...(lookups?.suppliers ?? []).map(
-                    (supplier) => ({
-                      value: String(supplier.id),
-                      label: supplier.name,
-                      keywords: supplier.name,
-                    }),
-                  ),
-                ]}
-                onValueChange={(value) =>
-                  setSupplierId(
-                    Number(value),
-                  )
-                }
-              />
+              <div className="flex gap-2">
+                <div className="min-w-0 flex-1">
+                  <SearchableSelect
+                    id="supplier"
+                    value={String(supplierId)}
+                    disabled={lookupsLoading}
+                    placeholder={
+                      lookupsLoading
+                        ? "جاري تحميل الموردين..."
+                        : "اختر المورد"
+                    }
+                    searchPlaceholder="ابحث باسم المورد..."
+                    emptyMessage="لا يوجد مورد مطابق للبحث"
+                    options={[
+                      {
+                        value: "0",
+                        label: "اختر المورد",
+                      },
+                      ...(lookups?.suppliers ?? []).map(
+                        (supplier) => ({
+                          value: String(supplier.id),
+                          label: supplier.name,
+                          keywords: supplier.name,
+                        }),
+                      ),
+                    ]}
+                    onValueChange={(value) =>
+                      setSupplierId(
+                        Number(value),
+                      )
+                    }
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-11 shrink-0 px-3"
+                  startIcon={<Plus size={15} />}
+                  onClick={openQuickSupplier}
+                >
+                  مورد جديد
+                </Button>
+              </div>
             </FormField>
 
             <FormField
@@ -1234,6 +1307,69 @@ export default function PurchaseFormPage() {
           </div>
         )}
       </div>
+
+      {/* ── Quick Supplier Dialog ─────────────────────────────────────── */}
+      <Dialog
+        open={quickSupplierOpen}
+        title="إضافة مورد جديد"
+        onClose={() => !quickSupplierSaving && setQuickSupplierOpen(false)}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              disabled={quickSupplierSaving}
+              onClick={() => setQuickSupplierOpen(false)}
+            >
+              إلغاء
+            </Button>
+            <Button
+              isLoading={quickSupplierSaving}
+              loadingText="جاري الإضافة..."
+              startIcon={<Save size={16} />}
+              onClick={() => void createQuickSupplier()}
+            >
+              إضافة واختيار المورد
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-4">
+          <FormField label="اسم المورد" required>
+            <Input
+              autoFocus
+              value={quickSupplier.name}
+              placeholder="اسم المورد..."
+              onChange={(e) =>
+                setQuickSupplier((c) => ({ ...c, name: e.target.value }))
+              }
+            />
+          </FormField>
+          <FormField label="رقم الهاتف">
+            <Input
+              dir="ltr"
+              value={quickSupplier.phone}
+              placeholder="اختياري"
+              onChange={(e) =>
+                setQuickSupplier((c) => ({ ...c, phone: e.target.value }))
+              }
+            />
+          </FormField>
+          <FormField label="ملاحظات">
+            <Input
+              value={quickSupplier.notes}
+              placeholder="اختياري"
+              onChange={(e) =>
+                setQuickSupplier((c) => ({ ...c, notes: e.target.value }))
+              }
+            />
+          </FormField>
+          {quickSupplierError && (
+            <p className="rounded-[var(--radius-sm)] bg-[var(--danger-subtle)] px-3 py-2 text-sm font-bold text-[var(--danger)]">
+              {quickSupplierError}
+            </p>
+          )}
+        </div>
+      </Dialog>
 
       <Dialog
         open={quickProductIndex !== null}

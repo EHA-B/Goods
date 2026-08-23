@@ -3,9 +3,10 @@ import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useMemo, useState } from "react";
 import { Calculator, Plus, Save, ShoppingCart, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { BackButton, Button, Card, FormField, FormSection, Input, PageHeader, SearchableSelect, Select, Textarea } from "../../components/ui";
+import { BackButton, Button, Card, Dialog, FormField, FormSection, Input, PageHeader, SearchableSelect, Select, Textarea } from "../../components/ui";
 import { PATHS } from "../../routes/path";
 import { salesService } from "./salesService";
+import { customersService } from "../customers/customersService";
 
 type SaleItemForm = {
   product_id: number;
@@ -49,6 +50,12 @@ export default function SaleFormPage() {
   const [exchangeRate, setExchangeRate] = useState(1);
   const [lookups, setLookups] = useState<{ customers: PartyApiRecord[]; cashboxes: CashboxApiRecord[]; products: ProductApiRecord[] } | null>(null);
 
+  // ── Quick customer dialog state ───────────────────────────────────────────
+  const [quickCustomerOpen, setQuickCustomerOpen] = useState(false);
+  const [quickCustomerSaving, setQuickCustomerSaving] = useState(false);
+  const [quickCustomerError, setQuickCustomerError] = useState("");
+  const [quickCustomer, setQuickCustomer] = useState({ name: "", phone: "", notes: "" });
+
   useEffect(() => {
     let active = true;
     Promise.all([salesService.getLookups(), salesService.getProducts()])
@@ -69,6 +76,57 @@ export default function SaleFormPage() {
 
   const updateItem = (index: number, patch: Partial<SaleItemForm>) =>
     setItems((curr) => curr.map((item, i) => i === index ? { ...item, ...patch } : item));
+
+  const openQuickCustomer = () => {
+    setQuickCustomerOpen(true);
+    setQuickCustomerError("");
+    setQuickCustomer({ name: "", phone: "", notes: "" });
+  };
+
+  const createQuickCustomer = async () => {
+    if (!quickCustomer.name.trim()) {
+      setQuickCustomerError("اسم العميل مطلوب.");
+      return;
+    }
+    try {
+      setQuickCustomerSaving(true);
+      setQuickCustomerError("");
+      const created = await customersService.create({
+        name: quickCustomer.name,
+        phone: quickCustomer.phone,
+        notes: quickCustomer.notes,
+        isActive: true,
+      });
+      const newRecord: PartyApiRecord = {
+        id: created.id, name: created.name,
+        phone: null,
+        email: null,
+        address: null,
+        balance: null,
+        notes: null,
+        isActive: 0,
+        created_at: null,
+        updated_at: null
+      };
+      setLookups((curr) =>
+        curr
+          ? {
+              ...curr,
+              customers: [...curr.customers, newRecord].sort((a, b) =>
+                a.name.localeCompare(b.name, "ar"),
+              ),
+            }
+          : curr,
+      );
+      setCustomerId(created.id);
+      setQuickCustomerOpen(false);
+    } catch (err) {
+      const e = err as Error;
+      setQuickCustomerError(e.message || "حدث خطأ أثناء إضافة العميل.");
+    } finally {
+      setQuickCustomerSaving(false);
+    }
+  };
 
   const selectProduct = async (index: number, productId: number) => {
     const product = lookups?.products.find((p) => p.id === productId);
@@ -166,7 +224,35 @@ export default function SaleFormPage() {
             <Input id="invoiceDate" type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
           </FormField>
           <FormField label="العميل" htmlFor="customer">
-            <Select id="customer" value={String(customerId)} options={[{ value: "0", label: "بيع نقدي (بدون عميل)" }, ...(lookups?.customers ?? []).map((c) => ({ value: String(c.id), label: c.name }))]} onChange={(e) => setCustomerId(Number(e.target.value))} />
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <SearchableSelect
+                  id="customer"
+                  value={String(customerId)}
+                  placeholder="بيع نقدي (بدون عميل)"
+                  searchPlaceholder="ابحث باسم العميل..."
+                  emptyMessage="لا يوجد عميل مطابق للبحث"
+                  options={[
+                    { value: "0", label: "بيع نقدي (بدون عميل)" },
+                    ...(lookups?.customers ?? []).map((c) => ({
+                      value: String(c.id),
+                      label: c.name,
+                      keywords: c.name,
+                    })),
+                  ]}
+                  onValueChange={(value) => setCustomerId(Number(value))}
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-11 shrink-0 px-3"
+                startIcon={<Plus size={15} />}
+                onClick={openQuickCustomer}
+              >
+                عميل جديد
+              </Button>
+            </div>
           </FormField>
           <FormField label="العملة" required>
             <Select value={currency} options={[{ value: "SYP", label: "ل.س (SYP)" }, { value: "USD", label: "دولار (USD)" }]} onChange={(e) => {
@@ -321,6 +407,69 @@ export default function SaleFormPage() {
         </Card>
       </div>
     </div>
+
+    {/* ── Quick Customer Dialog ─────────────────────────────────────── */}
+    <Dialog
+      open={quickCustomerOpen}
+      title="إضافة عميل جديد"
+      onClose={() => !quickCustomerSaving && setQuickCustomerOpen(false)}
+      footer={
+        <>
+          <Button
+            variant="secondary"
+            disabled={quickCustomerSaving}
+            onClick={() => setQuickCustomerOpen(false)}
+          >
+            إلغاء
+          </Button>
+          <Button
+            isLoading={quickCustomerSaving}
+            loadingText="جاري الإضافة..."
+            startIcon={<Save size={16} />}
+            onClick={() => void createQuickCustomer()}
+          >
+            إضافة واختيار العميل
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-4">
+        <FormField label="اسم العميل" required>
+          <Input
+            autoFocus
+            value={quickCustomer.name}
+            placeholder="اسم العميل..."
+            onChange={(e) =>
+              setQuickCustomer((c) => ({ ...c, name: e.target.value }))
+            }
+          />
+        </FormField>
+        <FormField label="رقم الهاتف">
+          <Input
+            dir="ltr"
+            value={quickCustomer.phone}
+            placeholder="اختياري"
+            onChange={(e) =>
+              setQuickCustomer((c) => ({ ...c, phone: e.target.value }))
+            }
+          />
+        </FormField>
+        <FormField label="ملاحظات">
+          <Input
+            value={quickCustomer.notes}
+            placeholder="اختياري"
+            onChange={(e) =>
+              setQuickCustomer((c) => ({ ...c, notes: e.target.value }))
+            }
+          />
+        </FormField>
+        {quickCustomerError && (
+          <p className="rounded-[var(--radius-sm)] bg-[var(--danger-subtle)] px-3 py-2 text-sm font-bold text-[var(--danger)]">
+            {quickCustomerError}
+          </p>
+        )}
+      </div>
+    </Dialog>
 
     <div className="fixed bottom-0 left-0 right-[260px] z-20 border-t border-[var(--border)] bg-[var(--surface)]/95 px-6 py-3 backdrop-blur">
       <div className="flex justify-end gap-3">

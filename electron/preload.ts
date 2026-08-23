@@ -381,9 +381,9 @@ const stockliteApi = {
   reports: {
     options: () =>
       invokeApi("api:report:options"),
-    generate: (input: unknown) =>
+    generate: (input: { reportId: string; filters: Record<string, unknown> }) =>
       invokeApi("api:report:generate", input),
-    export: (input: unknown) =>
+    export: (input: { reportId: string; filters: Record<string, unknown>; format: "pdf" | "excel" }) =>
       invokeApi("api:report:export", input),
   },
 

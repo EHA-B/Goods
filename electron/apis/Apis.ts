@@ -94,12 +94,8 @@ function escapeReportHtml(value) {
 
 function normalizeLatinDigits(value) {
   return String(value ?? '')
-    .replace(/[٠-٩]/g, (digit) =>
-      String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)),
-    )
-    .replace(/[۰-۹]/g, (digit) =>
-      String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)),
-    );
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
 }
 
 function formatReportExportCell(value, format, row) {
@@ -107,43 +103,28 @@ function formatReportExportCell(value, format, row) {
 
   if (format === 'number') {
     const numeric = Number(value);
-
-    return normalizeLatinDigits(
-      Number.isFinite(numeric)
-        ? numeric.toLocaleString('en-US', {
-            maximumFractionDigits: 3,
-          })
-        : String(value),
-    );
+    return Number.isFinite(numeric)
+      ? normalizeLatinDigits(numeric.toLocaleString('en-US', { maximumFractionDigits: 3 }))
+      : normalizeLatinDigits(String(value));
   }
 
   if (format === 'currency') {
     const numeric = Number(value);
-
-    if (!Number.isFinite(numeric)) {
-      return normalizeLatinDigits(String(value));
-    }
+    if (!Number.isFinite(numeric)) return String(value);
 
     const currency =
       String(row?.currency || 'SYP').toUpperCase() === 'USD'
         ? 'USD'
         : 'ل.س';
 
-    return normalizeLatinDigits(
-      `${numeric.toLocaleString('en-US', {
-        maximumFractionDigits: 2,
-      })} ${currency}`,
-    );
+    return normalizeLatinDigits(`${numeric.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${currency}`);
   }
 
   if (format === 'date') {
     const parsed = new Date(String(value));
-
-    return normalizeLatinDigits(
-      Number.isNaN(parsed.getTime())
-        ? String(value)
-        : parsed.toLocaleDateString('en-US'),
-    );
+    return Number.isNaN(parsed.getTime())
+      ? normalizeLatinDigits(String(value))
+      : normalizeLatinDigits(parsed.toLocaleDateString('ar-SY-u-nu-latn'));
   }
 
   return normalizeLatinDigits(String(value));
@@ -311,12 +292,6 @@ function renderReportHtml(report) {
       white-space: normal;
     }
 
-    .summary-value,
-    .meta,
-    .footer {
-      font-variant-numeric: tabular-nums lining-nums;
-    }
-
     .footer {
       display: flex;
       align-items: center;
@@ -337,7 +312,7 @@ function renderReportHtml(report) {
   <div class="report-header">
     <div>
       <h1>${escapeReportHtml(report?.title || 'تقرير')}</h1>
-      <div class="meta">تم التوليد: ${escapeReportHtml(normalizeLatinDigits(new Date(report?.generatedAt || Date.now()).toLocaleString('en-US')))}</div>
+      <div class="meta">تم التوليد: ${escapeReportHtml(normalizeLatinDigits(new Date(report?.generatedAt || Date.now()).toLocaleString('ar-SY-u-nu-latn')))}</div>
     </div>
     <div class="brand">StockLite</div>
   </div>
@@ -608,22 +583,6 @@ ipcMain.handle('api:notification:dismiss', async (_event,id) => { try { return s
 ipcMain.handle('api:dashboard:get', async () => {
   try { return success(await dashboardController.getDashboard()); }
   catch (e) { return failure(e.code || 'DASHBOARD_LOAD_FAILED', e.message || 'Failed to load dashboard', e.details); }
-});
-
-/**
- * Endpoint: api:report:getProfitLoss
- * Description: Returns a date-filtered Profit & Loss (Gains & Losses) report.
- *              Includes: gross revenue, COGS, gross profit, consignment supplier payouts,
- *              general expenses (wages, spoilage write-offs, overheads), other income,
- *              and a net profit summary — all without double-counting commission.
- */
-ipcMain.handle('api:report:getProfitLoss', async (_event, filters) => {
-  try {
-    const result = await reportController.getProfitLossReport(filters ?? {});
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'REPORT_LOAD_FAILED', e.message || 'Failed to generate report', e.details);
-  }
 });
 
 /**

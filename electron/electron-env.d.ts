@@ -113,6 +113,7 @@ type CashboxMovementRecord = {
   transaction_date: string;
   notes: string | null;
   created_at: string | null;
+  reference_display_id?: string | null;
 };
 
 type CashboxSummaryByCurrency = {
@@ -540,6 +541,8 @@ interface Window {
       listForPurchase(invoiceId: number): Promise<PaymentRecord[]>;
       recordSale(input: RecordSalePaymentInput): Promise<{ payment: PaymentRecord; invoice: SaleInvoiceRecord; cashbox: CashboxApiRecord }>;
       recordPurchase(input: RecordPurchasePaymentInput): Promise<{ payment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
+      recordGeneralReceipt(input: { party_type: string; party_id: number; cashbox_id: number; amount: number; payment_date: string; notes?: string }): Promise<any>;
+      recordGeneralPayment(input: { party_type: string; party_id: number; cashbox_id: number; amount: number; payment_date: string; notes?: string }): Promise<any>;
       reverseSale(paymentId: number, reason: string): Promise<{ reversedPayment: PaymentRecord; invoice: SaleInvoiceRecord; cashbox: CashboxApiRecord }>;
       reversePurchase(paymentId: number, reason: string): Promise<{ reversedPayment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
     };

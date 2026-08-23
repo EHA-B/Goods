@@ -366,6 +366,22 @@ export default function SupplierDetailsPage() {
             >
               تعديل
             </Button>
+
+            <Button
+              variant="secondary"
+              startIcon={
+                <CreditCard
+                  size={17}
+                />
+              }
+              onClick={() =>
+                navigate(
+                  `/payments/new?partyType=supplier&partyId=${supplier.id}`,
+                )
+              }
+            >
+              سند دفع / قبض
+            </Button>
           </div>
         }
       />

@@ -293,6 +293,9 @@ export default function CashboxMovementsPage() {
                           "text-sm"
                         }>
                           {MOVEMENT_LABELS[m.reference_type] ?? m.reference_type}
+                          {(m.reference_type === 'sale' || m.reference_type === 'purchase') && m.reference_display_id
+                            ? ` #${m.reference_display_id}`
+                            : ''}
                         </span>
                         {m.transfer_group_id && (
                           <p className="text-xs text-[var(--text-muted)] mt-0.5">مجموعة: {m.transfer_group_id.slice(-8)}</p>

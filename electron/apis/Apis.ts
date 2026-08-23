@@ -1172,6 +1172,19 @@ ipcMain.handle('api:payment:getPayment', async (_event, id) => {
 });
 
 /**
+ * Endpoint: api:payment:getPartyPayments
+ * Description: Read-only. Returns all payments for a specific party.
+ */
+ipcMain.handle('api:payment:getPartyPayments', async (_event, partyType, partyId) => {
+  try {
+    const result = await paymentController.getPartyPayments(partyType, partyId);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
  * Endpoint: api:payment:getAllPayments
  * Description: Read-only. Returns all payments.
  */
@@ -1256,6 +1269,32 @@ ipcMain.handle('api:payment:reverseSalePayment', async (_event, paymentId, reaso
 ipcMain.handle('api:payment:reversePurchasePayment', async (_event, paymentId, reason) => {
   try {
     const result = await paymentController.reversePurchasePayment(paymentId, reason);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:payment:recordGeneralReceipt
+ * Description: Records a general receipt from a party into the cashbox.
+ */
+ipcMain.handle('api:payment:recordGeneralReceipt', async (_event, input) => {
+  try {
+    const result = await paymentController.recordGeneralReceipt(input);
+    return success(result);
+  } catch (e) {
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
+/**
+ * Endpoint: api:payment:recordGeneralPayment
+ * Description: Records a general payment to a party from the cashbox.
+ */
+ipcMain.handle('api:payment:recordGeneralPayment', async (_event, input) => {
+  try {
+    const result = await paymentController.recordGeneralPayment(input);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);

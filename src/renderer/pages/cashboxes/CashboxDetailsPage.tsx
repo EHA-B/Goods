@@ -305,6 +305,9 @@ export default function CashboxDetailsPage() {
                           }
                         >
                           {MOVEMENT_LABELS[m.reference_type] ?? m.reference_type}
+                          {(m.reference_type === 'sale' || m.reference_type === 'purchase') && m.reference_display_id
+                            ? ` #${m.reference_display_id}`
+                            : ''}
                         </span>
                       </DataTableCell>
                       <DataTableCell>

@@ -38,6 +38,8 @@ export const PATHS = {
     SALE_DETAILS: "/sales/:saleId",
     SALE_PAYMENT_NEW: "/sales/:saleId/payments/new",
     SALE_PRINT: "/sales/:saleId/print",
+    PAYMENTS: "/payments",
+    PAYMENT_NEW: "/payments/new",
     CASHBOXES: "/cashboxes",
     CASHBOX_NEW: "/cashboxes/new",
     CASHBOX_DETAILS: "/cashboxes/:id",

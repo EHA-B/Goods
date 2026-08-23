@@ -56,6 +56,8 @@ import NotificationSettingsPage from "../pages/settings/NotificationSettingsPage
 import HelpCenterPage from "../pages/help/HelpCenterPage";
 import HelpArticlePage from "../pages/help/HelpArticlePage";
 import ReportsPage from "../pages/reports/ReportsPage";
+import PaymentsPage from "../pages/payments/PaymentsPage";
+import PaymentFormPage from "../pages/payments/PaymentFormPage";
 import { PATHS } from "./path";
 
 function AppRouter() {
@@ -106,6 +108,8 @@ function AppRouter() {
                     <Route path={PATHS.PURCHASE_CONSIGNMENT} element={<ConsignmentOverviewPage />} />
                     <Route path={PATHS.PURCHASE_CLOSE_CONSIGNMENT} element={<CloseConsignmentPage />} />
                     <Route path={PATHS.PURCHASE_CONSIGNMENT_SETTLEMENT} element={<ConsignmentSettlementDetailsPage />} />
+                    <Route path={PATHS.PAYMENTS} element={<PaymentsPage />} />
+                    <Route path={PATHS.PAYMENT_NEW} element={<PaymentFormPage />} />
                     <Route path={PATHS.CASHBOXES} element={<CashboxesPage />} />
                     <Route path={PATHS.CASHBOX_NEW} element={<CashboxFormPage />} />
                     <Route path={PATHS.CASHBOX_DETAILS} element={<CashboxDetailsPage />} />

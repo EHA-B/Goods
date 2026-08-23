@@ -318,6 +318,160 @@ class PaymentController {
         }
     }
 
+    // ─── recordGeneralReceipt ──────────────────────────────────────────────
+    
+    async recordGeneralReceipt(input) {
+        const { party_type, party_id, cashbox_id, amount, payment_date, notes } = input ?? {};
+
+        if (!party_type) throw { code: 'VALIDATION_ERROR', message: 'party_type مطلوب' };
+        if (!party_id) throw { code: 'VALIDATION_ERROR', message: 'party_id مطلوب' };
+        if (!cashbox_id) throw { code: 'VALIDATION_ERROR', message: 'cashbox_id مطلوب' };
+        const validatedAmount = validatePositiveAmount(amount, 'amount');
+        const validatedDate = validateDate(payment_date, 'payment_date');
+
+        const db = await dbmanager.init();
+
+        try {
+            await dbRun(db, 'BEGIN TRANSACTION');
+
+            const cashbox = await this._loadActiveCashbox(db, cashbox_id);
+            
+            const paymentExchangeRate = input.exchange_rate ? normalizeExchangeRate(cashbox.currency, input.exchange_rate) : 1;
+            const amountBase = toBaseAmount(validatedAmount, paymentExchangeRate);
+
+            // 1. Create payment record
+            const { lastID: paymentId } = await dbRun(db,
+                `INSERT INTO payments
+                   (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
+                    status, notes, created_at, updated_at)
+                 VALUES (?, ?, 'general_receipt', NULL, ?, ?, ?, ?, ?, ?, 'active', ?, datetime('now'), datetime('now'))`,
+                [party_type, party_id, cashbox_id, validatedAmount, cashbox.currency,
+                 paymentExchangeRate, amountBase, validatedDate, notes ?? null]
+            );
+
+            // 2. Increase cashbox balance (receipt = IN)
+            const cbResult = await this._updateCashboxBalance(
+                db, cashbox_id, validatedAmount, 'income', paymentId,
+                validatedDate, `سند قبض عام - ${party_type === 'customer' ? 'عميل' : 'مورد'} #${party_id}`
+            );
+
+            // 3. Update payment record with cashbox_transaction_id
+            await dbRun(db,
+                `UPDATE payments SET cashbox_transaction_id = ? WHERE id = ?`,
+                [cbResult.lastID, paymentId]
+            );
+
+            // 4. Update party balance
+            // Customer: reduces their receivable balance (-amount)
+            // Supplier: increases their payable balance (+amount) (e.g. they refunded us)
+            const partyDelta = party_type === 'customer' ? -amountBase : amountBase;
+            const partyBalance = await this._updatePartyBalance(db, party_type, party_id, partyDelta);
+
+            await dbRun(db,
+                `UPDATE payments SET balance_before = ?, balance_after = ? WHERE id = ?`,
+                [partyBalance.balanceBefore, partyBalance.balanceAfter, paymentId]
+            );
+
+            // 5. Activity log
+            await logActivity(db, 'general_receipt_recorded', 'payments', paymentId, {
+                party_type, party_id, amount: validatedAmount, cashbox_id
+            });
+
+            await dbRun(db, 'COMMIT');
+
+            const payment = await dbGet(db, 'SELECT * FROM payments WHERE id = ?', [paymentId]);
+            const updatedCashbox = await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [cashbox_id]);
+            const partyTable = party_type === 'customer' ? 'customers' : 'suppliers';
+            const party = await dbGet(db, `SELECT * FROM ${partyTable} WHERE id = ?`, [party_id]);
+
+            return { payment, party, cashbox: updatedCashbox };
+
+        } catch (err) {
+            await new Promise((res) => db.run('ROLLBACK', () => res()));
+            throw err;
+        }
+    }
+
+    // ─── recordGeneralPayment ──────────────────────────────────────────────
+
+    async recordGeneralPayment(input) {
+        const { party_type, party_id, cashbox_id, amount, payment_date, notes } = input ?? {};
+
+        if (!party_type) throw { code: 'VALIDATION_ERROR', message: 'party_type مطلوب' };
+        if (!party_id) throw { code: 'VALIDATION_ERROR', message: 'party_id مطلوب' };
+        if (!cashbox_id) throw { code: 'VALIDATION_ERROR', message: 'cashbox_id مطلوب' };
+        const validatedAmount = validatePositiveAmount(amount, 'amount');
+        const validatedDate = validateDate(payment_date, 'payment_date');
+
+        const db = await dbmanager.init();
+
+        try {
+            await dbRun(db, 'BEGIN TRANSACTION');
+
+            const cashbox = await this._loadActiveCashbox(db, cashbox_id);
+            
+            // Check cashbox balance sufficient
+            const cashboxBalance = normalizeAmount(cashbox.balance);
+            if (cashboxBalance < validatedAmount - 0.001) {
+                throw { code: 'INSUFFICIENT_BALANCE', message: `رصيد الصندوق (${cashboxBalance}) أقل من المبلغ المطلوب (${validatedAmount})` };
+            }
+
+            const paymentExchangeRate = input.exchange_rate ? normalizeExchangeRate(cashbox.currency, input.exchange_rate) : 1;
+            const amountBase = toBaseAmount(validatedAmount, paymentExchangeRate);
+
+            // 1. Create payment record
+            const { lastID: paymentId } = await dbRun(db,
+                `INSERT INTO payments
+                   (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
+                    status, notes, created_at, updated_at)
+                 VALUES (?, ?, 'general_payment', NULL, ?, ?, ?, ?, ?, ?, 'active', ?, datetime('now'), datetime('now'))`,
+                [party_type, party_id, cashbox_id, validatedAmount, cashbox.currency,
+                 paymentExchangeRate, amountBase, validatedDate, notes ?? null]
+            );
+
+            // 2. Decrease cashbox balance (payment = OUT)
+            const cbResult = await this._updateCashboxBalance(
+                db, cashbox_id, -validatedAmount, 'expense', paymentId,
+                validatedDate, `سند دفع عام - ${party_type === 'customer' ? 'عميل' : 'مورد'} #${party_id}`
+            );
+
+            // 3. Update payment record with cashbox_transaction_id
+            await dbRun(db,
+                `UPDATE payments SET cashbox_transaction_id = ? WHERE id = ?`,
+                [cbResult.lastID, paymentId]
+            );
+
+            // 4. Update party balance
+            // Supplier: decreases their payable balance (-amount)
+            // Customer: increases their receivable balance (+amount) (e.g. we refunded them)
+            const partyDelta = party_type === 'supplier' ? -amountBase : amountBase;
+            const partyBalance = await this._updatePartyBalance(db, party_type, party_id, partyDelta);
+
+            await dbRun(db,
+                `UPDATE payments SET balance_before = ?, balance_after = ? WHERE id = ?`,
+                [partyBalance.balanceBefore, partyBalance.balanceAfter, paymentId]
+            );
+
+            // 5. Activity log
+            await logActivity(db, 'general_payment_recorded', 'payments', paymentId, {
+                party_type, party_id, amount: validatedAmount, cashbox_id
+            });
+
+            await dbRun(db, 'COMMIT');
+
+            const payment = await dbGet(db, 'SELECT * FROM payments WHERE id = ?', [paymentId]);
+            const updatedCashbox = await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [cashbox_id]);
+            const partyTable = party_type === 'customer' ? 'customers' : 'suppliers';
+            const party = await dbGet(db, `SELECT * FROM ${partyTable} WHERE id = ?`, [party_id]);
+
+            return { payment, party, cashbox: updatedCashbox };
+
+        } catch (err) {
+            await new Promise((res) => db.run('ROLLBACK', () => res()));
+            throw err;
+        }
+    }
+
     // ─── reverseSalePayment ───────────────────────────────────────────────
 
     async reverseSalePayment(paymentId, reason) {
@@ -474,9 +628,10 @@ class PaymentController {
         if (!invoiceId) throw { code: 'VALIDATION_ERROR', message: 'invoiceId مطلوب' };
         const db = await dbmanager.init();
         return dbAll(db,
-            `SELECT p.*, c.name as cashbox_name
+            `SELECT p.*, c.name as cashbox_name, cu.name as customer_name
              FROM payments p
              LEFT JOIN cashboxes c ON p.cashbox_id = c.id
+             LEFT JOIN customers cu ON p.party_type = 'customer' AND p.party_id = cu.id
              WHERE p.invoice_id = ? AND p.payment_type = 'sale'
              ORDER BY p.payment_date DESC, p.id DESC`,
             [invoiceId]
@@ -487,9 +642,10 @@ class PaymentController {
         if (!invoiceId) throw { code: 'VALIDATION_ERROR', message: 'invoiceId مطلوب' };
         const db = await dbmanager.init();
         return dbAll(db,
-            `SELECT p.*, c.name as cashbox_name
+            `SELECT p.*, c.name as cashbox_name, su.name as supplier_name
              FROM payments p
              LEFT JOIN cashboxes c ON p.cashbox_id = c.id
+             LEFT JOIN suppliers su ON p.party_type = 'supplier' AND p.party_id = su.id
              WHERE p.invoice_id = ? AND p.payment_type = 'purchase'
              ORDER BY p.payment_date DESC, p.id DESC`,
             [invoiceId]
@@ -500,16 +656,44 @@ class PaymentController {
         if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID مطلوب' };
         const db = await dbmanager.init();
         const row = await dbGet(db,
-            `SELECT p.*, c.name as cashbox_name FROM payments p LEFT JOIN cashboxes c ON p.cashbox_id = c.id WHERE p.id = ?`,
+            `SELECT p.*, c.name as cashbox_name, cu.name as customer_name, su.name as supplier_name
+             FROM payments p 
+             LEFT JOIN cashboxes c ON p.cashbox_id = c.id 
+             LEFT JOIN customers cu ON p.party_type = 'customer' AND p.party_id = cu.id
+             LEFT JOIN suppliers su ON p.party_type = 'supplier' AND p.party_id = su.id
+             WHERE p.id = ?`,
             [id]
         );
         if (!row) throw { code: 'NOT_FOUND', message: 'الدفعة غير موجودة' };
         return row;
     }
 
+    async getPartyPayments(partyType, partyId) {
+        if (!partyType || !partyId) throw { code: 'VALIDATION_ERROR', message: 'partyType و partyId مطلوبان' };
+        const db = await dbmanager.init();
+        return dbAll(db,
+            `SELECT p.*, c.name as cashbox_name, cu.name as customer_name, su.name as supplier_name
+             FROM payments p
+             LEFT JOIN cashboxes c ON p.cashbox_id = c.id
+             LEFT JOIN customers cu ON p.party_type = 'customer' AND p.party_id = cu.id
+             LEFT JOIN suppliers su ON p.party_type = 'supplier' AND p.party_id = su.id
+             WHERE p.party_type = ? AND p.party_id = ?
+             ORDER BY p.payment_date DESC, p.id DESC`,
+            [partyType, partyId]
+        );
+    }
+
     async getAllPayments() {
         const db = await dbmanager.init();
-        return dbAll(db, 'SELECT * FROM payments ORDER BY created_at DESC');
+        return dbAll(db, `
+            SELECT p.*, 
+                   cu.name as customer_name,
+                   su.name as supplier_name
+            FROM payments p 
+            LEFT JOIN customers cu ON p.party_type = 'customer' AND p.party_id = cu.id
+            LEFT JOIN suppliers su ON p.party_type = 'supplier' AND p.party_id = su.id
+            ORDER BY p.created_at DESC
+        `);
     }
 }
 

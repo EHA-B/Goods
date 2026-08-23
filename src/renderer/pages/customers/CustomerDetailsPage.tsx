@@ -428,6 +428,22 @@ export default function CustomerDetailsPage() {
             >
               تعديل
             </Button>
+
+            <Button
+              variant="secondary"
+              startIcon={
+                <CreditCard
+                  size={17}
+                />
+              }
+              onClick={() =>
+                navigate(
+                  `/payments/new?partyType=customer&partyId=${customer.id}`,
+                )
+              }
+            >
+              سند دفع / قبض
+            </Button>
           </div>
         }
       />

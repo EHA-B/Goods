@@ -8,6 +8,12 @@
   "directories": {
     "output": "release/${version}"
   },
+  "publish": {
+    "provider": "github",
+    "owner": "EHA-B",
+    "repo": "Goods",
+    "private": false
+  },
   "files": [
     "dist",
     "dist-electron",

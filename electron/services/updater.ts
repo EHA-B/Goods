@@ -1,31 +1,29 @@
 /**
  * updater.ts
  * Auto-update service for StockLite.
+ * Hosted on: https://github.com/EHA-B/Goods
  *
- * Current mode: Manual file-based update (user brings a .exe installer on USB/physically)
- * Future mode:  Switch to GitHub Releases by uncommenting the publish config in electron-builder.json5
- *               and replacing the `manualUpdate` call with `autoUpdater.checkForUpdatesAndNotify()`.
+ * Flow:
+ *  1. On startup (after 5 s delay) → silently check GitHub Releases for a newer version
+ *  2. If found → ask user (Arabic dialog) whether to download
+ *  3. Download in background, show progress
+ *  4. When done → ask user to restart and install
  */
 
-import { dialog, ipcMain, BrowserWindow, shell } from "electron";
+import { dialog, ipcMain, BrowserWindow } from "electron";
 import { autoUpdater, UpdateInfo } from "electron-updater";
-import path from "node:path";
-import fs from "node:fs";
 
-// ─── Configure logger (writes to console in dev, suppressed in prod unless needed) ──────────────
-autoUpdater.logger = null; // Set to `require('electron-log')` if you add electron-log later
-autoUpdater.autoDownload = false;    // Always ask before downloading
-autoUpdater.autoInstallOnAppQuit = false;
+// ─── Configure ─────────────────────────────────────────────────────────────
+autoUpdater.autoDownload = false;          // Ask before downloading
+autoUpdater.autoInstallOnAppQuit = false;  // Ask before installing
+autoUpdater.logger = null;                 // Add electron-log here if needed
 
 let mainWin: BrowserWindow | null = null;
 
-// ─── IPC Channels ──────────────────────────────────────────────────────────────────────────────
+// ─── IPC Channels ──────────────────────────────────────────────────────────
 const IPC = {
-  CHECK:    "updater:check",       // Renderer → Main: check for update
-  DOWNLOAD: "updater:download",    // Renderer → Main: user approved download
-  INSTALL:  "updater:install",     // Renderer → Main: user wants to install now
-  STATUS:   "updater:status",      // Main → Renderer: status update
-  PROGRESS: "updater:progress",    // Main → Renderer: download progress
+  CHECK:    "updater:check",    // Renderer → Main: manual check
+  STATUS:   "updater:status",   // Main → Renderer: status push
 } as const;
 
 type UpdateStatus =
@@ -41,52 +39,51 @@ function sendStatus(status: UpdateStatus) {
   mainWin?.webContents.send(IPC.STATUS, status);
 }
 
-// ─── Arabic dialog texts ────────────────────────────────────────────────────────────────────────
-const ARABIC = {
-  updateAvailableTitle:   "تحديث متاح",
-  updateAvailableMsg:     (ver: string) =>
+// ─── Arabic dialog texts ────────────────────────────────────────────────────
+const AR = {
+  availableTitle:   "تحديث متاح",
+  availableMsg:     (ver: string) =>
     `يتوفر الإصدار الجديد ${ver}.\nهل تريد تنزيله الآن؟`,
-  downloadBtn:            "تنزيل",
-  laterBtn:               "لاحقاً",
-  updateReadyTitle:       "التحديث جاهز",
-  updateReadyMsg:         "تم تنزيل التحديث. هل تريد إعادة التشغيل الآن لتثبيته؟",
-  restartBtn:             "إعادة التشغيل وتثبيت التحديث",
-  postponeBtn:            "لاحقاً",
-  noUpdateTitle:          "لا يوجد تحديث",
-  noUpdateMsg:            "أنت تستخدم أحدث إصدار.",
-  errorTitle:             "خطأ في التحديث",
-  manualTitle:            "تثبيت التحديث يدوياً",
-  manualMsg:              "اختر ملف الإعداد (.exe) الذي جلبته لتثبيت التحديث.",
-  manualFilter:           "Setup Files",
+  downloadBtn:      "تنزيل التحديث",
+  laterBtn:         "لاحقاً",
+  readyTitle:       "التحديث جاهز",
+  readyMsg:         "تم تنزيل التحديث بنجاح.\nهل تريد إعادة التشغيل الآن لتثبيته؟",
+  restartBtn:       "إعادة التشغيل والتثبيت",
+  postponeBtn:      "لاحقاً",
+  noUpdateTitle:    "لا يوجد تحديث",
+  noUpdateMsg:      "أنت تستخدم أحدث إصدار من البرنامج.",
+  errorTitle:       "خطأ في التحديث",
 };
 
-// ─── Native dialog helpers ──────────────────────────────────────────────────────────────────────
+// ─── Dialog helpers ─────────────────────────────────────────────────────────
 async function askDownload(ver: string): Promise<boolean> {
-  const result = await dialog.showMessageBox(mainWin!, {
+  if (!mainWin) return false;
+  const { response } = await dialog.showMessageBox(mainWin, {
     type: "question",
-    title: ARABIC.updateAvailableTitle,
-    message: ARABIC.updateAvailableMsg(ver),
-    buttons: [ARABIC.downloadBtn, ARABIC.laterBtn],
+    title: AR.availableTitle,
+    message: AR.availableMsg(ver),
+    buttons: [AR.downloadBtn, AR.laterBtn],
     defaultId: 0,
     cancelId: 1,
   });
-  return result.response === 0;
+  return response === 0;
 }
 
 async function askInstall(): Promise<boolean> {
-  const result = await dialog.showMessageBox(mainWin!, {
+  if (!mainWin) return false;
+  const { response } = await dialog.showMessageBox(mainWin, {
     type: "question",
-    title: ARABIC.updateReadyTitle,
-    message: ARABIC.updateReadyMsg,
-    buttons: [ARABIC.restartBtn, ARABIC.postponeBtn],
+    title: AR.readyTitle,
+    message: AR.readyMsg,
+    buttons: [AR.restartBtn, AR.postponeBtn],
     defaultId: 0,
     cancelId: 1,
   });
-  return result.response === 0;
+  return response === 0;
 }
 
-// ─── electron-updater event wiring ─────────────────────────────────────────────────────────────
-function wireUpdaterEvents() {
+// ─── electron-updater events ────────────────────────────────────────────────
+function wireEvents() {
   autoUpdater.on("checking-for-update", () => {
     sendStatus({ type: "checking" });
   });
@@ -101,18 +98,20 @@ function wireUpdaterEvents() {
 
   autoUpdater.on("update-not-available", () => {
     sendStatus({ type: "not-available" });
-    dialog.showMessageBox(mainWin!, {
-      type: "info",
-      title: ARABIC.noUpdateTitle,
-      message: ARABIC.noUpdateMsg,
-    });
+    if (mainWin) {
+      dialog.showMessageBox(mainWin, {
+        type: "info",
+        title: AR.noUpdateTitle,
+        message: AR.noUpdateMsg,
+      });
+    }
   });
 
   autoUpdater.on("download-progress", (progress) => {
     sendStatus({ type: "downloading", percent: Math.round(progress.percent) });
   });
 
-  autoUpdater.on("update-downloaded", async (info: UpdateInfo) => {
+  autoUpdater.on("update-downloaded", async () => {
     sendStatus({ type: "ready" });
     const install = await askInstall();
     if (install) {
@@ -120,64 +119,35 @@ function wireUpdaterEvents() {
     }
   });
 
-  autoUpdater.on("error", (err) => {
+  autoUpdater.on("error", (err: Error) => {
     sendStatus({ type: "error", message: err.message });
-    dialog.showMessageBox(mainWin!, {
-      type: "error",
-      title: ARABIC.errorTitle,
-      message: err.message,
-    });
+    if (mainWin) {
+      dialog.showMessageBox(mainWin, {
+        type: "error",
+        title: AR.errorTitle,
+        message: err.message,
+      });
+    }
   });
 }
 
-// ─── Manual update: user brings a .exe file physically ─────────────────────────────────────────
-async function manualUpdate() {
-  const result = await dialog.showOpenDialog(mainWin!, {
-    title: ARABIC.manualTitle,
-    properties: ["openFile"],
-    filters: [{ name: ARABIC.manualFilter, extensions: ["exe", "msi"] }],
+// ─── IPC handler (renderer "Check for Updates" button) ─────────────────────
+function registerIpc() {
+  ipcMain.handle(IPC.CHECK, () => {
+    autoUpdater.checkForUpdates();
   });
-
-  if (result.canceled || result.filePaths.length === 0) return;
-
-  const installerPath = result.filePaths[0];
-
-  const confirm = await dialog.showMessageBox(mainWin!, {
-    type: "question",
-    title: ARABIC.manualTitle,
-    message: ARABIC.updateReadyMsg,
-    buttons: [ARABIC.restartBtn, ARABIC.laterBtn],
-    defaultId: 0,
-    cancelId: 1,
-  });
-
-  if (confirm.response === 0) {
-    // Launch installer and exit current app
-    shell.openPath(installerPath);
-    setTimeout(() => {
-      mainWin?.destroy();
-      const { app } = require("electron");
-      app.quit();
-    }, 1000);
-  }
 }
 
-// ─── IPC handlers (called from renderer's "Check for Updates" button) ──────────────────────────
-function registerIpcHandlers() {
-  // The renderer can call this to trigger a manual-file update
-  ipcMain.handle(IPC.CHECK, async () => {
-    await manualUpdate();
-  });
-
-  // Future: when you switch to GitHub releases, use this instead:
-  // ipcMain.handle(IPC.CHECK, async () => {
-  //   autoUpdater.checkForUpdates();
-  // });
-}
-
-// ─── Public init ───────────────────────────────────────────────────────────────────────────────
+// ─── Public init ────────────────────────────────────────────────────────────
 export function initUpdater(win: BrowserWindow) {
   mainWin = win;
-  wireUpdaterEvents();
-  registerIpcHandlers();
+  wireEvents();
+  registerIpc();
+
+  // Auto-check 5 seconds after startup (silent — no dialog if up-to-date)
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(() => {
+      // Silently ignore startup check errors (e.g. no internet)
+    });
+  }, 5000);
 }

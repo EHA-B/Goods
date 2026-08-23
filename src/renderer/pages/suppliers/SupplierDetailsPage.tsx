@@ -388,36 +388,52 @@ export default function SupplierDetailsPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-bold text-[var(--text-muted)]">
-                الرصيد الحالي
-              </p>
+  <div className="flex items-start justify-between gap-4">
+    <div>
+      <p className="text-xs font-bold text-[var(--text-muted)]">
+        الرصيد الحالي
+      </p>
 
-              <p
-                dir="ltr"
-                className="mt-2 text-right text-2xl font-bold text-[var(--text-primary)]"
-              >
-                {money(
-                  supplier.balance,
-                  "SYP",
-                )}
-              </p>
+      <p
+        dir="ltr"
+        className={`mt-2 text-right text-2xl font-bold ${
+          supplier.balance > 0
+            ? "text-red-600"
+            : "text-green-600"
+        }`}
+      >
+        {money(
+          supplier.balance,
+          "SYP",
+        )}
+      </p>
 
-              <p className="mt-1 text-xs text-[var(--text-muted)]">
-                {supplier.balance > 0
-                  ? "مبلغ مستحق للمورد"
-                  : supplier.balance < 0
-                    ? "دفعة مقدمة للمورد"
-                    : "الحساب متوازن"}
-              </p>
-            </div>
+      <p
+        className={`mt-1 text-xs font-medium ${
+          supplier.balance > 0
+            ? "text-red-600"
+            : "text-green-600"
+        }`}
+      >
+        {supplier.balance > 0
+          ? "مبلغ مستحق للمورد"
+          : supplier.balance < 0
+            ? "دفعة مقدمة للمورد"
+            : "الحساب متوازن"}
+      </p>
+    </div>
 
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--primary-subtle)] text-[var(--primary)]">
-              <WalletCards size={21} />
-            </div>
-          </div>
-        </Card>
+    <div
+      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
+        supplier.balance > 0
+          ? "bg-red-50 text-red-600"
+          : "bg-green-50 text-green-600"
+      }`}
+    >
+      <WalletCards size={21} />
+    </div>
+  </div>
+</Card>
 
         <Card>
           <div className="flex items-start justify-between gap-4">

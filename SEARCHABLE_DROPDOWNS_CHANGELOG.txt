@@ -1,0 +1,23 @@
+Searchable dropdown implementation
+
+New component:
+src/renderer/components/ui/SearchableSelect.tsx
+
+Modified:
+src/renderer/components/ui/index.ts
+src/renderer/pages/purchases/PurchaseFormPage.tsx
+src/renderer/pages/sales/SaleFormPage.tsx
+
+Applied search to:
+- Supplier selector in purchase invoice.
+- Product selector in purchase invoice.
+- Product selector in sale invoice.
+
+Search behavior:
+- Search box is inside the opened dropdown.
+- Supplier search by name.
+- Purchase product search by name or product code.
+- Sale product search by name.
+- Selection style remains consistent with the existing Select component.
+- Click outside / Escape closes the dropdown.
+- Enter selects when one result remains.

@@ -3,6 +3,18 @@ import {
   ipcRenderer,
 } from "electron";
 
+// ─── Updater bridge ──────────────────────────────────────────────────────────
+const updaterApi = {
+  /** Trigger update check (opens file picker for manual update) */
+  checkForUpdates: () => ipcRenderer.invoke("updater:check"),
+  /** Listen for status events from the main process */
+  onStatus: (cb: (status: unknown) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, status: unknown) => cb(status);
+    ipcRenderer.on("updater:status", handler);
+    return () => ipcRenderer.removeListener("updater:status", handler);
+  },
+};
+
 type ApiErrorPayload = {
   code?: string;
   message?: string;
@@ -423,3 +435,4 @@ const stockliteApi = {
 };
 
 contextBridge.exposeInMainWorld("stockliteApi", stockliteApi);
+contextBridge.exposeInMainWorld("updaterApi", updaterApi);

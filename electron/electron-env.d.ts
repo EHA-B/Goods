@@ -631,3 +631,22 @@ interface Window {
     };
   };
 }
+
+// ─── Auto-Updater API (exposed via preload) ─────────────────────────────────
+type UpdaterStatus =
+  | { type: "idle" }
+  | { type: "checking" }
+  | { type: "available"; info: { version: string } }
+  | { type: "not-available" }
+  | { type: "downloading"; percent: number }
+  | { type: "ready" }
+  | { type: "error"; message: string };
+
+interface Window {
+  updaterApi: {
+    /** Opens file picker to install an update manually */
+    checkForUpdates: () => Promise<void>;
+    /** Subscribe to status events. Returns an unsubscribe function. */
+    onStatus: (cb: (status: UpdaterStatus) => void) => () => void;
+  };
+}

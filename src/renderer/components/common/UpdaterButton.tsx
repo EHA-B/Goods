@@ -1,112 +1,66 @@
 /**
  * UpdaterButton.tsx
- * A button the user can click to check for updates / install a new version manually.
- * Place this anywhere in the app (e.g. Settings page, sidebar footer, etc.)
- *
- * Usage:
- *   import { UpdaterButton } from "@/components/common/UpdaterButton";
- *   <UpdaterButton />
+ * Reusable button that triggers the update check / install flow.
+ * Only renders visually prominent when an update is available.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { Download, RefreshCw, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { useUpdater } from "../../hooks/useUpdater";
 
-type UpdateStatus =
-  | { type: "idle" }
-  | { type: "checking" }
-  | { type: "available"; info: { version: string } }
-  | { type: "not-available" }
-  | { type: "downloading"; percent: number }
-  | { type: "ready" }
-  | { type: "error"; message: string };
-
-const LABEL: Record<UpdateStatus["type"], string> = {
-  idle:          "تحديث البرنامج",
-  checking:      "جارٍ الفحص...",
-  available:     "تحديث متاح",
-  "not-available": "أحدث إصدار",
-  downloading:   "جارٍ التنزيل...",
-  ready:         "جاهز للتثبيت",
-  error:         "خطأ في التحديث",
+const LABEL: Record<string, string> = {
+  idle:           "التحقق من التحديثات",
+  checking:       "جارٍ الفحص...",
+  available:      "تحديث متاح — تنزيل",
+  "not-available":"أحدث إصدار",
+  downloading:    "جارٍ التنزيل",
+  ready:          "إعادة التشغيل والتثبيت",
+  error:          "خطأ — أعد المحاولة",
 };
 
 export function UpdaterButton() {
-  const [status, setStatus] = useState<UpdateStatus>({ type: "idle" });
-  const [busy, setBusy] = useState(false);
+  const { status, busy, isDownloading, checkForUpdates } = useUpdater();
 
-  // Listen for status events pushed from the main process
-  useEffect(() => {
-    if (!window.updaterApi) return;
-    const unsub = window.updaterApi.onStatus((s: unknown) =>
-      setStatus(s as UpdateStatus)
-    );
-    return unsub;
-  }, []);
-
-  const handleClick = useCallback(async () => {
-    if (!window.updaterApi || busy) return;
-    setBusy(true);
-    try {
-      await window.updaterApi.checkForUpdates();
-    } finally {
-      setBusy(false);
-    }
-  }, [busy]);
-
-  const isDownloading = status.type === "downloading";
   const label = isDownloading
     ? `${LABEL.downloading} ${(status as { type: "downloading"; percent: number }).percent}%`
-    : LABEL[status.type];
+    : LABEL[status.type] ?? LABEL.idle;
 
-  const colorClass =
-    status.type === "available" || status.type === "ready"
-      ? "bg-green-600 hover:bg-green-700"
-      : status.type === "error"
-      ? "bg-red-600 hover:bg-red-700"
-      : status.type === "not-available"
-      ? "bg-gray-500 hover:bg-gray-600"
-      : "bg-blue-600 hover:bg-blue-700";
+  const Icon =
+    status.type === "available"      ? Download       :
+    status.type === "ready"          ? CheckCircle2   :
+    status.type === "error"          ? AlertCircle    :
+    busy || status.type === "checking" || isDownloading ? Loader2 :
+    RefreshCw;
+
+  const variant =
+    status.type === "available"  ? "update" :
+    status.type === "ready"      ? "success" :
+    status.type === "error"      ? "danger"  :
+    "default";
+
+  const styles: Record<string, string> = {
+    update:  "bg-[var(--primary)] hover:bg-[var(--primary-dark,var(--primary))] text-white shadow-sm",
+    success: "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm",
+    danger:  "bg-[var(--danger)] hover:opacity-90 text-white shadow-sm",
+    default: "bg-[var(--surface)] hover:bg-[var(--surface-subtle)] text-[var(--text-secondary)] border border-[var(--border)]",
+  };
 
   return (
     <button
       id="updater-check-button"
-      onClick={handleClick}
-      disabled={busy || isDownloading}
+      onClick={checkForUpdates}
+      disabled={busy || isDownloading || status.type === "not-available"}
       className={`
-        inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
-        text-white transition-colors duration-150 disabled:cursor-not-allowed
-        disabled:opacity-60 ${colorClass}
+        inline-flex items-center gap-2.5 rounded-[var(--radius-md)] px-4 py-2.5
+        text-sm font-semibold transition-all duration-150
+        disabled:cursor-not-allowed disabled:opacity-60
+        ${styles[variant]}
       `}
       title={status.type === "error" ? (status as { type: "error"; message: string }).message : undefined}
     >
-      {/* Spinner */}
-      {(busy || status.type === "checking" || isDownloading) && (
-        <svg
-          className="h-4 w-4 animate-spin"
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <circle
-            className="opacity-25"
-            cx="12" cy="12" r="10"
-            stroke="currentColor" strokeWidth="4"
-          />
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-          />
-        </svg>
-      )}
-
-      {/* Download-ready icon */}
-      {status.type === "ready" && (
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M5 13l4 4L19 7" />
-        </svg>
-      )}
-
+      <Icon
+        size={16}
+        className={(busy || status.type === "checking" || isDownloading) ? "animate-spin" : ""}
+      />
       {label}
     </button>
   );

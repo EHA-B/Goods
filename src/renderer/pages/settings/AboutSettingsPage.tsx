@@ -5,10 +5,12 @@ import {
   Database,
   FolderOpen,
   MonitorCog,
+  RefreshCw,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import StockLiteLogo from "../../components/brand/StockLiteLogo";
+import { UpdaterButton } from "../../components/common/UpdaterButton";
 import {
   BackButton,
   Button,
@@ -16,6 +18,7 @@ import {
   PageHeader,
   Skeleton,
 } from "../../components/ui";
+import { useUpdater } from "../../hooks/useUpdater";
 import { PATHS } from "../../routes/path";
 
 type AppInfo = {
@@ -42,6 +45,7 @@ export default function AboutSettingsPage() {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const { status: updateStatus, hasUpdate } = useUpdater();
 
   async function loadAppInfo() {
     setIsLoading(true);
@@ -213,6 +217,38 @@ export default function AboutSettingsPage() {
                 </p>
               )}
             </div>
+          </div>
+        </Card>
+
+        {/* ── Update card ─────────────────────────────────────── */}
+        <Card>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--primary-subtle)] text-[var(--primary)]">
+                <RefreshCw size={19} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold text-[var(--text-primary)]">التحديثات</p>
+                  {hasUpdate && (
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--primary)] opacity-75" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[var(--primary)]" />
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                  {updateStatus.type === "available"
+                    ? `يتوفر الإصدار ${(updateStatus as { type: "available"; info: { version: string } }).info.version} — اضغط للتنزيل`
+                    : updateStatus.type === "ready"
+                    ? "التحديث جاهز — اضغط لإعادة التشغيل والتثبيت"
+                    : updateStatus.type === "downloading"
+                    ? `جارٍ التنزيل ${(updateStatus as { type: "downloading"; percent: number }).percent}%`
+                    : "تحقق من توفر إصدار جديد من GitHub"}
+                </p>
+              </div>
+            </div>
+            <UpdaterButton />
           </div>
         </Card>
 

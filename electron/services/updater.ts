@@ -4,26 +4,36 @@
  * Hosted on: https://github.com/EHA-B/Goods
  *
  * Flow:
- *  1. On startup (after 5 s delay) → silently check GitHub Releases for a newer version
- *  2. If found → ask user (Arabic dialog) whether to download
- *  3. Download in background, show progress
- *  4. When done → ask user to restart and install
+ *  1. On startup (after 5 s delay) → silently check GitHub Releases.
+ *     ALL errors and "no update" on startup are completely silent — no dialogs.
+ *  2. If update found → ask user (Arabic dialog) whether to download.
+ *  3. Download in background, show progress.
+ *  4. When done → ask user to restart and install.
+ *
+ *  Manual check (user clicks button in Settings):
+ *  → Same but shows dialogs for "no update" and errors.
  */
 
 import { dialog, ipcMain, BrowserWindow } from "electron";
 import { autoUpdater, UpdateInfo } from "electron-updater";
 
 // ─── Configure ─────────────────────────────────────────────────────────────
-autoUpdater.autoDownload = false;          // Ask before downloading
-autoUpdater.autoInstallOnAppQuit = false;  // Ask before installing
-autoUpdater.logger = null;                 // Add electron-log here if needed
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
+autoUpdater.logger = null;
 
 let mainWin: BrowserWindow | null = null;
 
+/**
+ * true  → startup auto-check  → suppress ALL dialogs (errors, no-update)
+ * false → user clicked button → show appropriate dialogs
+ */
+let isSilentCheck = true;
+
 // ─── IPC Channels ──────────────────────────────────────────────────────────
 const IPC = {
-  CHECK:    "updater:check",    // Renderer → Main: manual check
-  STATUS:   "updater:status",   // Main → Renderer: status push
+  CHECK:  "updater:check",
+  STATUS: "updater:status",
 } as const;
 
 type UpdateStatus =
@@ -41,19 +51,36 @@ function sendStatus(status: UpdateStatus) {
 
 // ─── Arabic dialog texts ────────────────────────────────────────────────────
 const AR = {
-  availableTitle:   "تحديث متاح",
-  availableMsg:     (ver: string) =>
+  availableTitle: "تحديث متاح",
+  availableMsg:   (ver: string) =>
     `يتوفر الإصدار الجديد ${ver}.\nهل تريد تنزيله الآن؟`,
-  downloadBtn:      "تنزيل التحديث",
-  laterBtn:         "لاحقاً",
-  readyTitle:       "التحديث جاهز",
-  readyMsg:         "تم تنزيل التحديث بنجاح.\nهل تريد إعادة التشغيل الآن لتثبيته؟",
-  restartBtn:       "إعادة التشغيل والتثبيت",
-  postponeBtn:      "لاحقاً",
-  noUpdateTitle:    "لا يوجد تحديث",
-  noUpdateMsg:      "أنت تستخدم أحدث إصدار من البرنامج.",
-  errorTitle:       "خطأ في التحديث",
+  downloadBtn:    "تنزيل التحديث",
+  laterBtn:       "لاحقاً",
+  readyTitle:     "التحديث جاهز",
+  readyMsg:       "تم تنزيل التحديث بنجاح.\nهل تريد إعادة التشغيل الآن لتثبيته؟",
+  restartBtn:     "إعادة التشغيل والتثبيت",
+  postponeBtn:    "لاحقاً",
+  noUpdateTitle:  "لا يوجد تحديث",
+  noUpdateMsg:    "أنت تستخدم أحدث إصدار من البرنامج.",
+  errorTitle:     "خطأ في التحديث",
 };
+
+// ─── Detect "no release published yet" errors ───────────────────────────────
+// electron-updater throws these when GitHub has no release / latest.yml is missing.
+const NO_RELEASE_PATTERNS = [
+  "no published versions",
+  "cannot find latest",
+  "httperror: 404",
+  "latest.yml",
+  "could not get",
+  "enotfound",
+  "net::err",
+];
+
+function isNoReleaseError(err: Error): boolean {
+  const msg = (err.message ?? "").toLowerCase();
+  return NO_RELEASE_PATTERNS.some((p) => msg.includes(p));
+}
 
 // ─── Dialog helpers ─────────────────────────────────────────────────────────
 async function askDownload(ver: string): Promise<boolean> {
@@ -90,6 +117,7 @@ function wireEvents() {
 
   autoUpdater.on("update-available", async (info: UpdateInfo) => {
     sendStatus({ type: "available", info });
+    // Always prompt when an update is found (both silent and manual).
     const approved = await askDownload(info.version);
     if (approved) {
       autoUpdater.downloadUpdate();
@@ -98,7 +126,8 @@ function wireEvents() {
 
   autoUpdater.on("update-not-available", () => {
     sendStatus({ type: "not-available" });
-    if (mainWin) {
+    // Only show "you're up to date" dialog on manual checks.
+    if (!isSilentCheck && mainWin) {
       dialog.showMessageBox(mainWin, {
         type: "info",
         title: AR.noUpdateTitle,
@@ -120,6 +149,26 @@ function wireEvents() {
   });
 
   autoUpdater.on("error", (err: Error) => {
+    // ── Silent startup check: never show any dialog ────────────────────────
+    if (isSilentCheck) {
+      sendStatus({ type: "idle" }); // reset UI quietly
+      return;
+    }
+
+    // ── Manual check: "no release yet" → friendly "up to date" message ────
+    if (isNoReleaseError(err)) {
+      sendStatus({ type: "not-available" });
+      if (mainWin) {
+        dialog.showMessageBox(mainWin, {
+          type: "info",
+          title: AR.noUpdateTitle,
+          message: AR.noUpdateMsg,
+        });
+      }
+      return;
+    }
+
+    // ── Manual check: real error → show it ────────────────────────────────
     sendStatus({ type: "error", message: err.message });
     if (mainWin) {
       dialog.showMessageBox(mainWin, {
@@ -131,10 +180,13 @@ function wireEvents() {
   });
 }
 
-// ─── IPC handler (renderer "Check for Updates" button) ─────────────────────
+// ─── IPC handler ────────────────────────────────────────────────────────────
 function registerIpc() {
   ipcMain.handle(IPC.CHECK, () => {
-    autoUpdater.checkForUpdates();
+    isSilentCheck = false; // User triggered → show dialogs
+    autoUpdater.checkForUpdates()?.catch(() => {
+      // Error handled by the "error" event above
+    });
   });
 }
 
@@ -144,10 +196,11 @@ export function initUpdater(win: BrowserWindow) {
   wireEvents();
   registerIpc();
 
-  // Auto-check 5 seconds after startup (silent — no dialog if up-to-date)
+  // Startup silent check — ALL errors suppressed, no dialogs whatsoever.
   setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(() => {
-      // Silently ignore startup check errors (e.g. no internet)
+    isSilentCheck = true;
+    autoUpdater.checkForUpdates()?.catch(() => {
+      isSilentCheck = false; // reset after catch so next manual check works
     });
   }, 5000);
 }

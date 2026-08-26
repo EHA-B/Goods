@@ -3,6 +3,18 @@ import {
   ipcRenderer,
 } from "electron";
 
+// ─── Updater bridge ──────────────────────────────────────────────────────────
+const updaterApi = {
+  /** Trigger update check (opens file picker for manual update) */
+  checkForUpdates: () => ipcRenderer.invoke("updater:check"),
+  /** Listen for status events from the main process */
+  onStatus: (cb: (status: unknown) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, status: unknown) => cb(status);
+    ipcRenderer.on("updater:status", handler);
+    return () => ipcRenderer.removeListener("updater:status", handler);
+  },
+};
+
 type ApiErrorPayload = {
   code?: string;
   message?: string;
@@ -278,6 +290,10 @@ const stockliteApi = {
       invokeApi("api:payment:recordSalePayment", input),
     recordPurchase: (input: unknown) =>
       invokeApi("api:payment:recordPurchasePayment", input),
+    recordGeneralReceipt: (input: unknown) =>
+      invokeApi("api:payment:recordGeneralReceipt", input),
+    recordGeneralPayment: (input: unknown) =>
+      invokeApi("api:payment:recordGeneralPayment", input),
     reverseSale: (paymentId: number, reason: string) =>
       invokeApi("api:payment:reverseSalePayment", paymentId, reason),
     reversePurchase: (paymentId: number, reason: string) =>
@@ -291,6 +307,8 @@ const stockliteApi = {
       invokeApi("api:purchase:getDetails", id),
     createFull: (input: unknown) =>
       invokeApi("api:purchase:createFull", input),
+    update: (id: number, input: unknown, password: string) =>
+      invokeApi("api:purchase:update", id, input, password),
     addItems: (invoiceId: number, items: unknown) =>
       invokeApi("api:purchase:addItems", invoiceId, items),
     cancel: (id: number, reason: string) =>
@@ -333,6 +351,8 @@ const stockliteApi = {
       invokeApi("api:saleInvoice:getFullSaleInvoice", id),
     createProcess: (input: unknown) =>
       invokeApi("api:saleInvoice:createSaleProcess", input),
+    update: (id: number, input: unknown, password: string) =>
+      invokeApi("api:saleInvoice:updateSaleInvoice", id, input, password),
     cancel: (id: number, reason: string) =>
       invokeApi("api:saleInvoice:cancelSaleInvoice", id, reason),
     deleteDraft: (id: number) =>
@@ -381,9 +401,9 @@ const stockliteApi = {
   reports: {
     options: () =>
       invokeApi("api:report:options"),
-    generate: (input: { reportId: string; filters: Record<string, unknown> }) =>
+    generate: (input: unknown) =>
       invokeApi("api:report:generate", input),
-    export: (input: { reportId: string; filters: Record<string, unknown>; format: "pdf" | "excel" }) =>
+    export: (input: unknown) =>
       invokeApi("api:report:export", input),
   },
 
@@ -419,3 +439,4 @@ const stockliteApi = {
 };
 
 contextBridge.exposeInMainWorld("stockliteApi", stockliteApi);
+contextBridge.exposeInMainWorld("updaterApi", updaterApi);

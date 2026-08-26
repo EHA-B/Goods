@@ -1,7 +1,7 @@
 {
   "name": "stocklite",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "StockLite - Smart Inventory & Accounting System",
   "author": "Ehab & Eline",
   "type": "module",
@@ -19,6 +19,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "bcrypt": "^6.0.0",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.8.9",
     "knex": "^3.3.0",
     "lucide-react": "^1.27.0",
     "react": "^18.2.0",

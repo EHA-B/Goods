@@ -26,6 +26,67 @@ const {
     assertCashboxCurrency,
 } = require('./utils/currencyUtils');
 
+
+async function ensureInvoiceEditAuditColumns(db) {
+    const tableName = 'purchase_invoices';
+    const columns = await dbAll(db, `PRAGMA table_info(${tableName})`);
+    const names = new Set(columns.map((column) => String(column.name)));
+
+    const additions = [
+        ['is_edited', 'INTEGER NOT NULL DEFAULT 0'],
+        ['edit_count', 'INTEGER NOT NULL DEFAULT 0'],
+        ['last_edited_at', 'TEXT NULL'],
+        ['last_edited_by', 'INTEGER NULL'],
+    ];
+
+    for (const [columnName, definition] of additions) {
+        if (!names.has(columnName)) {
+            await dbRun(
+                db,
+                `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`
+            );
+        }
+    }
+}
+
+function normalizeInvoiceEditError(error) {
+    if (error?.code && error?.message) {
+        return error;
+    }
+
+    const message = String(error?.message ?? error ?? '');
+
+    if (/no such column/i.test(message)) {
+        return {
+            code: 'INVOICE_EDIT_SCHEMA_ERROR',
+            message: 'تعذر تحديث بنية قاعدة البيانات اللازمة لتعديل الفاتورة. أعد تشغيل التطبيق ثم حاول مرة أخرى.',
+            details: { technicalMessage: message },
+        };
+    }
+
+    if (/FOREIGN KEY constraint failed/i.test(message)) {
+        return {
+            code: 'INVOICE_EDIT_RELATION_LOCK',
+            message: 'لا يمكن تعديل الفاتورة لأن هناك سجلات لاحقة مرتبطة بها. عالج الحركات المرتبطة أولًا.',
+            details: { technicalMessage: message },
+        };
+    }
+
+    if (/UNIQUE constraint failed/i.test(message)) {
+        return {
+            code: 'DUPLICATE_INVOICE_NUMBER',
+            message: 'رقم الفاتورة مستخدم مسبقًا.',
+            details: { technicalMessage: message },
+        };
+    }
+
+    return {
+        code: 'INVOICE_EDIT_FAILED',
+        message: 'تعذر حفظ تعديل الفاتورة بسبب خطأ في قاعدة البيانات.',
+        details: { technicalMessage: message },
+    };
+}
+
 class PurchaseInvoiceController {
 
     // ─── createFullPurchaseInvoice ─────────────────────────────────────────
@@ -402,6 +463,94 @@ class PurchaseInvoiceController {
     }
 
     // ─── getPurchaseInvoiceDetails ─────────────────────────────────────────
+
+
+    async updatePurchaseInvoice(id, input, userId) {
+        if (!id) throw { code: 'VALIDATION_ERROR', message: 'رقم الفاتورة مطلوب' };
+        const { supplier_id, invoice_number, invoice_date, invoice_type = 'standard', discount_amount = 0, notes, items, currency, exchange_rate } = input ?? {};
+        if (!supplier_id) throw { code: 'SUPPLIER_NOT_FOUND', message: 'المورد مطلوب' };
+        if (!Array.isArray(items) || items.length === 0) throw { code: 'PURCHASE_ITEM_INVALID', message: 'يجب إضافة صنف واحد على الأقل' };
+
+        const db = await dbmanager.init();
+        await ensureInvoiceEditAuditColumns(db);
+        try {
+            await dbRun(db, 'BEGIN TRANSACTION');
+            const oldInvoice = await dbGet(db, 'SELECT * FROM purchase_invoices WHERE id = ?', [id]);
+            if (!oldInvoice) throw { code: 'NOT_FOUND', message: 'فاتورة الشراء غير موجودة' };
+            if (oldInvoice.status === 'cancelled') throw { code: 'PURCHASE_ALREADY_CANCELLED', message: 'لا يمكن تعديل فاتورة ملغاة' };
+
+            const settlement = await dbGet(db, 'SELECT id, status FROM consignment_settlements WHERE purchase_invoice_id = ? LIMIT 1', [id]);
+            if (settlement) throw { code: 'PURCHASE_EDIT_SETTLEMENT_LOCK', message: 'لا يمكن تعديل فاتورة أمانة بعد إنشاء تسوية لها.' };
+
+            const oldItems = await dbAll(db, 'SELECT * FROM purchase_invoice_items WHERE purchase_invoice_id = ? ORDER BY id', [id]);
+            const oldBatches = await dbAll(db, 'SELECT * FROM stock_batches WHERE purchase_invoice_id = ? ORDER BY id', [id]);
+            for (const batch of oldBatches) {
+                const usedSale = await dbGet(db, 'SELECT id FROM sale_invoice_items WHERE stock_batch_id = ? LIMIT 1', [batch.id]);
+                const adjusted = await dbGet(db, 'SELECT id FROM stock_adjustments WHERE stock_batch_id = ? LIMIT 1', [batch.id]);
+                if (usedSale || adjusted || Math.abs(normalizeAmount(batch.remaining_quantity) - normalizeAmount(batch.quantity)) > 0.001) {
+                    throw { code: 'PURCHASE_EDIT_STOCK_LOCK', message: `لا يمكن تعديل الفاتورة لأن الدفعة ${batch.batch_code || batch.id} عليها حركة لاحقة. عالج الحركات المرتبطة أولًا.` };
+                }
+            }
+
+            const supplier = await dbGet(db, 'SELECT * FROM suppliers WHERE id = ?', [supplier_id]);
+            if (!supplier || !supplier.isActive) throw { code: 'SUPPLIER_NOT_FOUND', message: 'المورد غير موجود أو غير نشط' };
+            const paidAmount = normalizeAmount(oldInvoice.paid_amount);
+            const activePayments = await dbAll(db, `SELECT * FROM payments WHERE invoice_id = ? AND payment_type = 'purchase' AND status = 'active'`, [id]);
+            const nextCurrency = normalizeCurrency(currency ?? oldInvoice.currency);
+            const nextRate = normalizeExchangeRate(nextCurrency, exchange_rate ?? oldInvoice.exchange_rate);
+            if (activePayments.length && (Number(supplier_id) !== Number(oldInvoice.supplier_id) || nextCurrency !== normalizeCurrency(oldInvoice.currency) || Math.abs(nextRate - normalizeExchangeRate(oldInvoice.currency, oldInvoice.exchange_rate)) > 0.000001)) {
+                throw { code: 'INVOICE_EDIT_PAYMENT_LOCK', message: 'لا يمكن تغيير المورد أو العملة أو سعر الصرف بعد وجود دفعات. اعكس الدفعات أولًا.' };
+            }
+
+            let invNumber = String(invoice_number ?? oldInvoice.invoice_number).trim();
+            const duplicate = await dbGet(db, 'SELECT id FROM purchase_invoices WHERE invoice_number = ? AND id <> ?', [invNumber, id]);
+            if (duplicate) throw { code: 'DUPLICATE_INVOICE_NUMBER', message: `رقم الفاتورة ${invNumber} موجود مسبقًا` };
+            const validatedDate = validateDate(invoice_date ?? oldInvoice.invoice_date, 'invoice_date');
+            const mappedItems = items.map((item) => ({ ...item, product_id: Number(item.product_id), quantity: Number(item.quantity ?? 0), price: Number(item.purchase_price ?? item.unit_price ?? 0), purchase_price: Number(item.purchase_price ?? item.unit_price ?? 0) }));
+            const seen = new Set();
+            for (let i = 0; i < mappedItems.length; i++) {
+                const item = mappedItems[i];
+                if (seen.has(item.product_id)) throw { code: 'DUPLICATE_PURCHASE_PRODUCT', message: `المنتج في السطر ${i + 1} مكرر` };
+                seen.add(item.product_id);
+                const product = await dbGet(db, 'SELECT * FROM products WHERE id = ?', [item.product_id]);
+                if (!product || !product.isActive) throw { code: 'PRODUCT_NOT_FOUND', message: `الصنف رقم ${i + 1} غير موجود أو غير نشط` };
+            }
+            const { normalizedItems, subtotal, discountAmount, totalAmount } = calculateInvoiceTotals(mappedItems, discount_amount);
+            if (paidAmount > totalAmount + 0.001) throw { code: 'INVOICE_EDIT_BELOW_PAID', message: 'الإجمالي الجديد أقل من المبلغ المدفوع. اعكس جزءًا من الدفعات أولًا.' };
+            const { remainingAmount, status } = calculatePaymentState(totalAmount, paidAmount);
+
+            const oldRate = normalizeExchangeRate(oldInvoice.currency, oldInvoice.exchange_rate);
+            const oldRemainingBase = toBaseAmount(oldInvoice.remaining_amount, oldRate);
+            const newRemainingBase = toBaseAmount(remainingAmount, nextRate);
+            if (oldInvoice.supplier_id) await dbRun(db, `UPDATE suppliers SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`, [oldRemainingBase, oldInvoice.supplier_id]);
+            await dbRun(db, `UPDATE suppliers SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`, [newRemainingBase, supplier_id]);
+
+            await dbRun(db, `DELETE FROM stock_movements WHERE reference_type = 'purchase_invoice' AND reference_id = ? AND movement_type = 'purchase_in'`, [id]);
+            await dbRun(db, 'DELETE FROM stock_batches WHERE purchase_invoice_id = ?', [id]);
+            await dbRun(db, 'DELETE FROM purchase_invoice_items WHERE purchase_invoice_id = ?', [id]);
+
+            for (let i = 0; i < normalizedItems.length; i++) {
+                const item = normalizedItems[i];
+                const receivedDate = validateDate(item.received_date ?? validatedDate, `item[${i}].received_date`);
+                const expiryDate = item.expiry_date ? validateDate(item.expiry_date, `item[${i}].expiry_date`) : null;
+                if (expiryDate && expiryDate < receivedDate) throw { code: 'VALIDATION_ERROR', message: `الصنف رقم ${i + 1}: تاريخ الانتهاء قبل الاستلام` };
+                await dbRun(db, `INSERT INTO purchase_invoice_items (purchase_invoice_id, product_id, quantity, unit_price, line_total, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`, [id, item.product_id, item.quantity, item.purchase_price, item.lineTotal, item.notes ?? null]);
+                const batchCode = item.batch_code?.trim() || `${invNumber}-B${String(i + 1).padStart(2, '0')}`;
+                const dupBatch = await dbGet(db, 'SELECT id FROM stock_batches WHERE batch_code = ?', [batchCode]);
+                if (dupBatch) throw { code: 'DUPLICATE_BATCH_CODE', message: `كود الدفعة ${batchCode} مستخدم مسبقًا` };
+                const { lastID: batchId } = await dbRun(db, `INSERT INTO stock_batches (product_id, supplier_id, purchase_invoice_id, batch_code, quantity, remaining_quantity, purchase_price, purchase_currency, purchase_exchange_rate, purchase_price_base, received_date, expiry_date, notes, isActive, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`, [item.product_id, supplier_id, id, batchCode, item.quantity, item.quantity, item.purchase_price, nextCurrency, nextRate, toBaseAmount(item.purchase_price, nextRate), receivedDate, expiryDate, item.batch_notes ?? null]);
+                await dbRun(db, `INSERT INTO stock_movements (product_id, stock_batch_id, movement_type, quantity, quantity_before, quantity_after, reference_type, reference_id, reference_number, supplier_id, notes, created_at) VALUES (?, ?, 'purchase_in', ?, 0, ?, 'purchase_invoice', ?, ?, ?, ?, datetime('now'))`, [item.product_id, batchId, item.quantity, item.quantity, id, invNumber, supplier_id, `فاتورة شراء معدلة ${invNumber}`]);
+            }
+
+            await dbRun(db, `UPDATE purchase_invoices SET invoice_number = ?, supplier_id = ?, invoice_type = ?, invoice_date = ?, subtotal = ?, discount = ?, discount_amount = ?, total = ?, remaining_amount = ?, status = ?, notes = ?, currency = ?, exchange_rate = ?, is_edited = 1, edit_count = COALESCE(edit_count, 0) + 1, last_edited_at = datetime('now'), last_edited_by = ?, updated_at = datetime('now') WHERE id = ?`, [invNumber, supplier_id, invoice_type, validatedDate, subtotal, discountAmount, discountAmount, totalAmount, remainingAmount, status, notes ?? null, nextCurrency, nextRate, userId ?? null, id]);
+            await dbRun(db, `INSERT INTO activity_logs (user_id, action, table_name, record_id, old_data, new_data, created_at, updated_at) VALUES (?, 'purchase_edited', 'purchase_invoices', ?, ?, ?, datetime('now'), datetime('now'))`, [userId ?? null, id, JSON.stringify({ invoice: oldInvoice, items: oldItems, batches: oldBatches }), JSON.stringify({ invoice_number: invNumber, supplier_id, invoice_type, invoice_date: validatedDate, total: totalAmount, remaining_amount: remainingAmount, currency: nextCurrency, exchange_rate: nextRate, items: normalizedItems.map(x => ({ product_id: x.product_id, quantity: x.quantity, purchase_price: x.purchase_price, batch_code: x.batch_code })) })]);
+            await dbRun(db, 'COMMIT');
+            return this.getPurchaseInvoiceDetails(id);
+        } catch (err) {
+            await new Promise((resolve) => db.run('ROLLBACK', () => resolve()));
+            throw normalizeInvoiceEditError(err);
+        }
+    }
 
     async getPurchaseInvoiceDetails(id) {
         if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID مطلوب' };

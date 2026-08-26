@@ -126,6 +126,7 @@ export default function InvoicePrintPage({ type }: { type: "sale" | "purchase" }
           partyLabel="العميل"
           partyName={saleDetails.customer?.name ?? "بيع نقدي"}
           statusLabel={saleStatus[saleDetails.invoice.status] ?? saleDetails.invoice.status}
+          edited={Boolean(saleDetails.invoice.is_edited)}
           items={saleDetails.items.map((item: Record<string, unknown>, i) => ({
             id: Number(item.id || i),
             productName: String(item.product_name ?? "-"),
@@ -153,6 +154,7 @@ export default function InvoicePrintPage({ type }: { type: "sale" | "purchase" }
           partyLabel="المورد"
           partyName={purchaseDetails.supplier?.name ?? "-"}
           statusLabel={purchaseStatus[purchaseDetails.invoice.status] ?? purchaseDetails.invoice.status}
+          edited={Boolean(purchaseDetails.invoice.is_edited)}
           items={purchaseDetails.items.map((item: Record<string, unknown>, i) => ({
             id: Number(item.id || i),
             productName: String(item.product_name ?? "-"),

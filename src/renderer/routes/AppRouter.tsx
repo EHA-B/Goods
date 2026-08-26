@@ -56,6 +56,8 @@ import NotificationSettingsPage from "../pages/settings/NotificationSettingsPage
 import HelpCenterPage from "../pages/help/HelpCenterPage";
 import HelpArticlePage from "../pages/help/HelpArticlePage";
 import ReportsPage from "../pages/reports/ReportsPage";
+import PaymentsPage from "../pages/payments/PaymentsPage";
+import PaymentFormPage from "../pages/payments/PaymentFormPage";
 import { PATHS } from "./path";
 
 function AppRouter() {
@@ -89,11 +91,13 @@ function AppRouter() {
                     <Route path={PATHS.SALES} element={<SalesPage />} />
                     <Route path={PATHS.SALE_NEW} element={<SaleFormPage />} />
                     <Route path={PATHS.SALE_DETAILS} element={<SaleDetailsPage />} />
+                    <Route path={PATHS.SALE_EDIT} element={<SaleFormPage />} />
                     <Route path={PATHS.SALE_PAYMENT_NEW} element={<SalePaymentPage />} />
                     <Route path={PATHS.SALE_PRINT} element={<InvoicePrintPage type="sale" />} />
                     <Route path={PATHS.PURCHASES} element={<PurchasesPage />} />
                     <Route path={PATHS.PURCHASE_NEW} element={<PurchaseFormPage />} />
                     <Route path={PATHS.PURCHASE_DETAILS} element={<PurchaseDetailsPage />} />
+                    <Route path={PATHS.PURCHASE_EDIT} element={<PurchaseFormPage />} />
                     <Route path={PATHS.PURCHASE_PAYMENT_NEW} element={<PurchasePaymentPage />} />
                     <Route path={PATHS.PURCHASE_PRINT} element={<InvoicePrintPage type="purchase" />} />
                     <Route path={PATHS.PRINT_PAYMENT} element={<DocumentPrintPage kind="payment" />} />
@@ -106,6 +110,8 @@ function AppRouter() {
                     <Route path={PATHS.PURCHASE_CONSIGNMENT} element={<ConsignmentOverviewPage />} />
                     <Route path={PATHS.PURCHASE_CLOSE_CONSIGNMENT} element={<CloseConsignmentPage />} />
                     <Route path={PATHS.PURCHASE_CONSIGNMENT_SETTLEMENT} element={<ConsignmentSettlementDetailsPage />} />
+                    <Route path={PATHS.PAYMENTS} element={<PaymentsPage />} />
+                    <Route path={PATHS.PAYMENT_NEW} element={<PaymentFormPage />} />
                     <Route path={PATHS.CASHBOXES} element={<CashboxesPage />} />
                     <Route path={PATHS.CASHBOX_NEW} element={<CashboxFormPage />} />
                     <Route path={PATHS.CASHBOX_DETAILS} element={<CashboxDetailsPage />} />

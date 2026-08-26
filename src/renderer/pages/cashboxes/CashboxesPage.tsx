@@ -32,6 +32,7 @@ import {
 import { PATHS } from "../../routes/path";
 import { cashboxesService, translateCashboxError } from "./cashboxesService";
 import { currencyName, currencySymbol, formatMoney, formatNumber } from "./currency";
+import { RECORDS_PAGE_SIZE, useClientPagination } from "../../lib/pagination";
 
 export default function CashboxesPage() {
   const navigate = useNavigate();
@@ -80,6 +81,19 @@ export default function CashboxesPage() {
       return matchesSearch && matchesStatus;
     });
   }, [cashboxes, searchQuery, statusFilter]);
+
+  const {
+    page,
+    setPage,
+    totalPages,
+    paginatedItems,
+  } = useClientPagination(
+    filteredCashboxes,
+    {
+      pageSize: RECORDS_PAGE_SIZE,
+      resetKey: `${searchQuery}|${statusFilter}`,
+    },
+  );
 
   const filtersAreActive = Boolean(searchQuery.trim()) || statusFilter !== "all";
 
@@ -228,7 +242,7 @@ export default function CashboxesPage() {
               </DataTableHead>
 
               <DataTableBody>
-                {filteredCashboxes.map((cashbox) => (
+                {paginatedItems.map((cashbox) => (
                   <DataTableRow key={cashbox.id}>
                     <DataTableCell className="font-bold text-[var(--text-primary)]">
                       {cashbox.name}
@@ -283,9 +297,13 @@ export default function CashboxesPage() {
             </DataTable>
 
             <TableFooter
-              visibleCount={filteredCashboxes.length}
-              totalCount={cashboxes.length}
+              visibleCount={paginatedItems.length}
+              totalCount={filteredCashboxes.length}
               entityName="صندوق"
+              page={page}
+              totalPages={totalPages}
+              pageSize={RECORDS_PAGE_SIZE}
+              onPageChange={setPage}
             />
           </>
         ) : (

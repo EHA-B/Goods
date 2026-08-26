@@ -26,6 +26,7 @@ import * as addWorkersTableMigration from './migrations/20260809100000_add_worke
 import * as m20260810113000_link_worker_payments_financial_transactions from './migrations/20260810113000_link_worker_payments_financial_transactions';
 import * as m20260814000000_consignment_settlement_monetary_values from './migrations/20260814000000_consignment_settlement_monetary_values';
 import * as m20260814000001_make_transaction_cashbox_nullable from './migrations/20260814000001_make_transaction_cashbox_nullable';
+import * as paymentInvoiceOptionalMigration from './migrations/20260823120000_make_payment_invoice_optional';
 import * as cashboxesSeed from './seeds/01_cashboxes';
 import * as usersSeed from './seeds/02_users';
 
@@ -57,6 +58,7 @@ class MigrationSource {
       '20260810113000_link_worker_payments_financial_transactions.ts',
       '20260814000000_consignment_settlement_monetary_values.ts',
       '20260814000001_make_transaction_cashbox_nullable.ts',
+      '20260823120000_make_payment_invoice_optional.ts',
     ]);
   }
   getMigrationName(migration: string) {
@@ -128,6 +130,9 @@ class MigrationSource {
     }
     if (migration === '20260814000001_make_transaction_cashbox_nullable.ts') {
       return { name: '20260814000001_make_transaction_cashbox_nullable.ts', up: m20260814000001_make_transaction_cashbox_nullable.up, down: m20260814000001_make_transaction_cashbox_nullable.down };
+    }
+    if (migration === '20260823120000_make_payment_invoice_optional.ts') {
+      return paymentInvoiceOptionalMigration;
     }
     if (migration === '20260804_sales_purchases_hardening.ts') {
       return sales_purchases_hardening;

@@ -24,7 +24,7 @@ export default function PurchasesTable({ purchases, onView, onDelete }: {
       const draft = purchase.status === "draft";
       const cancellable = ["confirmed", "partially_paid", "paid"].includes(purchase.status);
       return <DataTableRow key={purchase.id}>
-        <DataTableCell className="font-bold text-[var(--text-primary)]">{purchase.invoice_number}</DataTableCell>
+        <DataTableCell className="font-bold text-[var(--text-primary)]"><span className="inline-flex items-center gap-2">{purchase.invoice_number}{Boolean(purchase.is_edited) && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">معدلة</span>}</span></DataTableCell>
         <DataTableCell>{purchase.invoice_date}</DataTableCell>
         <DataTableCell>{purchase.supplier_name ?? "-"}</DataTableCell>
         <DataTableCell>{typeLabels[purchase.invoice_type]}</DataTableCell>

@@ -24,6 +24,7 @@ import {
   History,
   CircleHelp,
   BarChart3,
+  CreditCard,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -82,6 +83,11 @@ const navigationItems = [
     label: "الصناديق",
     path: PATHS.CASHBOXES,
     icon: CircleDollarSign,
+  },
+  {
+    label: "المدفوعات",
+    path: PATHS.PAYMENTS,
+    icon: CreditCard,
   },
   {
     label: "المعاملات المالية",

@@ -1,16 +1,33 @@
 import {
   BadgeDollarSign,
+  ReceiptText,
+  ShoppingCart,
   TrendingUp,
 } from "lucide-react";
 import type { ReportDefinition } from "./reportsTypes";
 
 export const reportCategories = [
   { value: "all", label: "كل التقارير" },
-  { value: "sales", label: "الأرباح والخسائر" },
-  { value: "purchases", label: "الكومسيون" },
+  { value: "sales", label: "المبيعات" },
+  { value: "purchases", label: "المشتريات" },
 ] as const;
 
 export const reportsCatalog: ReportDefinition[] = [
+  {
+    id: "sales-details",
+    title: "تقرير المبيعات التفصيلي",
+    description:
+      "تفاصيل فواتير البيع فاتورةً بفاتورة مع العميل والأصناف والدفعات والتكلفة والربح والحالة.",
+    category: "sales",
+    icon: ReceiptText,
+    filters: [
+      "dateRange",
+      "customer",
+      "product",
+      "currency",
+      "status",
+    ],
+  },
   {
     id: "sales-profit",
     title: "أرباح وخسائر",
@@ -22,6 +39,21 @@ export const reportsCatalog: ReportDefinition[] = [
       "dateRange",
       "product",
       "groupBy",
+    ],
+  },
+  {
+    id: "purchases-details",
+    title: "تقرير المشتريات التفصيلي",
+    description:
+      "تفاصيل فواتير الشراء والأمانات فاتورةً بفاتورة مع المورد والأصناف والدفعات وحالة المخزون.",
+    category: "purchases",
+    icon: ShoppingCart,
+    filters: [
+      "dateRange",
+      "supplier",
+      "product",
+      "currency",
+      "status",
     ],
   },
   {

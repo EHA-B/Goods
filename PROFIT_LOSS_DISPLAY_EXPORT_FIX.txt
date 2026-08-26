@@ -1,0 +1,19 @@
+Profit & Loss display/export fix — latest uploaded project
+
+Scope:
+- Improved ONLY the Profit & Loss preview layout.
+- Commission report keeps its existing renderer and data shape.
+- PDF / Excel export now supports reports that return `sections`.
+- Profit & Loss PDF is A4 portrait with section tables and a final net result.
+- Excel-compatible export now contains both Profit & Loss sections instead of an empty table.
+- Stock-loss valuation uses base purchase cost.
+- Consignment return/spoilage stock adjustments are excluded from manual stock-loss calculation to avoid double counting.
+
+Verified:
+- preload -> api:report:generate
+- preload -> api:report:export
+- IPC api:report:generate
+- IPC api:report:export
+- PDF A4 portrait
+- Commission report remains registered and uses the same generic table preview/export.
+- node --check reportController.js passed.

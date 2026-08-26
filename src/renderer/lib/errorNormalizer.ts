@@ -147,6 +147,35 @@ const MESSAGE_PATTERNS: Array<
   [RegExp, string]
 > = [
   /*
+   * تعديل الفواتير
+   * مهم كـ fallback إذا ضاع error.code أثناء IPC.
+   */
+  [
+    /PURCHASE_EDIT_STOCK_LOCK/i,
+    "PURCHASE_EDIT_STOCK_LOCK",
+  ],
+
+  [
+    /PURCHASE_EDIT_SETTLEMENT_LOCK/i,
+    "PURCHASE_EDIT_SETTLEMENT_LOCK",
+  ],
+
+  [
+    /INVOICE_EDIT_PAYMENT_LOCK/i,
+    "INVOICE_EDIT_PAYMENT_LOCK",
+  ],
+
+  [
+    /INVOICE_EDIT_BELOW_PAID/i,
+    "INVOICE_EDIT_BELOW_PAID",
+  ],
+
+  [
+    /INVOICE_EDIT_RELATION_LOCK/i,
+    "INVOICE_EDIT_RELATION_LOCK",
+  ],
+
+  /*
    * المنتجات
    */
   [
@@ -167,6 +196,16 @@ const MESSAGE_PATTERNS: Array<
   /*
    * كلمات المرور
    */
+  [
+    /INVALID_PASSWORD/i,
+    "INVALID_PASSWORD",
+  ],
+
+  [
+    /كلمة المرور غير صحيحة/i,
+    "INVALID_PASSWORD",
+  ],
+
   [
     /invalid[_\s-]*current[_\s-]*password/i,
     "INVALID_CURRENT_PASSWORD",

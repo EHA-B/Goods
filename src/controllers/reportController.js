@@ -87,6 +87,97 @@ function addFilter(where, params, condition, value) {
   }
 }
 
+function invoiceStatusLabel(status) {
+  switch (String(status || "").toLowerCase()) {
+    case "draft":
+      return "مسودة";
+    case "confirmed":
+      return "مؤكدة";
+    case "partially_paid":
+      return "مدفوعة جزئيًا";
+    case "paid":
+      return "مدفوعة";
+    case "cancelled":
+      return "ملغاة";
+    default:
+      return String(status || "—");
+  }
+}
+
+function purchaseTypeLabel(type) {
+  return String(type || "standard") === "consignment"
+    ? "أمانة"
+    : "شراء عادي";
+}
+
+function formatNumber(value, maximumFractionDigits = 2) {
+  return number(value).toLocaleString("en-US", {
+    maximumFractionDigits,
+  });
+}
+
+function formatMoney(value, currency = "SYP") {
+  const normalizedCurrency = normalizeCurrency(currency);
+  return `${formatNumber(value, 2)} ${currencyLabel(normalizedCurrency)}`;
+}
+
+function buildCurrencySummary(rows, labelPrefix) {
+  const currencies = [
+    ...new Set(
+      rows.map((row) =>
+        normalizeCurrency(row.currency),
+      ),
+    ),
+  ];
+
+  const summary = [];
+
+  for (const currency of currencies) {
+    const currencyRows = rows.filter(
+      (row) =>
+        normalizeCurrency(row.currency) ===
+        currency,
+    );
+
+    const activeRows = currencyRows.filter(
+      (row) =>
+        String(row.status || "").toLowerCase() !==
+        "cancelled",
+    );
+
+    const total = activeRows.reduce(
+      (sum, row) => sum + number(row.total),
+      0,
+    );
+    const paid = activeRows.reduce(
+      (sum, row) => sum + number(row.paid_amount),
+      0,
+    );
+    const remaining = activeRows.reduce(
+      (sum, row) =>
+        sum + number(row.remaining_amount),
+      0,
+    );
+
+    summary.push(
+      {
+        label: `${labelPrefix} (${currency})`,
+        value: formatMoney(total, currency),
+      },
+      {
+        label: `إجمالي المدفوع (${currency})`,
+        value: formatMoney(paid, currency),
+      },
+      {
+        label: `إجمالي المتبقي (${currency})`,
+        value: formatMoney(remaining, currency),
+      },
+    );
+  }
+
+  return summary;
+}
+
 class ReportController {
   async getOptions() {
     const db = await dbmanager.init();
@@ -141,6 +232,14 @@ class ReportController {
       return this.generateSalesProfit(filters);
     }
 
+    if (reportId === "sales-details") {
+      return this.generateSalesDetails(filters);
+    }
+
+    if (reportId === "purchases-details") {
+      return this.generatePurchasesDetails(filters);
+    }
+
     return {
       title: "",
       generatedAt: new Date().toISOString(),
@@ -148,6 +247,932 @@ class ReportController {
       rows: [],
       summary: [],
       totalRows: 0,
+    };
+  }
+
+  async generateSalesDetails(filters = {}) {
+    const db = await dbmanager.init();
+
+    const where = ["1 = 1"];
+    const params = [];
+
+    if (filters.fromDate) {
+      where.push(`date(si.invoice_date) >= date(?)`);
+      params.push(filters.fromDate);
+    }
+
+    if (filters.toDate) {
+      where.push(`date(si.invoice_date) <= date(?)`);
+      params.push(filters.toDate);
+    }
+
+    addFilter(
+      where,
+      params,
+      `si.customer_id = ?`,
+      filters.customerId,
+    );
+
+    addFilter(
+      where,
+      params,
+      `si.status = ?`,
+      filters.status,
+    );
+
+    if (
+      filters.currency &&
+      filters.currency !== "all"
+    ) {
+      where.push(
+        `UPPER(COALESCE(si.currency, 'SYP')) = ?`,
+      );
+      params.push(
+        normalizeCurrency(filters.currency),
+      );
+    }
+
+    if (
+      filters.productId &&
+      filters.productId !== "all"
+    ) {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM sale_invoice_items filter_sii
+          JOIN stock_batches filter_sb
+            ON filter_sb.id = filter_sii.stock_batch_id
+          WHERE filter_sii.sale_invoice_id = si.id
+            AND filter_sb.product_id = ?
+        )
+      `);
+      params.push(filters.productId);
+    }
+
+    const invoices = await all(
+      db,
+      `
+        SELECT
+          si.id,
+          si.invoice_number,
+          si.invoice_date,
+          si.subtotal,
+          COALESCE(si.discount_amount, si.discount, 0) AS discount_amount,
+          COALESCE(si.tax, 0) AS tax,
+          si.total,
+          si.paid_amount,
+          si.remaining_amount,
+          si.status,
+          si.notes,
+          UPPER(COALESCE(si.currency, 'SYP')) AS currency,
+          COALESCE(NULLIF(si.exchange_rate, 0), 1) AS exchange_rate,
+
+          c.name AS customer_name,
+          c.phone AS customer_phone,
+
+          st.name AS sale_type_name,
+          cb.name AS cashbox_name,
+
+          COALESCE(
+            (
+              SELECT COUNT(*)
+              FROM payments pay
+              WHERE pay.payment_type = 'sale'
+                AND pay.invoice_id = si.id
+                AND pay.status = 'active'
+            ),
+            0
+          ) AS payments_count,
+
+          (
+            SELECT MAX(pay.payment_date)
+            FROM payments pay
+            WHERE pay.payment_type = 'sale'
+              AND pay.invoice_id = si.id
+              AND pay.status = 'active'
+          ) AS last_payment_date
+
+        FROM sale_invoices si
+        LEFT JOIN customers c
+          ON c.id = si.customer_id
+        LEFT JOIN sale_types st
+          ON st.id = si.sale_type_id
+        LEFT JOIN cashboxes cb
+          ON cb.id = si.cashbox_id
+
+        WHERE ${where.join(" AND ")}
+
+        ORDER BY
+          date(si.invoice_date) DESC,
+          si.id DESC
+      `,
+      params,
+    );
+
+    const itemWhere = [];
+    const itemParams = [];
+
+    if (
+      filters.productId &&
+      filters.productId !== "all"
+    ) {
+      itemWhere.push(`sb.product_id = ?`);
+      itemParams.push(filters.productId);
+    }
+
+    const items = invoices.length
+      ? await all(
+          db,
+          `
+            SELECT
+              sii.sale_invoice_id,
+              sii.id AS item_id,
+              p.name AS product_name,
+              p.unit AS product_unit,
+              sb.batch_code,
+              sii.quantity,
+              sii.unit_price,
+              sii.line_total,
+              sii.cost_price,
+              sii.profit,
+              sii.notes
+            FROM sale_invoice_items sii
+            JOIN stock_batches sb
+              ON sb.id = sii.stock_batch_id
+            JOIN products p
+              ON p.id = sb.product_id
+            WHERE sii.sale_invoice_id IN (
+              ${invoices.map(() => "?").join(",")}
+            )
+            ${
+              itemWhere.length
+                ? `AND ${itemWhere.join(" AND ")}`
+                : ""
+            }
+            ORDER BY
+              sii.sale_invoice_id,
+              sii.id
+          `,
+          [
+            ...invoices.map((invoice) => invoice.id),
+            ...itemParams,
+          ],
+        )
+      : [];
+
+    const itemsByInvoice = new Map();
+
+    for (const item of items) {
+      const invoiceId = number(
+        item.sale_invoice_id,
+      );
+
+      if (!itemsByInvoice.has(invoiceId)) {
+        itemsByInvoice.set(invoiceId, []);
+      }
+
+      itemsByInvoice
+        .get(invoiceId)
+        .push(item);
+    }
+
+    const sections = invoices.map(
+      (invoice) => {
+        const currency = normalizeCurrency(
+          invoice.currency,
+        );
+
+        const invoiceItems =
+          itemsByInvoice.get(number(invoice.id)) ??
+          [];
+
+        const totalQuantity =
+          invoiceItems.reduce(
+            (sum, item) =>
+              sum + number(item.quantity),
+            0,
+          );
+
+        const totalProfitBase =
+          invoice.status === "cancelled"
+            ? 0
+            : invoiceItems.reduce(
+                (sum, item) =>
+                  sum + number(item.profit),
+                0,
+              );
+
+        return {
+          title: `فاتورة بيع ${invoice.invoice_number} — ${
+            invoice.customer_name || "بيع نقدي"
+          } — ${invoice.invoice_date}`,
+          columns: [
+            {
+              key: "product_name",
+              label: "الصنف",
+              format: "text",
+            },
+            {
+              key: "batch_code",
+              label: "الدفعة",
+              format: "text",
+            },
+            {
+              key: "quantity",
+              label: "الكمية",
+              format: "number",
+            },
+            {
+              key: "unit_price",
+              label: "سعر البيع",
+              format: "currency",
+            },
+            {
+              key: "line_total",
+              label: "إجمالي السطر",
+              format: "currency",
+            },
+            {
+              key: "cost_price_base",
+              label: "تكلفة الوحدة الأساسية",
+              format: "currency",
+            },
+            {
+              key: "profit_base",
+              label: "ربح السطر الأساسي",
+              format: "currency",
+            },
+          ],
+          rows: invoiceItems.map((item) => ({
+            product_name: `${item.product_name}${
+              item.product_unit
+                ? ` (${item.product_unit})`
+                : ""
+            }`,
+            batch_code: item.batch_code || "—",
+            quantity: number(item.quantity),
+            unit_price: number(item.unit_price),
+            line_total: number(item.line_total),
+            cost_price_base: number(
+              item.cost_price,
+            ),
+            profit_base:
+              invoice.status === "cancelled"
+                ? 0
+                : number(item.profit),
+            currency,
+          })),
+          summary: [
+            {
+              label: "العميل",
+              value:
+                invoice.customer_name ||
+                "بيع نقدي",
+            },
+            {
+              label: "نوع البيع",
+              value:
+                invoice.sale_type_name || "—",
+            },
+            {
+              label: "الحالة",
+              value: invoiceStatusLabel(
+                invoice.status,
+              ),
+            },
+            {
+              label: "العملة",
+              value: currency,
+            },
+            {
+              label: "سعر الصرف",
+              value: formatNumber(
+                invoice.exchange_rate,
+                6,
+              ),
+            },
+            {
+              label: "الكمية الكلية",
+              value: formatNumber(
+                totalQuantity,
+                3,
+              ),
+            },
+            {
+              label: "المجموع الفرعي",
+              value: formatMoney(
+                invoice.subtotal,
+                currency,
+              ),
+            },
+            {
+              label: "الخصم",
+              value: formatMoney(
+                invoice.discount_amount,
+                currency,
+              ),
+            },
+            {
+              label: "الإجمالي",
+              value: formatMoney(
+                invoice.total,
+                currency,
+              ),
+            },
+            {
+              label: "المدفوع",
+              value: formatMoney(
+                invoice.paid_amount,
+                currency,
+              ),
+            },
+            {
+              label: "المتبقي",
+              value: formatMoney(
+                invoice.remaining_amount,
+                currency,
+              ),
+            },
+            {
+              label: "عدد الدفعات",
+              value: number(
+                invoice.payments_count,
+              ),
+            },
+            {
+              label: "آخر دفعة",
+              value:
+                invoice.last_payment_date ||
+                "—",
+            },
+            {
+              label: "ربح الأصناف الأساسي",
+              value: `${formatNumber(
+                totalProfitBase,
+                2,
+              )} ل.س`,
+            },
+          ],
+        };
+      },
+    );
+
+    const totalItems = sections.reduce(
+      (sum, section) =>
+        sum + section.rows.length,
+      0,
+    );
+
+    const totalQuantity = sections.reduce(
+      (sum, section) =>
+        sum +
+        section.rows.reduce(
+          (sectionSum, row) =>
+            sectionSum +
+            number(row.quantity),
+          0,
+        ),
+      0,
+    );
+
+    const cancelledCount =
+      invoices.filter(
+        (invoice) =>
+          invoice.status === "cancelled",
+      ).length;
+
+    const totalProfitBase =
+      sections.reduce(
+        (sum, section) => {
+          const profitSummary =
+            section.summary.find(
+              (item) =>
+                item.label ===
+                "ربح الأصناف الأساسي",
+            );
+
+          return (
+            sum +
+            number(
+              String(
+                profitSummary?.value ?? 0,
+              )
+                .replace(/,/g, "")
+                .replace(/[^\d.-]/g, ""),
+            )
+          );
+        },
+        0,
+      );
+
+    return {
+      title: "تقرير المبيعات التفصيلي",
+      generatedAt:
+        new Date().toISOString(),
+      columns: [],
+      rows: [],
+      sections,
+      summary: [
+        {
+          label: "عدد فواتير البيع",
+          value: invoices.length,
+        },
+        {
+          label: "عدد بنود الأصناف",
+          value: totalItems,
+        },
+        {
+          label: "إجمالي الكمية المباعة",
+          value: formatNumber(
+            totalQuantity,
+            3,
+          ),
+        },
+        {
+          label: "الفواتير الملغاة",
+          value: cancelledCount,
+        },
+        ...buildCurrencySummary(
+          invoices,
+          "إجمالي المبيعات الفعلية",
+        ),
+        {
+          label: "إجمالي ربح الأصناف الأساسي",
+          value: `${formatNumber(
+            totalProfitBase,
+            2,
+          )} ل.س`,
+        },
+      ],
+      totalRows: totalItems,
+    };
+  }
+
+  async generatePurchasesDetails(filters = {}) {
+    const db = await dbmanager.init();
+
+    const where = ["1 = 1"];
+    const params = [];
+
+    if (filters.fromDate) {
+      where.push(`date(pi.invoice_date) >= date(?)`);
+      params.push(filters.fromDate);
+    }
+
+    if (filters.toDate) {
+      where.push(`date(pi.invoice_date) <= date(?)`);
+      params.push(filters.toDate);
+    }
+
+    addFilter(
+      where,
+      params,
+      `pi.supplier_id = ?`,
+      filters.supplierId,
+    );
+
+    addFilter(
+      where,
+      params,
+      `pi.status = ?`,
+      filters.status,
+    );
+
+    if (
+      filters.currency &&
+      filters.currency !== "all"
+    ) {
+      where.push(
+        `UPPER(COALESCE(pi.currency, 'SYP')) = ?`,
+      );
+      params.push(
+        normalizeCurrency(filters.currency),
+      );
+    }
+
+    if (
+      filters.productId &&
+      filters.productId !== "all"
+    ) {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM purchase_invoice_items filter_pii
+          WHERE filter_pii.purchase_invoice_id = pi.id
+            AND filter_pii.product_id = ?
+        )
+      `);
+      params.push(filters.productId);
+    }
+
+    const invoices = await all(
+      db,
+      `
+        SELECT
+          pi.id,
+          pi.invoice_number,
+          pi.invoice_date,
+          pi.invoice_type,
+          pi.subtotal,
+          COALESCE(pi.discount_amount, pi.discount, 0) AS discount_amount,
+          COALESCE(pi.tax, 0) AS tax,
+          pi.total,
+          pi.paid_amount,
+          pi.remaining_amount,
+          pi.status,
+          pi.notes,
+          UPPER(COALESCE(pi.currency, 'SYP')) AS currency,
+          COALESCE(NULLIF(pi.exchange_rate, 0), 1) AS exchange_rate,
+          pi.settlement_status,
+          pi.settled_at,
+
+          s.name AS supplier_name,
+          s.phone AS supplier_phone,
+
+          COALESCE(
+            (
+              SELECT COUNT(*)
+              FROM payments pay
+              WHERE pay.payment_type = 'purchase'
+                AND pay.invoice_id = pi.id
+                AND pay.status = 'active'
+            ),
+            0
+          ) AS payments_count,
+
+          (
+            SELECT MAX(pay.payment_date)
+            FROM payments pay
+            WHERE pay.payment_type = 'purchase'
+              AND pay.invoice_id = pi.id
+              AND pay.status = 'active'
+          ) AS last_payment_date
+
+        FROM purchase_invoices pi
+        LEFT JOIN suppliers s
+          ON s.id = pi.supplier_id
+
+        WHERE ${where.join(" AND ")}
+
+        ORDER BY
+          date(pi.invoice_date) DESC,
+          pi.id DESC
+      `,
+      params,
+    );
+
+    const itemWhere = [];
+    const itemParams = [];
+
+    if (
+      filters.productId &&
+      filters.productId !== "all"
+    ) {
+      itemWhere.push(`pii.product_id = ?`);
+      itemParams.push(filters.productId);
+    }
+
+    const items = invoices.length
+      ? await all(
+          db,
+          `
+            SELECT
+              pii.purchase_invoice_id,
+              pii.id AS item_id,
+              p.name AS product_name,
+              p.unit AS product_unit,
+              pii.quantity,
+              pii.unit_price,
+              pii.line_total,
+              pii.notes,
+
+              sb.batch_code,
+              sb.remaining_quantity,
+              sb.received_date,
+              sb.expiry_date
+
+            FROM purchase_invoice_items pii
+            JOIN products p
+              ON p.id = pii.product_id
+            LEFT JOIN stock_batches sb
+              ON sb.purchase_invoice_id =
+                 pii.purchase_invoice_id
+             AND sb.product_id =
+                 pii.product_id
+
+            WHERE pii.purchase_invoice_id IN (
+              ${invoices.map(() => "?").join(",")}
+            )
+            ${
+              itemWhere.length
+                ? `AND ${itemWhere.join(" AND ")}`
+                : ""
+            }
+
+            ORDER BY
+              pii.purchase_invoice_id,
+              pii.id
+          `,
+          [
+            ...invoices.map((invoice) => invoice.id),
+            ...itemParams,
+          ],
+        )
+      : [];
+
+    const itemsByInvoice = new Map();
+
+    for (const item of items) {
+      const invoiceId = number(
+        item.purchase_invoice_id,
+      );
+
+      if (!itemsByInvoice.has(invoiceId)) {
+        itemsByInvoice.set(invoiceId, []);
+      }
+
+      itemsByInvoice
+        .get(invoiceId)
+        .push(item);
+    }
+
+    const sections = invoices.map(
+      (invoice) => {
+        const currency = normalizeCurrency(
+          invoice.currency,
+        );
+
+        const invoiceItems =
+          itemsByInvoice.get(number(invoice.id)) ??
+          [];
+
+        const totalQuantity =
+          invoiceItems.reduce(
+            (sum, item) =>
+              sum + number(item.quantity),
+            0,
+          );
+
+        const remainingQuantity =
+          invoiceItems.reduce(
+            (sum, item) =>
+              sum +
+              number(
+                item.remaining_quantity,
+              ),
+            0,
+          );
+
+        return {
+          title: `فاتورة شراء ${invoice.invoice_number} — ${
+            invoice.supplier_name || "مورد غير معروف"
+          } — ${invoice.invoice_date}`,
+          columns: [
+            {
+              key: "product_name",
+              label: "الصنف",
+              format: "text",
+            },
+            {
+              key: "batch_code",
+              label: "كود الدفعة",
+              format: "text",
+            },
+            {
+              key: "quantity",
+              label: "الكمية المستلمة",
+              format: "number",
+            },
+            {
+              key: "remaining_quantity",
+              label: "المتبقي بالمخزون",
+              format: "number",
+            },
+            {
+              key: "unit_price",
+              label: "سعر الشراء",
+              format: "currency",
+            },
+            {
+              key: "line_total",
+              label: "إجمالي السطر",
+              format: "currency",
+            },
+            {
+              key: "received_date",
+              label: "تاريخ الاستلام",
+              format: "date",
+            },
+            {
+              key: "expiry_date",
+              label: "تاريخ الانتهاء",
+              format: "date",
+            },
+          ],
+          rows: invoiceItems.map((item) => ({
+            product_name: `${item.product_name}${
+              item.product_unit
+                ? ` (${item.product_unit})`
+                : ""
+            }`,
+            batch_code: item.batch_code || "—",
+            quantity: number(item.quantity),
+            remaining_quantity: number(
+              item.remaining_quantity,
+            ),
+            unit_price: number(item.unit_price),
+            line_total: number(item.line_total),
+            received_date:
+              item.received_date || "—",
+            expiry_date:
+              item.expiry_date || "—",
+            currency,
+          })),
+          summary: [
+            {
+              label: "المورد",
+              value:
+                invoice.supplier_name || "—",
+            },
+            {
+              label: "نوع الفاتورة",
+              value: purchaseTypeLabel(
+                invoice.invoice_type,
+              ),
+            },
+            {
+              label: "الحالة",
+              value: invoiceStatusLabel(
+                invoice.status,
+              ),
+            },
+            {
+              label: "حالة الأمانة",
+              value:
+                invoice.invoice_type ===
+                "consignment"
+                  ? settlementStatusLabel(
+                      String(
+                        invoice.settlement_status ||
+                          "",
+                      ).toLowerCase() ===
+                        "settled"
+                        ? "settled"
+                        : "pending",
+                    )
+                  : "—",
+            },
+            {
+              label: "العملة",
+              value: currency,
+            },
+            {
+              label: "سعر الصرف",
+              value: formatNumber(
+                invoice.exchange_rate,
+                6,
+              ),
+            },
+            {
+              label: "الكمية المستلمة",
+              value: formatNumber(
+                totalQuantity,
+                3,
+              ),
+            },
+            {
+              label: "المتبقي بالمخزون",
+              value: formatNumber(
+                remainingQuantity,
+                3,
+              ),
+            },
+            {
+              label: "المجموع الفرعي",
+              value: formatMoney(
+                invoice.subtotal,
+                currency,
+              ),
+            },
+            {
+              label: "الخصم",
+              value: formatMoney(
+                invoice.discount_amount,
+                currency,
+              ),
+            },
+            {
+              label: "الإجمالي",
+              value: formatMoney(
+                invoice.total,
+                currency,
+              ),
+            },
+            {
+              label: "المدفوع",
+              value: formatMoney(
+                invoice.paid_amount,
+                currency,
+              ),
+            },
+            {
+              label: "المتبقي",
+              value: formatMoney(
+                invoice.remaining_amount,
+                currency,
+              ),
+            },
+            {
+              label: "عدد الدفعات",
+              value: number(
+                invoice.payments_count,
+              ),
+            },
+            {
+              label: "آخر دفعة",
+              value:
+                invoice.last_payment_date ||
+                "—",
+            },
+          ],
+        };
+      },
+    );
+
+    const totalItems = sections.reduce(
+      (sum, section) =>
+        sum + section.rows.length,
+      0,
+    );
+
+    const totalQuantity = sections.reduce(
+      (sum, section) =>
+        sum +
+        section.rows.reduce(
+          (sectionSum, row) =>
+            sectionSum +
+            number(row.quantity),
+          0,
+        ),
+      0,
+    );
+
+    const cancelledCount =
+      invoices.filter(
+        (invoice) =>
+          invoice.status === "cancelled",
+      ).length;
+
+    const consignmentCount =
+      invoices.filter(
+        (invoice) =>
+          invoice.invoice_type ===
+          "consignment",
+      ).length;
+
+    return {
+      title: "تقرير المشتريات التفصيلي",
+      generatedAt:
+        new Date().toISOString(),
+      columns: [],
+      rows: [],
+      sections,
+      summary: [
+        {
+          label: "عدد فواتير الشراء",
+          value: invoices.length,
+        },
+        {
+          label: "الفواتير العادية",
+          value:
+            invoices.length -
+            consignmentCount,
+        },
+        {
+          label: "فواتير الأمانة",
+          value: consignmentCount,
+        },
+        {
+          label: "الفواتير الملغاة",
+          value: cancelledCount,
+        },
+        {
+          label: "عدد بنود الأصناف",
+          value: totalItems,
+        },
+        {
+          label: "إجمالي الكمية المستلمة",
+          value: formatNumber(
+            totalQuantity,
+            3,
+          ),
+        },
+        ...buildCurrencySummary(
+          invoices,
+          "إجمالي المشتريات الفعلية",
+        ),
+      ],
+      totalRows: totalItems,
     };
   }
 
@@ -630,132 +1655,133 @@ class ReportController {
         filters.date_to,
     });
 
-    const summary =
-      detailed.summary || {};
+    const summary = detailed.summary || {};
 
-    const rows = [
+    const revenuesColumns = [
+      { key: "metric", label: "البيان", format: "text" },
+      { key: "category", label: "التصنيف", format: "text" },
+      { key: "date", label: "التاريخ", format: "date" },
+      { key: "amount", label: "القيمة", format: "currency" },
+    ];
+    
+    const revenuesRows = [
       {
-        metric: "إجمالي إيراد المبيعات",
-        amount: number(
-          summary.total_revenue_base,
-        ),
-        result: "إيراد",
+        metric: "إجمالي إيراد المبيعات (الأساسي)",
+        category: "إيراد مبيعات",
+        date: "—",
+        amount: number(summary.total_revenue_base),
+        currency: "SYP", // Base currency
+      }
+    ];
+    
+    for (const item of detailed.other_income.details) {
+      revenuesRows.push({
+        metric: item.description || item.notes || "إيراد غير مسمى",
+        category: item.category_name || "إيرادات أخرى",
+        date: item.transaction_date,
+        amount: item.amount,
+        currency: item.currency,
+      });
+    }
+
+    const expensesColumns = [
+      { key: "metric", label: "البيان", format: "text" },
+      { key: "category", label: "التصنيف", format: "text" },
+      { key: "date", label: "التاريخ", format: "date" },
+      { key: "amount", label: "القيمة", format: "currency" },
+    ];
+    
+    const expensesRows = [
+      {
+        metric: "إجمالي تكلفة البضاعة المباعة",
+        category: "تكلفة مبيعات",
+        date: "—",
+        amount: number(summary.total_cogs_base),
+        currency: "SYP", // Base currency
       },
       {
-        metric: "تكلفة البضاعة المباعة",
-        amount: number(
-          summary.total_cogs_base,
-        ),
-        result: "تكلفة",
+        metric: "مدفوعات موردي الأمانة (حصة الموردين)",
+        category: "مدفوعات أمانة",
+        date: "—",
+        amount: number(summary.total_consignment_payout_base),
+        currency: "SYP", // Base currency
+      }
+    ];
+
+    for (const item of detailed.expenses.details) {
+      expensesRows.push({
+        metric: item.description || item.notes || "مصروف غير مسمى",
+        category: item.category_name || "المصروفات العامة",
+        date: item.transaction_date,
+        amount: item.amount,
+        currency: item.currency,
+      });
+    }
+
+    for (const item of detailed.stock_losses.details) {
+      expensesRows.push({
+        metric: `خسارة مخزون (${item.product_name}): ${item.reason || item.notes || ""}`,
+        category: "خسائر مخزون",
+        date: item.adjustment_date,
+        amount: item.loss_amount,
+        currency: "SYP", // Base currency based on purchase price
+      });
+    }
+
+    const sections = [
+      {
+        title: "الإيرادات",
+        columns: revenuesColumns,
+        rows: revenuesRows,
+        summary: [
+          {
+            label: "إجمالي الإيرادات (بدون المبيعات)",
+            value: `${number(summary.total_other_income_native).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
+          },
+          {
+            label: "إجمالي إيراد المبيعات",
+            value: `${number(summary.total_revenue_base).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
+          }
+        ]
       },
       {
-        metric: "إجمالي ربح المبيعات",
-        amount: number(
-          summary.gross_profit_base,
-        ),
-        result:
-          number(
-            summary.gross_profit_base,
-          ) >= 0
-            ? "ربح"
-            : "خسارة",
-      },
-      {
-        metric: "إيرادات أخرى",
-        amount: number(
-          summary.total_other_income_native,
-        ),
-        result: "إيراد",
-      },
-      {
-        metric: "المصروفات العامة",
-        amount: number(
-          summary.total_expenses_native,
-        ),
-        result: "مصروف",
-      },
-      {
-        metric: "مدفوعات موردي الأمانة",
-        amount: number(
-          summary.total_consignment_payout_base,
-        ),
-        result: "معلومة",
-      },
-      {
-        metric: "صافي الربح / الخسارة",
-        amount: number(
-          summary.net_profit_base,
-        ),
-        result:
-          summary.is_profit
-            ? "ربح"
-            : "خسارة",
-      },
+        title: "التكاليف والمصروفات",
+        columns: expensesColumns,
+        rows: expensesRows,
+        summary: [
+          {
+            label: "إجمالي التكلفة (مبيعات وأمانة)",
+            value: `${(number(summary.total_cogs_base) + number(summary.total_consignment_payout_base)).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
+          },
+          {
+            label: "المصروفات العامة وخسائر المخزون",
+            value: `${(number(summary.total_expenses_native) + number(summary.total_stock_loss_base)).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
+          }
+        ]
+      }
     ];
 
     return {
       title: "أرباح وخسائر",
-      generatedAt:
-        new Date().toISOString(),
-      columns: [
-        {
-          key: "metric",
-          label: "البيان",
-          format: "text",
-        },
-        {
-          key: "amount",
-          label: "القيمة",
-          format: "currency",
-        },
-        {
-          key: "result",
-          label: "التصنيف",
-          format: "text",
-        },
-      ],
-      rows,
+      generatedAt: new Date().toISOString(),
+      columns: [],
+      rows: [],
+      sections: sections,
       summary: [
         {
-          label:
-            "إجمالي إيراد المبيعات",
-          value: `${number(
-            summary.total_revenue_base,
-          ).toLocaleString("en-US", {
-            maximumFractionDigits: 2,
-          })} ل.س`,
+          label: "إجمالي إيراد المبيعات",
+          value: `${number(summary.total_revenue_base).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
         },
         {
-          label:
-            "إجمالي التكلفة",
-          value: `${number(
-            summary.total_cogs_base,
-          ).toLocaleString("en-US", {
-            maximumFractionDigits: 2,
-          })} ل.س`,
+          label: "إجمالي التكلفة والمصروفات",
+          value: `${(number(summary.total_cogs_base) + number(summary.total_expenses_native) + number(summary.total_stock_loss_base)).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
         },
         {
-          label:
-            "المصروفات العامة",
-          value: `${number(
-            summary.total_expenses_native,
-          ).toLocaleString("en-US", {
-            maximumFractionDigits: 2,
-          })} ل.س`,
-        },
-        {
-          label:
-            "صافي الربح / الخسارة",
-          value: `${number(
-            summary.net_profit_base,
-          ).toLocaleString("en-US", {
-            maximumFractionDigits: 2,
-          })} ل.س`,
+          label: "صافي الربح / الخسارة",
+          value: `${number(summary.net_profit_base).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
         },
       ],
-      totalRows: rows.length,
-
-      // Keep the complete accounting payload from the parallel branch.
+      totalRows: revenuesRows.length + expensesRows.length,
       details: detailed,
     };
   }
@@ -839,13 +1865,19 @@ class ReportController {
       // 5. GENERAL EXPENSES (wages, overheads, spoilage write-offs, etc.)
       //    From transactions table. cashbox_id may be NULL for non-cash write-offs.
       // ────────────────────────────────────────────────────────────────────
+      // ────────────────────────────────────────────────────────────────────
+      // 5. GENERAL EXPENSES (Detailed)
+      //    From transactions table. cashbox_id may be NULL for non-cash write-offs.
+      // ────────────────────────────────────────────────────────────────────
       const expenseRows = await all(db, `
           SELECT
+              t.id,
+              t.transaction_date,
+              t.description,
+              t.notes,
               COALESCE(c.currency, 'non_cash') AS currency,
-              COALESCE(SUM(t.amount), 0)       AS expense_native,
-              tc.name                          AS category_name,
-              tc.id                            AS category_id,
-              COUNT(*)                         AS count
+              t.amount AS expense_native,
+              tc.name AS category_name
           FROM transactions t
           LEFT JOIN cashboxes c ON c.id = t.cashbox_id
           LEFT JOIN transaction_categories tc ON tc.id = t.category_id
@@ -853,20 +1885,21 @@ class ReportController {
             AND t.status = 'active'
             AND t.transaction_date >= ?
             AND t.transaction_date <= ?
-          GROUP BY tc.id, COALESCE(c.currency, 'non_cash')
-          ORDER BY expense_native DESC
+          ORDER BY t.transaction_date DESC, t.id DESC
       `, [dateFrom, dateTo]);
 
       // ────────────────────────────────────────────────────────────────────
-      // 6. GENERAL INCOME (non-sale income transactions)
+      // 6. GENERAL INCOME (Detailed)
       // ────────────────────────────────────────────────────────────────────
       const incomeRows = await all(db, `
           SELECT
+              t.id,
+              t.transaction_date,
+              t.description,
+              t.notes,
               COALESCE(c.currency, 'non_cash') AS currency,
-              COALESCE(SUM(t.amount), 0)       AS income_native,
-              tc.name                          AS category_name,
-              tc.id                            AS category_id,
-              COUNT(*)                         AS count
+              t.amount AS income_native,
+              tc.name AS category_name
           FROM transactions t
           LEFT JOIN cashboxes c ON c.id = t.cashbox_id
           LEFT JOIN transaction_categories tc ON tc.id = t.category_id
@@ -874,8 +1907,35 @@ class ReportController {
             AND t.status = 'active'
             AND t.transaction_date >= ?
             AND t.transaction_date <= ?
-          GROUP BY tc.id, COALESCE(c.currency, 'non_cash')
-          ORDER BY income_native DESC
+          ORDER BY t.transaction_date DESC, t.id DESC
+      `, [dateFrom, dateTo]);
+
+      // ────────────────────────────────────────────────────────────────────
+      // 6.5. STOCK ADJUSTMENT LOSSES (negative adjustments)
+      // ────────────────────────────────────────────────────────────────────
+      const stockLossRows = await all(db, `
+          SELECT
+              sa.quantity,
+              COALESCE(sb.purchase_price_base, sb.purchase_price, 0) AS purchase_price,
+              (
+                ABS(sa.quantity) *
+                COALESCE(sb.purchase_price_base, sb.purchase_price, 0)
+              ) AS loss_amount,
+              p.name AS product_name,
+              DATE(sa.created_at) AS adjustment_date,
+              sa.reason,
+              sa.notes
+          FROM stock_adjustments sa
+          JOIN stock_batches sb ON sb.id = sa.stock_batch_id
+          JOIN products p ON p.id = sb.product_id
+          WHERE sa.quantity < 0
+            AND COALESCE(sa.reason, '') NOT IN (
+              'consignment_return_out',
+              'consignment_spoilage_out'
+            )
+            AND DATE(sa.created_at) >= ?
+            AND DATE(sa.created_at) <= ?
+          ORDER BY sa.created_at DESC
       `, [dateFrom, dateTo]);
 
       // ────────────────────────────────────────────────────────────────────
@@ -924,13 +1984,14 @@ class ReportController {
       const totalConsignmentPayoutBase   = consignmentPayoutRows.reduce((s, r) => s + number(r.payout_base), 0);
       const totalExpensesNative          = expenseRows.reduce((s, r) => s + number(r.expense_native), 0);
       const totalIncomeNative            = incomeRows.reduce((s, r) => s + number(r.income_native), 0);
+      const totalStockLossBase           = stockLossRows.reduce((s, r) => s + number(r.loss_amount), 0);
 
-      // Net profit = gross profit from sales + other income − other expenses.
+      // Net profit = gross profit from sales + other income − other expenses - stock loss.
       // Consignment commission is already embedded in grossProfitBase because:
       //   gross_profit = sale_revenue_base − cogs_base
       // and the COGS for consignment batches is the purchase_price_base per unit.
       const netProfitBase = Math.round(
-          (totalGrossProfitBase + totalIncomeNative - totalExpensesNative) * 100
+          (totalGrossProfitBase + totalIncomeNative - totalExpensesNative - totalStockLossBase) * 100
       ) / 100;
 
       return {
@@ -963,25 +2024,42 @@ class ReportController {
           },
 
           expenses: {
-              by_category: expenseRows.map(r => ({
-                  category_id: r.category_id,
-                  category:    r.category_name || 'غير مصنف',
+              details: expenseRows.map(r => ({
+                  id:          r.id,
+                  transaction_date: r.transaction_date,
+                  category_name: r.category_name,
+                  description: r.description,
+                  notes:       r.notes,
                   currency:    r.currency,
                   amount:      number(r.expense_native),
-                  count:       r.count,
               })),
               total_native: number(totalExpensesNative),
           },
 
           other_income: {
-              by_category: incomeRows.map(r => ({
-                  category_id: r.category_id,
-                  category:    r.category_name || 'غير مصنف',
+              details: incomeRows.map(r => ({
+                  id:          r.id,
+                  transaction_date: r.transaction_date,
+                  category_name: r.category_name,
+                  description: r.description,
+                  notes:       r.notes,
                   currency:    r.currency,
                   amount:      number(r.income_native),
-                  count:       r.count,
               })),
               total_native: number(totalIncomeNative),
+          },
+          
+          stock_losses: {
+              details: stockLossRows.map(r => ({
+                  quantity: r.quantity,
+                  purchase_price: number(r.purchase_price),
+                  loss_amount: number(r.loss_amount),
+                  product_name: r.product_name,
+                  adjustment_date: r.adjustment_date,
+                  reason: r.reason,
+                  notes: r.notes
+              })),
+              total_base: number(totalStockLossBase),
           },
 
           spoilage_summary: spoilageRows.map(r => ({
@@ -1006,6 +2084,7 @@ class ReportController {
               total_consignment_payout_base:   number(totalConsignmentPayoutBase),
               total_expenses_native:           number(totalExpensesNative),
               total_other_income_native:       number(totalIncomeNative),
+              total_stock_loss_base:           number(totalStockLossBase),
               net_profit_base:                 number(netProfitBase),
               is_profit:                       netProfitBase >= 0,
           },

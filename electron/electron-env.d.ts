@@ -113,6 +113,7 @@ type CashboxMovementRecord = {
   transaction_date: string;
   notes: string | null;
   created_at: string | null;
+  reference_display_id?: string | null;
 };
 
 type CashboxSummaryByCurrency = {
@@ -301,6 +302,10 @@ type PurchaseInvoiceRecord = {
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
+  is_edited?: boolean | number;
+  edit_count?: number;
+  last_edited_at?: string | null;
+  last_edited_by?: number | null;
 };
 
 type PurchaseInvoiceDetails = {
@@ -359,6 +364,10 @@ type SaleInvoiceRecord = {
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
+  is_edited?: boolean | number;
+  edit_count?: number;
+  last_edited_at?: string | null;
+  last_edited_by?: number | null;
 };
 
 type SaleInvoiceDetails = {
@@ -540,6 +549,8 @@ interface Window {
       listForPurchase(invoiceId: number): Promise<PaymentRecord[]>;
       recordSale(input: RecordSalePaymentInput): Promise<{ payment: PaymentRecord; invoice: SaleInvoiceRecord; cashbox: CashboxApiRecord }>;
       recordPurchase(input: RecordPurchasePaymentInput): Promise<{ payment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
+      recordGeneralReceipt(input: { party_type: string; party_id: number; cashbox_id: number; amount: number; payment_date: string; notes?: string }): Promise<any>;
+      recordGeneralPayment(input: { party_type: string; party_id: number; cashbox_id: number; amount: number; payment_date: string; notes?: string }): Promise<any>;
       reverseSale(paymentId: number, reason: string): Promise<{ reversedPayment: PaymentRecord; invoice: SaleInvoiceRecord; cashbox: CashboxApiRecord }>;
       reversePurchase(paymentId: number, reason: string): Promise<{ reversedPayment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
     };
@@ -549,6 +560,7 @@ interface Window {
       list(filters?: InvoiceListFilters, pagination?: PaginationInput): Promise<PaginatedInvoices<PurchaseInvoiceRecord>>;
       getDetails(id: number): Promise<PurchaseInvoiceDetails>;
       createFull(input: CreatePurchaseInvoiceInput): Promise<PurchaseInvoiceDetails>;
+      update(id: number, input: CreatePurchaseInvoiceInput, password: string): Promise<PurchaseInvoiceDetails>;
       addItems(invoiceId: number, items: unknown): Promise<PurchaseInvoiceDetails>;
       cancel(id: number, reason: string): Promise<PurchaseInvoiceDetails>;
       recordPayment(input: RecordPurchasePaymentInput): Promise<{ payment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
@@ -568,6 +580,7 @@ interface Window {
       getDetails(id: number): Promise<SaleInvoiceDetails>;
       getFull(id: number): Promise<SaleInvoiceDetails>;
       createProcess(input: CreateSaleInvoiceInput): Promise<SaleInvoiceDetails>;
+      update(id: number, input: CreateSaleInvoiceInput, password: string): Promise<SaleInvoiceDetails>;
       cancel(id: number, reason: string): Promise<SaleInvoiceDetails>;
       deleteDraft(id: number): Promise<{ success: true }>;
       availableBatches(productId: number): Promise<StockBatchRecord[]>;
@@ -626,5 +639,24 @@ interface Window {
       markAllRead: () => Promise<any>;
       dismiss: (id: number) => Promise<any>;
     };
+  };
+}
+
+// ─── Auto-Updater API (exposed via preload) ─────────────────────────────────
+type UpdaterStatus =
+  | { type: "idle" }
+  | { type: "checking" }
+  | { type: "available"; info: { version: string } }
+  | { type: "not-available" }
+  | { type: "downloading"; percent: number }
+  | { type: "ready" }
+  | { type: "error"; message: string };
+
+interface Window {
+  updaterApi: {
+    /** Opens file picker to install an update manually */
+    checkForUpdates: () => Promise<void>;
+    /** Subscribe to status events. Returns an unsubscribe function. */
+    onStatus: (cb: (status: UpdaterStatus) => void) => () => void;
   };
 }

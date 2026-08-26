@@ -1,5 +1,5 @@
 import { getArabicErrorMessage } from "../../lib/errorNormalizer";
-import { Banknote, HandCoins, Plus, Printer, ReceiptText, RotateCcw, Trash2, XCircle } from "lucide-react";
+import { Banknote, HandCoins, Plus, Pencil, Printer, ReceiptText, RotateCcw, Trash2, XCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DataTable from "../../components/common/DataTable";
@@ -42,7 +42,8 @@ export default function PurchaseDetailsPage() {
   if (loading) return <div className="px-6 py-12 text-center text-sm text-[var(--text-muted)]">جاري التحميل...</div>;
   if (error || !details) return <EmptyState icon={<ReceiptText size={32} />} title="خطأ في التحميل" description={error || "تعذر العثور على فاتورة الشراء المطلوبة."} />;
 
-  const { invoice, supplier, items, payments, financial_summary } = details;
+  const { invoice, supplier, items, payments, financial_summary, activity } = details;
+  const editHistory = (activity ?? []).filter((entry) => entry.action === "purchase_edited");
   const editable = invoice.status === "draft";
   const canCancel = ["confirmed", "partially_paid", "paid"].includes(invoice.status);
 
@@ -76,14 +77,14 @@ export default function PurchaseDetailsPage() {
   };
 
   return <>
-    <PageHeader title={`فاتورة الشراء ${invoice.invoice_number}`} description="تفاصيل المورد والأصناف ودفعات المخزون والمدفوعات." actions={<div className="flex flex-wrap gap-2"><BackButton to={PATHS.PURCHASES} /><Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/print`)}>طباعة / PDF</Button>{invoice.invoice_type === "consignment" && <Button variant="secondary" startIcon={<HandCoins size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/consignment`)}>متابعة الأمانة</Button>}{invoice.status !== "paid" && invoice.status !== "cancelled" && !(invoice.invoice_type === "consignment" && invoice.settlement_status === "settled") && <Button startIcon={<Plus size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/payments/new`)}>تسجيل دفعة</Button>}{canCancel && <Button variant="danger" startIcon={<XCircle size={17} />} onClick={() => setCancelOpen(true)}>إلغاء الفاتورة</Button>}<Button variant="danger" startIcon={<Trash2 size={17} />} disabled={!editable} title={!editable ? "الحذف متاح للفواتير المسودة فقط" : undefined} onClick={() => setDeleteOpen(true)}>حذف</Button></div>} />
-    <p className="mb-5 text-xs text-[var(--text-muted)]">الفاتورة المؤكدة لا تُعدّل مباشرة. التصحيح يتم بالإلغاء للحفاظ على المخزون والأرصدة والسجل المالي.</p>
+    <PageHeader title={`فاتورة الشراء ${invoice.invoice_number}`} description="تفاصيل المورد والأصناف ودفعات المخزون والمدفوعات." actions={<div className="flex flex-wrap gap-2"><BackButton to={PATHS.PURCHASES} />{invoice.status !== "cancelled" && <Button variant="secondary" startIcon={<Pencil size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/edit`)}>تعديل محمي</Button>}<Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/print`)}>طباعة / PDF</Button>{invoice.invoice_type === "consignment" && <Button variant="secondary" startIcon={<HandCoins size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/consignment`)}>متابعة الأمانة</Button>}{invoice.status !== "paid" && invoice.status !== "cancelled" && !(invoice.invoice_type === "consignment" && invoice.settlement_status === "settled") && <Button startIcon={<Plus size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/payments/new`)}>تسجيل دفعة</Button>}{canCancel && <Button variant="danger" startIcon={<XCircle size={17} />} onClick={() => setCancelOpen(true)}>إلغاء الفاتورة</Button>}<Button variant="danger" startIcon={<Trash2 size={17} />} disabled={!editable} title={!editable ? "الحذف متاح للفواتير المسودة فقط" : undefined} onClick={() => setDeleteOpen(true)}>حذف</Button></div>} />
+    <p className="mb-5 text-xs text-[var(--text-muted)]">التعديل محمي بكلمة مرور، ويُرفض تلقائيًا إذا كانت دفعات المخزون الناتجة عن الفاتورة قد دخلت في حركات لاحقة.</p>
     <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
       <div className="space-y-5">
         <Card header="بيانات الفاتورة">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              ["رقم الفاتورة", invoice.invoice_number],
+              ["رقم الفاتورة", <span className="inline-flex items-center gap-2">{invoice.invoice_number}{Boolean(invoice.is_edited) && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">معدلة</span>}</span>],
               ["التاريخ", invoice.invoice_date],
               ["المورد", supplier?.name ?? "-"],
               ["نوع الفاتورة", typeLabels[invoice.invoice_type] ?? "-"],
@@ -103,6 +104,10 @@ export default function PurchaseDetailsPage() {
             </div>
           )}
         </Card>
+
+        {editHistory.length > 0 && <Card header="سجل تعديلات الفاتورة" description="كل حفظ تعديل موثق في سجل النشاط مع النسخة السابقة والجديدة.">
+          <div className="space-y-2">{editHistory.map((entry, index) => <div key={String(entry.id ?? index)} className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2 text-sm"><span className="font-bold text-[var(--text-primary)]">تعديل #{editHistory.length - index}</span><span className="text-[var(--text-muted)]">{String(entry.created_at ?? "—")}</span></div>)}</div>
+        </Card>}
 
         <Card padding={false} header="أصناف الفاتورة" description="المنتجات والكميات وأسعار الشراء وبيانات دفعات المخزون.">
           <DataTable>

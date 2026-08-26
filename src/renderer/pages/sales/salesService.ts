@@ -31,6 +31,9 @@ export const salesService = {
   createProcess: (input: CreateSaleInvoiceInput) =>
     window.stockliteApi.saleInvoices.createProcess(input),
 
+  update: (id: number, input: CreateSaleInvoiceInput, password: string) =>
+    window.stockliteApi.saleInvoices.update(id, input, password),
+
   /**
    * Cancel a sale invoice. Restores stock, reverses payments.
    */

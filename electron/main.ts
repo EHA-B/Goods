@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog } from "electron";
+import { initUpdater } from "./services/updater";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -128,4 +129,6 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+  // Initialize auto-updater after window is ready
+  if (win) initUpdater(win);
 });

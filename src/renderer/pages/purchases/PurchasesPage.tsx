@@ -4,7 +4,9 @@ import { Plus, ReceiptText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import PurchasesSummaryCards from "../../components/purchases/PurchasesSummaryCards";
 import PurchasesTable from "../../components/purchases/PurchasesTable";
-import { Button, Card, ConfirmDialog, EmptyState, Input, PageHeader, Pagination, Select } from "../../components/ui";
+import { Button, Card, ConfirmDialog, EmptyState, Input, PageHeader, Select } from "../../components/ui";
+import TableFooter from "../../components/common/TableFooter";
+import { RECORDS_PAGE_SIZE } from "../../lib/pagination";
 import { PATHS } from "../../routes/path";
 import { purchasesService } from "./purchasesService";
 
@@ -13,7 +15,7 @@ const emptyTotals = { total: 0, paid: 0, remaining: 0, count: 0 };
 export default function PurchasesPage() {
   const navigate = useNavigate();
   const [purchases, setPurchases] = useState<PurchaseInvoiceRecord[]>([]);
-  const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 1 });
+  const [pagination, setPagination] = useState({ page: 1, limit: RECORDS_PAGE_SIZE, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -74,7 +76,15 @@ export default function PurchasesPage() {
       {error && <div className="m-4 rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
       {loading ? <div className="px-6 py-12 text-center text-sm text-[var(--text-muted)]">جاري التحميل...</div> : purchases.length ? <>
         <PurchasesTable purchases={purchases} onView={(p) => navigate(`/purchases/${p.id}`)} onDelete={setPendingDelete} />
-        <div className="px-5 pb-5"><Pagination page={pagination.page} totalPages={Math.max(1, pagination.totalPages)} onChange={(page) => void load(page)} /></div>
+        <TableFooter
+          visibleCount={purchases.length}
+          totalCount={pagination.total}
+          entityName="فاتورة"
+          page={pagination.page}
+          totalPages={Math.max(1, pagination.totalPages)}
+          pageSize={pagination.limit}
+          onPageChange={(nextPage) => void load(nextPage)}
+        />
       </> : <EmptyState icon={<ReceiptText size={32} />} title="لا توجد فواتير مطابقة" description="غيّر البحث أو الفلاتر، أو أنشئ فاتورة شراء جديدة." />}
     </Card>
     <ConfirmDialog open={Boolean(pendingDelete)} title={pendingDelete?.status === "draft" ? "حذف فاتورة الشراء" : "إلغاء فاتورة الشراء"} message={`هل تريد ${pendingDelete?.status === "draft" ? "حذف" : "إلغاء"} الفاتورة ${pendingDelete?.invoice_number ?? ""}؟`} onCancel={() => setPendingDelete(null)} onConfirm={handleDelete} loading={deleting} />

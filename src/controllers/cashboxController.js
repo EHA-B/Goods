@@ -557,37 +557,47 @@ class CashboxController {
         const limit = Math.min(100, Math.max(1, Number(filters.limit) || 20));
         const offset = (page - 1) * limit;
 
-        const conditions = ['cashbox_id = ?'];
+        const conditions = ['ct.cashbox_id = ?'];
         const values = [cashboxId];
 
         if (filters.direction) {
-            conditions.push('direction = ?');
+            conditions.push('ct.direction = ?');
             values.push(filters.direction);
         }
         if (filters.reference_type) {
-            conditions.push('reference_type = ?');
+            conditions.push('ct.reference_type = ?');
             values.push(filters.reference_type);
         }
         if (filters.date_from) {
-            conditions.push('transaction_date >= ?');
+            conditions.push('ct.transaction_date >= ?');
             values.push(filters.date_from);
         }
         if (filters.date_to) {
-            conditions.push('transaction_date <= ?');
+            conditions.push('ct.transaction_date <= ?');
             values.push(filters.date_to);
         }
 
         const where = `WHERE ${conditions.join(' AND ')}`;
 
         const totalRow = await this._dbGet(db,
-            `SELECT COUNT(*) as total FROM cashbox_transactions ${where}`,
+            `SELECT COUNT(*) as total FROM cashbox_transactions ct ${where}`,
             values
         );
         const total = totalRow?.total || 0;
         const totalPages = Math.ceil(total / limit);
 
         const items = await this._dbAll(db,
-            `SELECT * FROM cashbox_transactions ${where} ORDER BY transaction_date DESC, id DESC LIMIT ? OFFSET ?`,
+            `SELECT ct.*,
+                    CASE 
+                        WHEN ct.reference_type = 'sale' THEN si.invoice_number
+                        WHEN ct.reference_type = 'purchase' THEN pi.invoice_number
+                        ELSE NULL
+                    END as reference_display_id
+             FROM cashbox_transactions ct
+             LEFT JOIN sale_invoices si ON ct.reference_type = 'sale' AND ct.reference_id = si.id
+             LEFT JOIN purchase_invoices pi ON ct.reference_type = 'purchase' AND ct.reference_id = pi.id
+             ${where} 
+             ORDER BY ct.transaction_date DESC, ct.id DESC LIMIT ? OFFSET ?`,
             [...values, limit, offset]
         );
 
@@ -621,7 +631,17 @@ class CashboxController {
         );
 
         const recentMovements = await this._dbAll(db,
-            `SELECT * FROM cashbox_transactions WHERE cashbox_id = ? ORDER BY transaction_date DESC, id DESC LIMIT 10`,
+            `SELECT ct.*,
+                    CASE 
+                        WHEN ct.reference_type = 'sale' THEN si.invoice_number
+                        WHEN ct.reference_type = 'purchase' THEN pi.invoice_number
+                        ELSE NULL
+                    END as reference_display_id
+             FROM cashbox_transactions ct
+             LEFT JOIN sale_invoices si ON ct.reference_type = 'sale' AND ct.reference_id = si.id
+             LEFT JOIN purchase_invoices pi ON ct.reference_type = 'purchase' AND ct.reference_id = pi.id
+             WHERE ct.cashbox_id = ? 
+             ORDER BY ct.transaction_date DESC, ct.id DESC LIMIT 10`,
             [id]
         );
 

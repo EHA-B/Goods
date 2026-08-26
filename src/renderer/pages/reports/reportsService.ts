@@ -3,7 +3,7 @@ import type { ReportFilterOptions, ReportFilters, ReportOutputFormat, ReportResu
 type ReportsApi = {
   options?: () => Promise<ReportFilterOptions>;
   generate?: (input: { reportId: string; filters: ReportFilters }) => Promise<ReportResult>;
-  export?: (input: { reportId: string; filters: ReportFilters; format: Exclude<ReportOutputFormat, "preview"> }) => Promise<{ success: boolean; filePath?: string }>;
+  export?: (input: { reportId: string; filters: ReportFilters; format: Exclude<ReportOutputFormat, "preview"> }) => Promise<{ success: boolean; filePath?: string; canceled?: boolean }>;
 };
 
 function api(): ReportsApi | undefined {

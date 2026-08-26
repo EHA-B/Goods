@@ -1,8 +1,9 @@
 import { notifyValidation } from "../../lib/notifications";
 import { getArabicErrorMessage } from "../../lib/errorNormalizer";
-import { useEffect, useMemo, useState } from "react";
+import { getInvoiceEditErrorMessage } from "../../lib/invoiceEditErrors";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Calculator, PackagePlus, Plus, Save, Trash2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   BackButton,
   Button,
@@ -12,15 +13,28 @@ import {
   FormSection,
   Input,
   PageHeader,
+  SearchableSelect,
   Select,
   Textarea,
 } from "../../components/ui";
 import { PATHS } from "../../routes/path";
 import { purchasesService } from "./purchasesService";
+import InvoiceEditPasswordDialog from "../../components/invoices/InvoiceEditPasswordDialog";
+import {
+  clearInvoiceDraft,
+  consumeInvoiceDraft,
+  invoiceDraftFingerprint,
+  invoiceDraftKey,
+  saveInvoiceDraft,
+} from "../../lib/invoiceDrafts";
 import {
   getProductErrorMessage,
   productsService,
 } from "../products/productsService";
+import {
+  suppliersService,
+  getSupplierErrorMessage,
+} from "../suppliers/suppliersService";
 
 type PurchaseItemForm = {
   product_id: number;
@@ -70,6 +84,15 @@ const money = (value: number) =>
 
 export default function PurchaseFormPage() {
   const navigate = useNavigate();
+  const { purchaseId } = useParams();
+  const editingId = Number(purchaseId || 0);
+  const isEdit = editingId > 0;
+  const draftKey = invoiceDraftKey("purchase", isEdit ? "edit" : "new", editingId || undefined);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [pendingInput, setPendingInput] = useState<CreatePurchaseInvoiceInputWithEstimatedPrice | null>(null);
+  const [restoredDraft, setRestoredDraft] = useState(false);
+  const [draftInitialized, setDraftInitialized] = useState(false);
+  const draftBaselineRef = useRef<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -92,6 +115,7 @@ export default function PurchaseFormPage() {
   ]);
 
   const [paymentAmount, setPaymentAmount] = useState(0);
+  const [existingPaidAmount, setExistingPaidAmount] = useState(0);
   const [paymentCashboxId, setPaymentCashboxId] = useState(0);
   const [paymentDate, setPaymentDate] = useState(
     new Date().toISOString().slice(0, 10),
@@ -118,6 +142,12 @@ export default function PurchaseFormPage() {
     category: "",
     description: "",
   });
+
+  // ── Quick supplier dialog state ───────────────────────────────────────────
+  const [quickSupplierOpen, setQuickSupplierOpen] = useState(false);
+  const [quickSupplierSaving, setQuickSupplierSaving] = useState(false);
+  const [quickSupplierError, setQuickSupplierError] = useState("");
+  const [quickSupplier, setQuickSupplier] = useState({ name: "", phone: "", notes: "" });
 
   const [lookups, setLookups] = useState<{
     suppliers: PartyApiRecord[];
@@ -155,6 +185,98 @@ export default function PurchaseFormPage() {
       )
       .finally(() => setLookupsLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!isEdit || !lookups) return;
+    purchasesService.getDetails(editingId).then((data) => {
+      const draft = consumeInvoiceDraft<any>(draftKey);
+      const source = draft ?? { supplierId: Number(data.invoice.supplier_id), invoiceNumber: data.invoice.invoice_number, invoiceDate: data.invoice.invoice_date, invoiceType: data.invoice.invoice_type, discount: Number(data.invoice.discount_amount ?? data.invoice.discount ?? 0), notes: data.invoice.notes ?? "", currency: data.invoice.currency ?? "SYP", exchangeRate: Number(data.invoice.exchange_rate ?? 1), items: data.items.map((row: any) => ({ product_id: Number(row.product_id), productName: String(row.product_name ?? ""), quantity: Number(row.quantity ?? 1), purchase_price: Number(row.unit_price ?? 0), estimated_purchase_price: Number(row.estimated_purchase_price ?? row.unit_price ?? 0), batch_code: String(row.batch_code ?? ""), received_date: String(row.batch_received_date ?? row.received_date ?? data.invoice.invoice_date), expiry_date: String(row.batch_expiry_date ?? row.expiry_date ?? "") })) };
+      setSupplierId(source.supplierId); setInvoiceNumber(source.invoiceNumber); setInvoiceDate(source.invoiceDate); setInvoiceType(source.invoiceType); setDiscount(source.discount); setNotes(source.notes); setCurrency(source.currency); setExchangeRate(source.exchangeRate); setItems(source.items); setPaymentAmount(0); setExistingPaidAmount(Number(data.invoice.paid_amount ?? 0)); setRestoredDraft(Boolean(draft)); setDraftInitialized(true);
+    }).catch((err: Error) => setError(getArabicErrorMessage(err, "تعذر تحميل الفاتورة للتعديل")));
+  }, [isEdit, editingId, lookups, draftKey]);
+
+  useEffect(() => {
+    if (isEdit || draftInitialized) return; const draft = consumeInvoiceDraft<any>(draftKey); if (!draft) { setDraftInitialized(true); return; }
+    setSupplierId(draft.supplierId ?? 0); setInvoiceNumber(draft.invoiceNumber ?? ""); setInvoiceDate(draft.invoiceDate ?? invoiceDate); setInvoiceType(draft.invoiceType ?? "standard"); setDiscount(draft.discount ?? 0); setNotes(draft.notes ?? ""); setItems(draft.items ?? [emptyItem()]); setPaymentAmount(draft.paymentAmount ?? 0); setPaymentCashboxId(draft.paymentCashboxId ?? 0); setPaymentDate(draft.paymentDate ?? paymentDate); setPaymentExchangeRate(draft.paymentExchangeRate ?? ""); setCurrency(draft.currency ?? "SYP"); setExchangeRate(draft.exchangeRate ?? 1); setRestoredDraft(true); setDraftInitialized(true);
+  }, [isEdit, draftKey, draftInitialized]);
+
+  useEffect(() => {
+    if (!draftInitialized) {
+      return;
+    }
+
+    const draftData = {
+      supplierId,
+      invoiceNumber,
+      invoiceDate,
+      invoiceType,
+      discount,
+      notes,
+      items,
+      paymentAmount,
+      paymentCashboxId,
+      paymentDate,
+      paymentExchangeRate,
+      currency,
+      exchangeRate,
+    };
+
+    const fingerprint =
+      invoiceDraftFingerprint(
+        draftData,
+      );
+
+    /*
+     * أول لقطة بعد تحميل النموذج هي خط الأساس.
+     * لا نحفظها كمسودة، سواء كانت بيانات فارغة أو مسودة مستعادة.
+     */
+    if (
+      draftBaselineRef.current ===
+      null
+    ) {
+      draftBaselineRef.current =
+        fingerprint;
+      return;
+    }
+
+    /*
+     * إذا رجعت البيانات لنفس حالة الدخول الحالية، لا يوجد شيء غير مكتمل.
+     */
+    if (
+      fingerprint ===
+      draftBaselineRef.current
+    ) {
+      clearInvoiceDraft(draftKey);
+      return;
+    }
+
+    const timer =
+      window.setTimeout(() => {
+        saveInvoiceDraft(
+          draftKey,
+          draftData,
+        );
+      }, 700);
+
+    return () =>
+      window.clearTimeout(timer);
+  }, [
+    draftInitialized,
+    draftKey,
+    supplierId,
+    invoiceNumber,
+    invoiceDate,
+    invoiceType,
+    discount,
+    notes,
+    items,
+    paymentAmount,
+    paymentCashboxId,
+    paymentDate,
+    paymentExchangeRate,
+    currency,
+    exchangeRate,
+  ]);
 
   /**
    * المجموع الحقيقي للمشتريات العادية.
@@ -199,9 +321,13 @@ export default function PurchaseFormPage() {
   /**
    * المتبقي = الإجمالي - الدفعة الأولية (للعادية) أو صفر (للأمانة عند الإنشاء).
    */
+  const effectivePaidAmount = isEdit
+    ? existingPaidAmount
+    : paymentAmount;
+
   const remaining = Math.max(
     0,
-    total - paymentAmount,
+    total - effectivePaidAmount,
   );
 
   const activeCashboxes = useMemo(
@@ -320,6 +446,56 @@ export default function PurchaseFormPage() {
       );
     } finally {
       setQuickProductSaving(false);
+    }
+  };
+
+  const openQuickSupplier = () => {
+    setQuickSupplierOpen(true);
+    setQuickSupplierError("");
+    setQuickSupplier({ name: "", phone: "", notes: "" });
+  };
+
+  const createQuickSupplier = async () => {
+    if (!quickSupplier.name.trim()) {
+      setQuickSupplierError("اسم المورد مطلوب.");
+      return;
+    }
+    try {
+      setQuickSupplierSaving(true);
+      setQuickSupplierError("");
+      const created = await suppliersService.create({
+        name: quickSupplier.name,
+        phone: quickSupplier.phone,
+        notes: quickSupplier.notes,
+        isActive: true,
+      });
+      const newRecord: PartyApiRecord = {
+        id: created.id, name: created.name,
+        phone: null,
+        email: null,
+        address: null,
+        balance: null,
+        notes: null,
+        isActive: 0,
+        created_at: null,
+        updated_at: null
+      };
+      setLookups((curr) =>
+        curr
+          ? {
+              ...curr,
+              suppliers: [...curr.suppliers, newRecord].sort((a, b) =>
+                a.name.localeCompare(b.name, "ar"),
+              ),
+            }
+          : curr,
+      );
+      setSupplierId(created.id);
+      setQuickSupplierOpen(false);
+    } catch (err) {
+      setQuickSupplierError(getSupplierErrorMessage(err));
+    } finally {
+      setQuickSupplierSaving(false);
     }
   };
 
@@ -591,6 +767,8 @@ export default function PurchaseFormPage() {
             : exchangeRate,
       };
 
+    if (isEdit) { setPendingInput(input); setPasswordOpen(true); return; }
+
     setLoading(true);
 
     try {
@@ -603,6 +781,7 @@ export default function PurchaseFormPage() {
         );
       }
 
+      clearInvoiceDraft(draftKey);
       navigate(`/purchases/${result.invoice.id}`);
     } catch (err: unknown) {
       const e = err as Error;
@@ -621,18 +800,16 @@ export default function PurchaseFormPage() {
   return (
     <>
       <PageHeader
-        title="فاتورة شراء جديدة"
-        description={
-          isConsignment
-            ? "استلام بضاعة أمانة من المورد. سعر الشراء المتوقع تقديري فقط ولا يمثل مبلغًا مستحقًا."
-            : "أدخل بيانات المورد والأصناف ودفعات المخزون والمبالغ المالية."
-        }
+        title={isEdit ? "تعديل فاتورة شراء" : "فاتورة شراء جديدة"}
+        description={isEdit ? "تعديل محمي بكلمة مرور. لن يسمح النظام بالتعديل إذا تحرك مخزون الفاتورة لاحقًا." : isConsignment ? "استلام بضاعة أمانة من المورد. سعر الشراء المتوقع تقديري فقط ولا يمثل مبلغًا مستحقًا." : "أدخل بيانات المورد والأصناف ودفعات المخزون والمبالغ المالية."}
         actions={
           <BackButton to={PATHS.PURCHASES} />
         }
       />
 
       <div className="space-y-5 pb-24">
+        {restoredDraft && <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"><span>تم تحميل آخر مسودة غير مكتملة.</span><Button size="sm" variant="secondary" onClick={() => { clearInvoiceDraft(draftKey); window.location.reload(); }}>تجاهل المسودة</Button></div>}
+        {isEdit && <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3 text-sm text-[var(--text-secondary)]">التعديل يتطلب كلمة المرور عند الحفظ. إذا كانت دفعة مخزون من هذه الفاتورة قد بيعت أو عُدلت، سيرفض الباك التعديل حفاظًا على السجل.</div>}
         {error && (
           <div className="rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
             {error}
@@ -679,30 +856,49 @@ export default function PurchaseFormPage() {
               htmlFor="supplier"
               required
             >
-              <Select
-                id="supplier"
-                value={String(supplierId)}
-                disabled={lookupsLoading}
-                options={[
-                  {
-                    value: "0",
-                    label: lookupsLoading
-                      ? "جاري تحميل الموردين..."
-                      : "اختر المورد",
-                  },
-                  ...(lookups?.suppliers ?? []).map(
-                    (supplier) => ({
-                      value: String(supplier.id),
-                      label: supplier.name,
-                    }),
-                  ),
-                ]}
-                onChange={(e) =>
-                  setSupplierId(
-                    Number(e.target.value),
-                  )
-                }
-              />
+              <div className="flex gap-2">
+                <div className="min-w-0 flex-1">
+                  <SearchableSelect
+                    id="supplier"
+                    value={String(supplierId)}
+                    disabled={lookupsLoading}
+                    placeholder={
+                      lookupsLoading
+                        ? "جاري تحميل الموردين..."
+                        : "اختر المورد"
+                    }
+                    searchPlaceholder="ابحث باسم المورد..."
+                    emptyMessage="لا يوجد مورد مطابق للبحث"
+                    options={[
+                      {
+                        value: "0",
+                        label: "اختر المورد",
+                      },
+                      ...(lookups?.suppliers ?? []).map(
+                        (supplier) => ({
+                          value: String(supplier.id),
+                          label: supplier.name,
+                          keywords: supplier.name,
+                        }),
+                      ),
+                    ]}
+                    onValueChange={(value) =>
+                      setSupplierId(
+                        Number(value),
+                      )
+                    }
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-11 shrink-0 px-3"
+                  startIcon={<Plus size={15} />}
+                  onClick={openQuickSupplier}
+                >
+                  مورد جديد
+                </Button>
+              </div>
             </FormField>
 
             <FormField
@@ -860,22 +1056,25 @@ export default function PurchaseFormPage() {
                     >
                       <div className="flex gap-2">
                         <div className="min-w-0 flex-1">
-                          <Select
+                          <SearchableSelect
                             value={String(
                               item.product_id,
                             )}
                             disabled={
                               lookupsLoading
                             }
+                            placeholder={
+                              lookupsLoading
+                                ? "جاري تحميل المنتجات..."
+                                : "اختر المنتج"
+                            }
+                            searchPlaceholder="ابحث باسم المنتج أو الكود..."
+                            emptyMessage="لا يوجد منتج مطابق للبحث"
                             options={[
                               {
                                 value: "0",
-                                label:
-                                  lookupsLoading
-                                    ? "جاري تحميل المنتجات..."
-                                    : "اختر المنتج",
+                                label: "اختر المنتج",
                               },
-
                               ...(
                                 lookups?.products ??
                                 []
@@ -885,16 +1084,14 @@ export default function PurchaseFormPage() {
                                     product.id,
                                   ),
                                   label: `${product.name} — ${product.code ?? ""}`,
+                                  keywords: `${product.name} ${product.code ?? ""}`,
                                 }),
                               ),
                             ]}
-                            onChange={(e) =>
+                            onValueChange={(value) =>
                               selectProduct(
                                 index,
-                                Number(
-                                  e.target
-                                    .value,
-                                ),
+                                Number(value),
                               )
                             }
                           />
@@ -1065,7 +1262,7 @@ export default function PurchaseFormPage() {
 
         {!isConsignment && (
           <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
-            <FormSection
+            {!isEdit ? <FormSection
               title="الدفع الأولي"
               description="يمكن تسجيل دفعة مع إنشاء الفاتورة."
               icon={<Calculator size={18} />}
@@ -1146,7 +1343,7 @@ export default function PurchaseFormPage() {
                   />
                 </FormField>
               </div>
-            </FormSection>
+            </FormSection> : <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4 text-sm text-[var(--text-secondary)]">الدفعات السابقة تبقى كما هي ولا يتم تعديلها من نموذج الفاتورة.</div>}
 
             <Card
               header="ملخص الفاتورة"
@@ -1226,6 +1423,69 @@ export default function PurchaseFormPage() {
           </div>
         )}
       </div>
+
+      {/* ── Quick Supplier Dialog ─────────────────────────────────────── */}
+      <Dialog
+        open={quickSupplierOpen}
+        title="إضافة مورد جديد"
+        onClose={() => !quickSupplierSaving && setQuickSupplierOpen(false)}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              disabled={quickSupplierSaving}
+              onClick={() => setQuickSupplierOpen(false)}
+            >
+              إلغاء
+            </Button>
+            <Button
+              isLoading={quickSupplierSaving}
+              loadingText="جاري الإضافة..."
+              startIcon={<Save size={16} />}
+              onClick={() => void createQuickSupplier()}
+            >
+              إضافة واختيار المورد
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-4">
+          <FormField label="اسم المورد" required>
+            <Input
+              autoFocus
+              value={quickSupplier.name}
+              placeholder="اسم المورد..."
+              onChange={(e) =>
+                setQuickSupplier((c) => ({ ...c, name: e.target.value }))
+              }
+            />
+          </FormField>
+          <FormField label="رقم الهاتف">
+            <Input
+              dir="ltr"
+              value={quickSupplier.phone}
+              placeholder="اختياري"
+              onChange={(e) =>
+                setQuickSupplier((c) => ({ ...c, phone: e.target.value }))
+              }
+            />
+          </FormField>
+          <FormField label="ملاحظات">
+            <Input
+              value={quickSupplier.notes}
+              placeholder="اختياري"
+              onChange={(e) =>
+                setQuickSupplier((c) => ({ ...c, notes: e.target.value }))
+              }
+            />
+          </FormField>
+          {quickSupplierError && (
+            <p className="rounded-[var(--radius-sm)] bg-[var(--danger-subtle)] px-3 py-2 text-sm font-bold text-[var(--danger)]">
+              {quickSupplierError}
+            </p>
+          )}
+        </div>
+      </Dialog>
 
       <Dialog
         open={quickProductIndex !== null}
@@ -1370,6 +1630,7 @@ export default function PurchaseFormPage() {
           </Button>
         </div>
       </div>
+    <InvoiceEditPasswordDialog open={passwordOpen} loading={loading} error={error} onClose={() => setPasswordOpen(false)} onConfirm={async (password) => { if (!pendingInput) return; setLoading(true); setError(""); try { const result = await purchasesService.update(editingId, pendingInput as CreatePurchaseInvoiceInput, password); clearInvoiceDraft(draftKey); setPasswordOpen(false); navigate(`/purchases/${result.invoice.id}`); } catch (err: unknown) { setError(getInvoiceEditErrorMessage(err)); } finally { setLoading(false); } }} />
     </>
   );
 }

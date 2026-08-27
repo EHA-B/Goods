@@ -307,6 +307,8 @@ const stockliteApi = {
       invokeApi("api:purchase:getDetails", id),
     createFull: (input: unknown) =>
       invokeApi("api:purchase:createFull", input),
+    update: (id: number, input: unknown, password: string) =>
+      invokeApi("api:purchase:update", id, input, password),
     addItems: (invoiceId: number, items: unknown) =>
       invokeApi("api:purchase:addItems", invoiceId, items),
     cancel: (id: number, reason: string) =>
@@ -349,6 +351,8 @@ const stockliteApi = {
       invokeApi("api:saleInvoice:getFullSaleInvoice", id),
     createProcess: (input: unknown) =>
       invokeApi("api:saleInvoice:createSaleProcess", input),
+    update: (id: number, input: unknown, password: string) =>
+      invokeApi("api:saleInvoice:updateSaleInvoice", id, input, password),
     cancel: (id: number, reason: string) =>
       invokeApi("api:saleInvoice:cancelSaleInvoice", id, reason),
     deleteDraft: (id: number) =>

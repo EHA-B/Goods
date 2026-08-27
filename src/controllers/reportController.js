@@ -87,6 +87,97 @@ function addFilter(where, params, condition, value) {
   }
 }
 
+function invoiceStatusLabel(status) {
+  switch (String(status || "").toLowerCase()) {
+    case "draft":
+      return "مسودة";
+    case "confirmed":
+      return "مؤكدة";
+    case "partially_paid":
+      return "مدفوعة جزئيًا";
+    case "paid":
+      return "مدفوعة";
+    case "cancelled":
+      return "ملغاة";
+    default:
+      return String(status || "—");
+  }
+}
+
+function purchaseTypeLabel(type) {
+  return String(type || "standard") === "consignment"
+    ? "أمانة"
+    : "شراء عادي";
+}
+
+function formatNumber(value, maximumFractionDigits = 2) {
+  return number(value).toLocaleString("en-US", {
+    maximumFractionDigits,
+  });
+}
+
+function formatMoney(value, currency = "SYP") {
+  const normalizedCurrency = normalizeCurrency(currency);
+  return `${formatNumber(value, 2)} ${currencyLabel(normalizedCurrency)}`;
+}
+
+function buildCurrencySummary(rows, labelPrefix) {
+  const currencies = [
+    ...new Set(
+      rows.map((row) =>
+        normalizeCurrency(row.currency),
+      ),
+    ),
+  ];
+
+  const summary = [];
+
+  for (const currency of currencies) {
+    const currencyRows = rows.filter(
+      (row) =>
+        normalizeCurrency(row.currency) ===
+        currency,
+    );
+
+    const activeRows = currencyRows.filter(
+      (row) =>
+        String(row.status || "").toLowerCase() !==
+        "cancelled",
+    );
+
+    const total = activeRows.reduce(
+      (sum, row) => sum + number(row.total),
+      0,
+    );
+    const paid = activeRows.reduce(
+      (sum, row) => sum + number(row.paid_amount),
+      0,
+    );
+    const remaining = activeRows.reduce(
+      (sum, row) =>
+        sum + number(row.remaining_amount),
+      0,
+    );
+
+    summary.push(
+      {
+        label: `${labelPrefix} (${currency})`,
+        value: formatMoney(total, currency),
+      },
+      {
+        label: `إجمالي المدفوع (${currency})`,
+        value: formatMoney(paid, currency),
+      },
+      {
+        label: `إجمالي المتبقي (${currency})`,
+        value: formatMoney(remaining, currency),
+      },
+    );
+  }
+
+  return summary;
+}
+
 class ReportController {
   async getOptions() {
     const db = await dbmanager.init();
@@ -141,6 +232,14 @@ class ReportController {
       return this.generateSalesProfit(filters);
     }
 
+    if (reportId === "sales-details") {
+      return this.generateSalesDetails(filters);
+    }
+
+    if (reportId === "purchases-details") {
+      return this.generatePurchasesDetails(filters);
+    }
+
     return {
       title: "",
       generatedAt: new Date().toISOString(),
@@ -148,6 +247,932 @@ class ReportController {
       rows: [],
       summary: [],
       totalRows: 0,
+    };
+  }
+
+  async generateSalesDetails(filters = {}) {
+    const db = await dbmanager.init();
+
+    const where = ["1 = 1"];
+    const params = [];
+
+    if (filters.fromDate) {
+      where.push(`date(si.invoice_date) >= date(?)`);
+      params.push(filters.fromDate);
+    }
+
+    if (filters.toDate) {
+      where.push(`date(si.invoice_date) <= date(?)`);
+      params.push(filters.toDate);
+    }
+
+    addFilter(
+      where,
+      params,
+      `si.customer_id = ?`,
+      filters.customerId,
+    );
+
+    addFilter(
+      where,
+      params,
+      `si.status = ?`,
+      filters.status,
+    );
+
+    if (
+      filters.currency &&
+      filters.currency !== "all"
+    ) {
+      where.push(
+        `UPPER(COALESCE(si.currency, 'SYP')) = ?`,
+      );
+      params.push(
+        normalizeCurrency(filters.currency),
+      );
+    }
+
+    if (
+      filters.productId &&
+      filters.productId !== "all"
+    ) {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM sale_invoice_items filter_sii
+          JOIN stock_batches filter_sb
+            ON filter_sb.id = filter_sii.stock_batch_id
+          WHERE filter_sii.sale_invoice_id = si.id
+            AND filter_sb.product_id = ?
+        )
+      `);
+      params.push(filters.productId);
+    }
+
+    const invoices = await all(
+      db,
+      `
+        SELECT
+          si.id,
+          si.invoice_number,
+          si.invoice_date,
+          si.subtotal,
+          COALESCE(si.discount_amount, si.discount, 0) AS discount_amount,
+          COALESCE(si.tax, 0) AS tax,
+          si.total,
+          si.paid_amount,
+          si.remaining_amount,
+          si.status,
+          si.notes,
+          UPPER(COALESCE(si.currency, 'SYP')) AS currency,
+          COALESCE(NULLIF(si.exchange_rate, 0), 1) AS exchange_rate,
+
+          c.name AS customer_name,
+          c.phone AS customer_phone,
+
+          st.name AS sale_type_name,
+          cb.name AS cashbox_name,
+
+          COALESCE(
+            (
+              SELECT COUNT(*)
+              FROM payments pay
+              WHERE pay.payment_type = 'sale'
+                AND pay.invoice_id = si.id
+                AND pay.status = 'active'
+            ),
+            0
+          ) AS payments_count,
+
+          (
+            SELECT MAX(pay.payment_date)
+            FROM payments pay
+            WHERE pay.payment_type = 'sale'
+              AND pay.invoice_id = si.id
+              AND pay.status = 'active'
+          ) AS last_payment_date
+
+        FROM sale_invoices si
+        LEFT JOIN customers c
+          ON c.id = si.customer_id
+        LEFT JOIN sale_types st
+          ON st.id = si.sale_type_id
+        LEFT JOIN cashboxes cb
+          ON cb.id = si.cashbox_id
+
+        WHERE ${where.join(" AND ")}
+
+        ORDER BY
+          date(si.invoice_date) DESC,
+          si.id DESC
+      `,
+      params,
+    );
+
+    const itemWhere = [];
+    const itemParams = [];
+
+    if (
+      filters.productId &&
+      filters.productId !== "all"
+    ) {
+      itemWhere.push(`sb.product_id = ?`);
+      itemParams.push(filters.productId);
+    }
+
+    const items = invoices.length
+      ? await all(
+          db,
+          `
+            SELECT
+              sii.sale_invoice_id,
+              sii.id AS item_id,
+              p.name AS product_name,
+              p.unit AS product_unit,
+              sb.batch_code,
+              sii.quantity,
+              sii.unit_price,
+              sii.line_total,
+              sii.cost_price,
+              sii.profit,
+              sii.notes
+            FROM sale_invoice_items sii
+            JOIN stock_batches sb
+              ON sb.id = sii.stock_batch_id
+            JOIN products p
+              ON p.id = sb.product_id
+            WHERE sii.sale_invoice_id IN (
+              ${invoices.map(() => "?").join(",")}
+            )
+            ${
+              itemWhere.length
+                ? `AND ${itemWhere.join(" AND ")}`
+                : ""
+            }
+            ORDER BY
+              sii.sale_invoice_id,
+              sii.id
+          `,
+          [
+            ...invoices.map((invoice) => invoice.id),
+            ...itemParams,
+          ],
+        )
+      : [];
+
+    const itemsByInvoice = new Map();
+
+    for (const item of items) {
+      const invoiceId = number(
+        item.sale_invoice_id,
+      );
+
+      if (!itemsByInvoice.has(invoiceId)) {
+        itemsByInvoice.set(invoiceId, []);
+      }
+
+      itemsByInvoice
+        .get(invoiceId)
+        .push(item);
+    }
+
+    const sections = invoices.map(
+      (invoice) => {
+        const currency = normalizeCurrency(
+          invoice.currency,
+        );
+
+        const invoiceItems =
+          itemsByInvoice.get(number(invoice.id)) ??
+          [];
+
+        const totalQuantity =
+          invoiceItems.reduce(
+            (sum, item) =>
+              sum + number(item.quantity),
+            0,
+          );
+
+        const totalProfitBase =
+          invoice.status === "cancelled"
+            ? 0
+            : invoiceItems.reduce(
+                (sum, item) =>
+                  sum + number(item.profit),
+                0,
+              );
+
+        return {
+          title: `فاتورة بيع ${invoice.invoice_number} — ${
+            invoice.customer_name || "بيع نقدي"
+          } — ${invoice.invoice_date}`,
+          columns: [
+            {
+              key: "product_name",
+              label: "الصنف",
+              format: "text",
+            },
+            {
+              key: "batch_code",
+              label: "الدفعة",
+              format: "text",
+            },
+            {
+              key: "quantity",
+              label: "الكمية",
+              format: "number",
+            },
+            {
+              key: "unit_price",
+              label: "سعر البيع",
+              format: "currency",
+            },
+            {
+              key: "line_total",
+              label: "إجمالي السطر",
+              format: "currency",
+            },
+            {
+              key: "cost_price_base",
+              label: "تكلفة الوحدة الأساسية",
+              format: "currency",
+            },
+            {
+              key: "profit_base",
+              label: "ربح السطر الأساسي",
+              format: "currency",
+            },
+          ],
+          rows: invoiceItems.map((item) => ({
+            product_name: `${item.product_name}${
+              item.product_unit
+                ? ` (${item.product_unit})`
+                : ""
+            }`,
+            batch_code: item.batch_code || "—",
+            quantity: number(item.quantity),
+            unit_price: number(item.unit_price),
+            line_total: number(item.line_total),
+            cost_price_base: number(
+              item.cost_price,
+            ),
+            profit_base:
+              invoice.status === "cancelled"
+                ? 0
+                : number(item.profit),
+            currency,
+          })),
+          summary: [
+            {
+              label: "العميل",
+              value:
+                invoice.customer_name ||
+                "بيع نقدي",
+            },
+            {
+              label: "نوع البيع",
+              value:
+                invoice.sale_type_name || "—",
+            },
+            {
+              label: "الحالة",
+              value: invoiceStatusLabel(
+                invoice.status,
+              ),
+            },
+            {
+              label: "العملة",
+              value: currency,
+            },
+            {
+              label: "سعر الصرف",
+              value: formatNumber(
+                invoice.exchange_rate,
+                6,
+              ),
+            },
+            {
+              label: "الكمية الكلية",
+              value: formatNumber(
+                totalQuantity,
+                3,
+              ),
+            },
+            {
+              label: "المجموع الفرعي",
+              value: formatMoney(
+                invoice.subtotal,
+                currency,
+              ),
+            },
+            {
+              label: "الخصم",
+              value: formatMoney(
+                invoice.discount_amount,
+                currency,
+              ),
+            },
+            {
+              label: "الإجمالي",
+              value: formatMoney(
+                invoice.total,
+                currency,
+              ),
+            },
+            {
+              label: "المدفوع",
+              value: formatMoney(
+                invoice.paid_amount,
+                currency,
+              ),
+            },
+            {
+              label: "المتبقي",
+              value: formatMoney(
+                invoice.remaining_amount,
+                currency,
+              ),
+            },
+            {
+              label: "عدد الدفعات",
+              value: number(
+                invoice.payments_count,
+              ),
+            },
+            {
+              label: "آخر دفعة",
+              value:
+                invoice.last_payment_date ||
+                "—",
+            },
+            {
+              label: "ربح الأصناف الأساسي",
+              value: `${formatNumber(
+                totalProfitBase,
+                2,
+              )} ل.س`,
+            },
+          ],
+        };
+      },
+    );
+
+    const totalItems = sections.reduce(
+      (sum, section) =>
+        sum + section.rows.length,
+      0,
+    );
+
+    const totalQuantity = sections.reduce(
+      (sum, section) =>
+        sum +
+        section.rows.reduce(
+          (sectionSum, row) =>
+            sectionSum +
+            number(row.quantity),
+          0,
+        ),
+      0,
+    );
+
+    const cancelledCount =
+      invoices.filter(
+        (invoice) =>
+          invoice.status === "cancelled",
+      ).length;
+
+    const totalProfitBase =
+      sections.reduce(
+        (sum, section) => {
+          const profitSummary =
+            section.summary.find(
+              (item) =>
+                item.label ===
+                "ربح الأصناف الأساسي",
+            );
+
+          return (
+            sum +
+            number(
+              String(
+                profitSummary?.value ?? 0,
+              )
+                .replace(/,/g, "")
+                .replace(/[^\d.-]/g, ""),
+            )
+          );
+        },
+        0,
+      );
+
+    return {
+      title: "تقرير المبيعات التفصيلي",
+      generatedAt:
+        new Date().toISOString(),
+      columns: [],
+      rows: [],
+      sections,
+      summary: [
+        {
+          label: "عدد فواتير البيع",
+          value: invoices.length,
+        },
+        {
+          label: "عدد بنود الأصناف",
+          value: totalItems,
+        },
+        {
+          label: "إجمالي الكمية المباعة",
+          value: formatNumber(
+            totalQuantity,
+            3,
+          ),
+        },
+        {
+          label: "الفواتير الملغاة",
+          value: cancelledCount,
+        },
+        ...buildCurrencySummary(
+          invoices,
+          "إجمالي المبيعات الفعلية",
+        ),
+        {
+          label: "إجمالي ربح الأصناف الأساسي",
+          value: `${formatNumber(
+            totalProfitBase,
+            2,
+          )} ل.س`,
+        },
+      ],
+      totalRows: totalItems,
+    };
+  }
+
+  async generatePurchasesDetails(filters = {}) {
+    const db = await dbmanager.init();
+
+    const where = ["1 = 1"];
+    const params = [];
+
+    if (filters.fromDate) {
+      where.push(`date(pi.invoice_date) >= date(?)`);
+      params.push(filters.fromDate);
+    }
+
+    if (filters.toDate) {
+      where.push(`date(pi.invoice_date) <= date(?)`);
+      params.push(filters.toDate);
+    }
+
+    addFilter(
+      where,
+      params,
+      `pi.supplier_id = ?`,
+      filters.supplierId,
+    );
+
+    addFilter(
+      where,
+      params,
+      `pi.status = ?`,
+      filters.status,
+    );
+
+    if (
+      filters.currency &&
+      filters.currency !== "all"
+    ) {
+      where.push(
+        `UPPER(COALESCE(pi.currency, 'SYP')) = ?`,
+      );
+      params.push(
+        normalizeCurrency(filters.currency),
+      );
+    }
+
+    if (
+      filters.productId &&
+      filters.productId !== "all"
+    ) {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM purchase_invoice_items filter_pii
+          WHERE filter_pii.purchase_invoice_id = pi.id
+            AND filter_pii.product_id = ?
+        )
+      `);
+      params.push(filters.productId);
+    }
+
+    const invoices = await all(
+      db,
+      `
+        SELECT
+          pi.id,
+          pi.invoice_number,
+          pi.invoice_date,
+          pi.invoice_type,
+          pi.subtotal,
+          COALESCE(pi.discount_amount, pi.discount, 0) AS discount_amount,
+          COALESCE(pi.tax, 0) AS tax,
+          pi.total,
+          pi.paid_amount,
+          pi.remaining_amount,
+          pi.status,
+          pi.notes,
+          UPPER(COALESCE(pi.currency, 'SYP')) AS currency,
+          COALESCE(NULLIF(pi.exchange_rate, 0), 1) AS exchange_rate,
+          pi.settlement_status,
+          pi.settled_at,
+
+          s.name AS supplier_name,
+          s.phone AS supplier_phone,
+
+          COALESCE(
+            (
+              SELECT COUNT(*)
+              FROM payments pay
+              WHERE pay.payment_type = 'purchase'
+                AND pay.invoice_id = pi.id
+                AND pay.status = 'active'
+            ),
+            0
+          ) AS payments_count,
+
+          (
+            SELECT MAX(pay.payment_date)
+            FROM payments pay
+            WHERE pay.payment_type = 'purchase'
+              AND pay.invoice_id = pi.id
+              AND pay.status = 'active'
+          ) AS last_payment_date
+
+        FROM purchase_invoices pi
+        LEFT JOIN suppliers s
+          ON s.id = pi.supplier_id
+
+        WHERE ${where.join(" AND ")}
+
+        ORDER BY
+          date(pi.invoice_date) DESC,
+          pi.id DESC
+      `,
+      params,
+    );
+
+    const itemWhere = [];
+    const itemParams = [];
+
+    if (
+      filters.productId &&
+      filters.productId !== "all"
+    ) {
+      itemWhere.push(`pii.product_id = ?`);
+      itemParams.push(filters.productId);
+    }
+
+    const items = invoices.length
+      ? await all(
+          db,
+          `
+            SELECT
+              pii.purchase_invoice_id,
+              pii.id AS item_id,
+              p.name AS product_name,
+              p.unit AS product_unit,
+              pii.quantity,
+              pii.unit_price,
+              pii.line_total,
+              pii.notes,
+
+              sb.batch_code,
+              sb.remaining_quantity,
+              sb.received_date,
+              sb.expiry_date
+
+            FROM purchase_invoice_items pii
+            JOIN products p
+              ON p.id = pii.product_id
+            LEFT JOIN stock_batches sb
+              ON sb.purchase_invoice_id =
+                 pii.purchase_invoice_id
+             AND sb.product_id =
+                 pii.product_id
+
+            WHERE pii.purchase_invoice_id IN (
+              ${invoices.map(() => "?").join(",")}
+            )
+            ${
+              itemWhere.length
+                ? `AND ${itemWhere.join(" AND ")}`
+                : ""
+            }
+
+            ORDER BY
+              pii.purchase_invoice_id,
+              pii.id
+          `,
+          [
+            ...invoices.map((invoice) => invoice.id),
+            ...itemParams,
+          ],
+        )
+      : [];
+
+    const itemsByInvoice = new Map();
+
+    for (const item of items) {
+      const invoiceId = number(
+        item.purchase_invoice_id,
+      );
+
+      if (!itemsByInvoice.has(invoiceId)) {
+        itemsByInvoice.set(invoiceId, []);
+      }
+
+      itemsByInvoice
+        .get(invoiceId)
+        .push(item);
+    }
+
+    const sections = invoices.map(
+      (invoice) => {
+        const currency = normalizeCurrency(
+          invoice.currency,
+        );
+
+        const invoiceItems =
+          itemsByInvoice.get(number(invoice.id)) ??
+          [];
+
+        const totalQuantity =
+          invoiceItems.reduce(
+            (sum, item) =>
+              sum + number(item.quantity),
+            0,
+          );
+
+        const remainingQuantity =
+          invoiceItems.reduce(
+            (sum, item) =>
+              sum +
+              number(
+                item.remaining_quantity,
+              ),
+            0,
+          );
+
+        return {
+          title: `فاتورة شراء ${invoice.invoice_number} — ${
+            invoice.supplier_name || "مورد غير معروف"
+          } — ${invoice.invoice_date}`,
+          columns: [
+            {
+              key: "product_name",
+              label: "الصنف",
+              format: "text",
+            },
+            {
+              key: "batch_code",
+              label: "كود الدفعة",
+              format: "text",
+            },
+            {
+              key: "quantity",
+              label: "الكمية المستلمة",
+              format: "number",
+            },
+            {
+              key: "remaining_quantity",
+              label: "المتبقي بالمخزون",
+              format: "number",
+            },
+            {
+              key: "unit_price",
+              label: "سعر الشراء",
+              format: "currency",
+            },
+            {
+              key: "line_total",
+              label: "إجمالي السطر",
+              format: "currency",
+            },
+            {
+              key: "received_date",
+              label: "تاريخ الاستلام",
+              format: "date",
+            },
+            {
+              key: "expiry_date",
+              label: "تاريخ الانتهاء",
+              format: "date",
+            },
+          ],
+          rows: invoiceItems.map((item) => ({
+            product_name: `${item.product_name}${
+              item.product_unit
+                ? ` (${item.product_unit})`
+                : ""
+            }`,
+            batch_code: item.batch_code || "—",
+            quantity: number(item.quantity),
+            remaining_quantity: number(
+              item.remaining_quantity,
+            ),
+            unit_price: number(item.unit_price),
+            line_total: number(item.line_total),
+            received_date:
+              item.received_date || "—",
+            expiry_date:
+              item.expiry_date || "—",
+            currency,
+          })),
+          summary: [
+            {
+              label: "المورد",
+              value:
+                invoice.supplier_name || "—",
+            },
+            {
+              label: "نوع الفاتورة",
+              value: purchaseTypeLabel(
+                invoice.invoice_type,
+              ),
+            },
+            {
+              label: "الحالة",
+              value: invoiceStatusLabel(
+                invoice.status,
+              ),
+            },
+            {
+              label: "حالة الأمانة",
+              value:
+                invoice.invoice_type ===
+                "consignment"
+                  ? settlementStatusLabel(
+                      String(
+                        invoice.settlement_status ||
+                          "",
+                      ).toLowerCase() ===
+                        "settled"
+                        ? "settled"
+                        : "pending",
+                    )
+                  : "—",
+            },
+            {
+              label: "العملة",
+              value: currency,
+            },
+            {
+              label: "سعر الصرف",
+              value: formatNumber(
+                invoice.exchange_rate,
+                6,
+              ),
+            },
+            {
+              label: "الكمية المستلمة",
+              value: formatNumber(
+                totalQuantity,
+                3,
+              ),
+            },
+            {
+              label: "المتبقي بالمخزون",
+              value: formatNumber(
+                remainingQuantity,
+                3,
+              ),
+            },
+            {
+              label: "المجموع الفرعي",
+              value: formatMoney(
+                invoice.subtotal,
+                currency,
+              ),
+            },
+            {
+              label: "الخصم",
+              value: formatMoney(
+                invoice.discount_amount,
+                currency,
+              ),
+            },
+            {
+              label: "الإجمالي",
+              value: formatMoney(
+                invoice.total,
+                currency,
+              ),
+            },
+            {
+              label: "المدفوع",
+              value: formatMoney(
+                invoice.paid_amount,
+                currency,
+              ),
+            },
+            {
+              label: "المتبقي",
+              value: formatMoney(
+                invoice.remaining_amount,
+                currency,
+              ),
+            },
+            {
+              label: "عدد الدفعات",
+              value: number(
+                invoice.payments_count,
+              ),
+            },
+            {
+              label: "آخر دفعة",
+              value:
+                invoice.last_payment_date ||
+                "—",
+            },
+          ],
+        };
+      },
+    );
+
+    const totalItems = sections.reduce(
+      (sum, section) =>
+        sum + section.rows.length,
+      0,
+    );
+
+    const totalQuantity = sections.reduce(
+      (sum, section) =>
+        sum +
+        section.rows.reduce(
+          (sectionSum, row) =>
+            sectionSum +
+            number(row.quantity),
+          0,
+        ),
+      0,
+    );
+
+    const cancelledCount =
+      invoices.filter(
+        (invoice) =>
+          invoice.status === "cancelled",
+      ).length;
+
+    const consignmentCount =
+      invoices.filter(
+        (invoice) =>
+          invoice.invoice_type ===
+          "consignment",
+      ).length;
+
+    return {
+      title: "تقرير المشتريات التفصيلي",
+      generatedAt:
+        new Date().toISOString(),
+      columns: [],
+      rows: [],
+      sections,
+      summary: [
+        {
+          label: "عدد فواتير الشراء",
+          value: invoices.length,
+        },
+        {
+          label: "الفواتير العادية",
+          value:
+            invoices.length -
+            consignmentCount,
+        },
+        {
+          label: "فواتير الأمانة",
+          value: consignmentCount,
+        },
+        {
+          label: "الفواتير الملغاة",
+          value: cancelledCount,
+        },
+        {
+          label: "عدد بنود الأصناف",
+          value: totalItems,
+        },
+        {
+          label: "إجمالي الكمية المستلمة",
+          value: formatNumber(
+            totalQuantity,
+            3,
+          ),
+        },
+        ...buildCurrencySummary(
+          invoices,
+          "إجمالي المشتريات الفعلية",
+        ),
+      ],
+      totalRows: totalItems,
     };
   }
 

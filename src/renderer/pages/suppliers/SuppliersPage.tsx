@@ -33,6 +33,7 @@ import {
 } from "../../components/ui";
 
 import { PATHS } from "../../routes/path";
+import { RECORDS_PAGE_SIZE, useClientPagination } from "../../lib/pagination";
 
 import {
   getSupplierErrorMessage,
@@ -153,6 +154,19 @@ export default function SuppliersPage() {
       searchQuery,
       statusFilter,
     ]);
+
+  const {
+    page,
+    setPage,
+    totalPages,
+    paginatedItems,
+  } = useClientPagination(
+    filtered,
+    {
+      pageSize: RECORDS_PAGE_SIZE,
+      resetKey: `${searchQuery}|${statusFilter}`,
+    },
+  );
 
   const filtersAreActive =
     Boolean(
@@ -289,7 +303,7 @@ export default function SuppliersPage() {
           0 ? (
           <>
             <SuppliersTable
-              suppliers={filtered}
+              suppliers={paginatedItems}
               onView={(
                 supplier,
               ) =>
@@ -310,13 +324,13 @@ export default function SuppliersPage() {
             />
 
             <TableFooter
-              visibleCount={
-                filtered.length
-              }
-              totalCount={
-                suppliers.length
-              }
+              visibleCount={paginatedItems.length}
+              totalCount={filtered.length}
               entityName="مورد"
+              page={page}
+              totalPages={totalPages}
+              pageSize={RECORDS_PAGE_SIZE}
+              onPageChange={setPage}
             />
           </>
         ) : suppliers.length ===

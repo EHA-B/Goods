@@ -34,6 +34,7 @@ import {
   notifySuccess,
 } from "../../lib/notifications";
 import { PATHS } from "../../routes/path";
+import { RECORDS_PAGE_SIZE, useClientPagination } from "../../lib/pagination";
 import {
   getWorkerErrorMessage,
   getWorkerTypeLabel,
@@ -93,6 +94,19 @@ export default function WorkersPage() {
       return matchesSearch && matchesType && matchesState;
     });
   }, [workers, search, typeFilter, stateFilter]);
+
+  const {
+    page,
+    setPage,
+    totalPages,
+    paginatedItems,
+  } = useClientPagination(
+    filtered,
+    {
+      pageSize: RECORDS_PAGE_SIZE,
+      resetKey: `${search}|${typeFilter}|${stateFilter}`,
+    },
+  );
 
   const filtersActive =
     Boolean(search.trim()) ||
@@ -219,7 +233,7 @@ export default function WorkersPage() {
                 </thead>
 
                 <tbody>
-                  {filtered.map((worker) => (
+                  {paginatedItems.map((worker) => (
                     <tr
                       key={worker.id}
                       className="border-t border-[var(--border)]"
@@ -310,9 +324,13 @@ export default function WorkersPage() {
             </div>
 
             <TableFooter
-              visibleCount={filtered.length}
-              totalCount={workers.length}
+              visibleCount={paginatedItems.length}
+              totalCount={filtered.length}
               entityName="سجل"
+              page={page}
+              totalPages={totalPages}
+              pageSize={RECORDS_PAGE_SIZE}
+              onPageChange={setPage}
             />
           </>
         ) : workers.length === 0 ? (

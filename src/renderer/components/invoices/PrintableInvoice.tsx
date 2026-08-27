@@ -9,6 +9,7 @@ type Props = {
   partyLabel: string;
   partyName: string;
   statusLabel: string;
+  edited?: boolean;
   items: PrintItem[];
   subtotal: number;
   discount: number;
@@ -38,7 +39,7 @@ export default function PrintableInvoice(props: Props) {
         </div>
       </div>
       <div className="invoice-title-box">
-        <span className="invoice-document-label">فاتورة رسمية</span>
+        <span className="invoice-document-label">فاتورة رسمية{props.edited ? " — معدلة" : ""}</span>
         <h2>{props.title}</h2>
         <dl><div><dt>رقم الفاتورة</dt><dd><bdi>{props.invoiceNumber}</bdi></dd></div><div><dt>تاريخ الفاتورة</dt><dd><bdi>{props.invoiceDate}</bdi></dd></div></dl>
       </div>

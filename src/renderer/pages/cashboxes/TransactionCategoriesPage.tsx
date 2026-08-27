@@ -14,6 +14,7 @@ import { BackButton, Button, Card, ConfirmDialog, EmptyState, PageHeader, Status
 import { PATHS } from "../../routes/path";
 import type { TransactionCategory } from "../../components/transactions/types";
 import { transactionsService } from "../transactions/transactionsService";
+import { RECORDS_PAGE_SIZE, useClientPagination } from "../../lib/pagination";
 
 export default function TransactionCategoriesPage() {
   const navigate = useNavigate();
@@ -36,6 +37,19 @@ export default function TransactionCategoriesPage() {
   }
 
   useEffect(() => { void loadData(); }, []);
+
+  const {
+    page,
+    setPage,
+    totalPages,
+    paginatedItems,
+  } = useClientPagination(
+    items,
+    {
+      pageSize: RECORDS_PAGE_SIZE,
+      resetKey: String(items.length),
+    },
+  );
 
   async function confirmDelete() {
     if (!pending) return;
@@ -66,7 +80,7 @@ export default function TransactionCategoriesPage() {
             <DataTable>
               <DataTableHead><DataTableRow>{["اسم الفئة", "النوع", "الوصف", "الحالة", "عدد المعاملات", "الإجراءات"].map((header) => <DataTableHeaderCell key={header}>{header}</DataTableHeaderCell>)}</DataTableRow></DataTableHead>
               <DataTableBody>
-                {items.map((item) => (
+                {paginatedItems.map((item) => (
                   <DataTableRow key={item.id}>
                     <DataTableCell className="font-bold text-[var(--text-primary)]">{item.name}</DataTableCell>
                     <DataTableCell>{item.type === "income" ? "إيراد" : "مصروف"}</DataTableCell>
@@ -84,7 +98,7 @@ export default function TransactionCategoriesPage() {
               </DataTableBody>
             </DataTable>
             <div className="border-t border-[var(--border)] px-4 py-3"><p className="text-xs text-[var(--text-muted)]">لا يمكن حذف فئة مستخدمة في معاملات مالية سابقة، ويمكن تعطيلها بدلًا من ذلك.</p></div>
-            <TableFooter visibleCount={items.length} totalCount={items.length} entityName="فئة" />
+            <TableFooter visibleCount={paginatedItems.length} totalCount={items.length} entityName="فئة" page={page} totalPages={totalPages} pageSize={RECORDS_PAGE_SIZE} onPageChange={setPage} />
           </>
         ) : (
           <EmptyState icon={<Tags size={32} />} title="لا توجد فئات مالية" description="أضف فئة إيراد أو مصروف لبدء تسجيل المعاملات." />

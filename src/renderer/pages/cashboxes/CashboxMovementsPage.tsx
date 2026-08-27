@@ -7,6 +7,8 @@ import {
   DataTable, DataTableBody, DataTableCell, DataTableHead,
   DataTableHeaderCell, DataTableRow,
 } from "../../components/common";
+import TableFooter from "../../components/common/TableFooter";
+import { RECORDS_PAGE_SIZE } from "../../lib/pagination";
 import {
   BackButton, Button, Card, EmptyState, Input, PageHeader, Select,
 } from "../../components/ui";
@@ -60,7 +62,7 @@ export default function CashboxMovementsPage() {
 
   const [cashbox, setCashbox] = useState<CashboxApiRecord | null>(null);
   const [items, setItems] = useState<CashboxMovementRecord[]>([]);
-  const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 1 });
+  const [pagination, setPagination] = useState({ page: 1, limit: RECORDS_PAGE_SIZE, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,7 +86,7 @@ export default function CashboxMovementsPage() {
         cashboxesService.get(Number(id)),
         cashboxesService.movements(Number(id), {
           page,
-          limit: 25,
+          limit: RECORDS_PAGE_SIZE,
           direction: (direction as "in" | "out") || undefined,
           reference_type: refType || undefined,
           date_from: dateFrom || undefined,
@@ -353,28 +355,15 @@ export default function CashboxMovementsPage() {
               </DataTableBody>
             </DataTable>
 
-            {/* Pagination */}
-            <div className="flex items-center justify-between border-t border-[var(--border)] px-4 py-3 text-sm text-[var(--text-muted)]">
-              <span>{pagination.total} حركة — صفحة {pagination.page} من {pagination.totalPages}</span>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  السابق
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={page >= pagination.totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  التالي
-                </Button>
-              </div>
-            </div>
+            <TableFooter
+              visibleCount={items.length}
+              totalCount={pagination.total}
+              entityName="حركة"
+              page={pagination.page}
+              totalPages={Math.max(1, pagination.totalPages)}
+              pageSize={pagination.limit}
+              onPageChange={setPage}
+            />
           </>
         )}
       </Card>

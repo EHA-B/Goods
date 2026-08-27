@@ -1,6 +1,6 @@
 import { getArabicErrorMessage } from "../../../lib/errorNormalizer";
 import { HandCoins } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import CommissionPreviewCard from "../../../components/consignment/CommissionPreviewCard";
@@ -202,20 +202,28 @@ export default function CloseConsignmentPage() {
         <div className="space-y-5">
           <Card header="بيانات الفاتورة">
             <div className="grid gap-4 sm:grid-cols-3">
-              {[
-                ["رقم الفاتورة", summary.invoice.invoice_number],
-                ["المورد", summary.invoice.supplier_name],
+              {(
                 [
-                  "إجمالي المبيعات",
-                  money(
-                    summary.sales.total_sales_amount,
-                    summary.invoice.currency,
-                  ),
-                ],
-                ["الكمية المباعة", summary.sales.sold_quantity],
-                ["الكمية المتبقية", summary.stock.remaining_quantity],
-                ["العملة", summary.invoice.currency],
-              ].map(([label, value]) => (
+                  ["رقم الفاتورة", summary.invoice.invoice_number],
+                  ["المورد", summary.invoice.supplier_name],
+                  [
+                    "إجمالي المبيعات",
+                    money(
+                      summary.sales.total_sales_amount,
+                      summary.invoice.currency,
+                    ),
+                  ],
+                  ["الكمية المباعة", summary.sales.sold_quantity],
+                  ["الكمية المتبقية", summary.stock.remaining_quantity],
+                  ["العملة", summary.invoice.currency],
+                  ...(summary.invoice.transport_cost > 0
+                    ? [["تكلفة النقل", money(summary.invoice.transport_cost, summary.invoice.currency)]]
+                    : []),
+                  ...(summary.invoice.emptying_cost > 0
+                    ? [["تكلفة العتالة", money(summary.invoice.emptying_cost, summary.invoice.currency)]]
+                    : []),
+                ] as [string, React.ReactNode][]
+              ).map(([label, value]) => (
                 <div key={String(label)}>
                   <p className="text-xs font-bold text-[var(--text-muted)]">
                     {label}
@@ -341,6 +349,20 @@ export default function CloseConsignmentPage() {
                 preview!.net_supplier_payout,
                 summary.invoice.currency,
               )})`
+            : ""
+        }${
+          summary.invoice.transport_cost > 0 || summary.invoice.emptying_cost > 0
+            ? `\n\nالمصاريف الإضافية المسجلة: ${
+                summary.invoice.transport_cost > 0
+                  ? `تكلفة نقل ${money(summary.invoice.transport_cost, summary.invoice.currency)}`
+                  : ""
+              }${
+                summary.invoice.transport_cost > 0 && summary.invoice.emptying_cost > 0 ? "، " : ""
+              }${
+                summary.invoice.emptying_cost > 0
+                  ? `تكلفة عتالة ${money(summary.invoice.emptying_cost, summary.invoice.currency)}`
+                  : ""
+              } (مسجلة كمصروفات ضمن الحسابات).`
             : ""
         }، ومعالجة المتبقي عبر: ${policyLabels[policy]}. سيتم تنفيذ جميع الآثار المخزنية والمالية وحفظها في قاعدة البيانات.`}
         confirmText="تأكيد التسوية"

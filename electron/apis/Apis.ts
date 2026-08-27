@@ -654,8 +654,8 @@ ipcMain.handle('api:auth:changePassword', async (_event, input) => {
 
 
 const internallyAuditedChannels = new Set([
-  'api:saleInvoice:createSaleProcess','api:saleInvoice:cancelSaleInvoice','api:payment:recordSalePayment','api:payment:reverseSalePayment',
-  'api:purchase:createFull','api:purchase:addItems','api:purchase:cancel','api:payment:recordPurchasePayment','api:payment:reversePurchasePayment',
+  'api:saleInvoice:createSaleProcess','api:saleInvoice:updateSaleInvoice','api:saleInvoice:cancelSaleInvoice','api:payment:recordSalePayment','api:payment:reverseSalePayment',
+  'api:purchase:createFull','api:purchase:update','api:purchase:addItems','api:purchase:cancel','api:payment:recordPurchasePayment','api:payment:reversePurchasePayment',
   'api:purchase:closeCommission','api:purchase:reverseCommissionSettlement',
 ]);
 function auditInfoForChannel(channel, args, data) {
@@ -1416,6 +1416,18 @@ ipcMain.handle('api:purchase:createFull', async (_event, input) => {
  * Endpoint: api:purchase:addItems
  * Description: Appends new items to an existing purchase invoice and calculates related changes.
  */
+ipcMain.handle('api:purchase:update', async (_event, id, input, password) => {
+  try {
+    const user = getCurrentUser();
+    if (!user) return failure('UNAUTHENTICATED', 'Authentication is required');
+    await authController.verifyPassword(user.id, password);
+    return success(await purchaseInvoiceController.updatePurchaseInvoice(id, input, user.id));
+  } catch (e) {
+    console.error('[invoice-edit:purchase]', e);
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
 ipcMain.handle('api:purchase:addItems', async (_event, invoiceId, items) => {
   try {
     const result = await purchaseInvoiceController.addItemsToPurchaseInvoice(invoiceId, items);
@@ -1736,6 +1748,18 @@ ipcMain.handle('api:saleInvoice:createSaleProcess', async (_event, input) => {
  * Endpoint: api:saleInvoice:getSaleInvoice
  * Description: Read-only. Returns a single sale invoice row.
  */
+ipcMain.handle('api:saleInvoice:updateSaleInvoice', async (_event, id, input, password) => {
+  try {
+    const user = getCurrentUser();
+    if (!user) return failure('UNAUTHENTICATED', 'Authentication is required');
+    await authController.verifyPassword(user.id, password);
+    return success(await saleInvoiceController.updateSaleInvoice(id, input, user.id));
+  } catch (e) {
+    console.error('[invoice-edit:sale]', e);
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  }
+});
+
 ipcMain.handle('api:saleInvoice:getSaleInvoice', async (_event, id) => {
   try {
     const result = await saleInvoiceController.getSaleInvoice(id);

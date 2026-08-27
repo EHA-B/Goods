@@ -1,5 +1,5 @@
 import { getArabicErrorMessage } from "../../lib/errorNormalizer";
-import { Banknote, Plus, Printer, ReceiptText, RotateCcw, XCircle } from "lucide-react";
+import { Banknote, Plus, Pencil, Printer, ReceiptText, RotateCcw, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DataTable from "../../components/common/DataTable";
@@ -39,7 +39,8 @@ export default function SaleDetailsPage() {
   if (loading) return <div className="px-6 py-12 text-center text-sm text-[var(--text-muted)]">جاري التحميل...</div>;
   if (error || !details) return <EmptyState icon={<ReceiptText size={32} />} title="خطأ في التحميل" description={error || "تعذر العثور على فاتورة البيع المطلوبة."} />;
 
-  const { invoice, customer, items, payments, financial_summary } = details;
+  const { invoice, customer, items, payments, financial_summary, activity } = details;
+  const editHistory = (activity ?? []).filter((entry) => entry.action === "sale_edited");
 
   const cost = items.reduce((sum, item: Record<string, unknown>) => sum + Number(item.cost_price ?? 0) * Number(item.quantity ?? 0), 0);
   const profit = items.reduce((sum, item: Record<string, unknown>) => sum + Number(item.profit ?? 0), 0);
@@ -70,7 +71,7 @@ export default function SaleDetailsPage() {
           {invoice.status !== "paid" && invoice.status !== "cancelled" && (
             <Button startIcon={<Plus size={17} />} onClick={() => navigate(`/sales/${invoice.id}/payments/new`)}>تسجيل دفعة</Button>
           )}
-          <Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/sales/${invoice.id}/print`)}>طباعة / PDF</Button>
+          {invoice.status !== "cancelled" && <Button variant="secondary" startIcon={<Pencil size={17} />} onClick={() => navigate(`/sales/${invoice.id}/edit`)}>تعديل محمي</Button>}<Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/sales/${invoice.id}/print`)}>طباعة / PDF</Button>
           {invoice.status !== "cancelled" && (
             <Button variant="danger" startIcon={<XCircle size={17} />} onClick={() => setCancelOpen(true)}>إلغاء الفاتورة</Button>
           )}
@@ -83,7 +84,7 @@ export default function SaleDetailsPage() {
         <Card header="بيانات الفاتورة">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              ["رقم الفاتورة", invoice.invoice_number],
+              ["رقم الفاتورة", <span className="inline-flex items-center gap-2">{invoice.invoice_number}{Boolean(invoice.is_edited) && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">معدلة</span>}</span>],
               ["التاريخ", invoice.invoice_date],
               ["العميل", customer?.name ?? "بيع نقدي"],
               ["العملة", invoice.currency || "SYP"],
@@ -102,6 +103,10 @@ export default function SaleDetailsPage() {
             </div>
           )}
         </Card>
+
+        {editHistory.length > 0 && <Card header="سجل تعديلات الفاتورة" description="كل حفظ تعديل موثق في سجل النشاط مع النسخة السابقة والجديدة.">
+          <div className="space-y-2">{editHistory.map((entry, index) => <div key={String(entry.id ?? index)} className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2 text-sm"><span className="font-bold text-[var(--text-primary)]">تعديل #{editHistory.length - index}</span><span className="text-[var(--text-muted)]">{String(entry.created_at ?? "—")}</span></div>)}</div>
+        </Card>}
 
         <Card padding={false} header="أصناف الفاتورة" description="المنتجات والدفعات والكميات والأسعار والأرباح.">
           <DataTable>

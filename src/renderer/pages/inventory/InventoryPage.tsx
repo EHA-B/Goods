@@ -5,6 +5,7 @@ import TableFooter from "../../components/common/TableFooter";
 import { InventoryStatsGrid, InventoryTable, InventoryToolbar } from "../../components/inventory";
 import { Button, Card, EmptyState, LoadingSpinner, PageHeader } from "../../components/ui";
 import { getInventoryErrorMessage, inventoryService, type InventoryItem, type InventorySummary } from "./inventoryService";
+import { RECORDS_PAGE_SIZE, useClientPagination } from "../../lib/pagination";
 
 const emptySummary: InventorySummary = { totalUnits: 0, inventoryValue: 0, lowStockCount: 0, outOfStockCount: 0, expiringBatchesCount: 0 };
 
@@ -36,6 +37,19 @@ export default function InventoryPage() {
     });
   }, [items, searchQuery, statusFilter]);
 
+  const {
+    page,
+    setPage,
+    totalPages,
+    paginatedItems,
+  } = useClientPagination(
+    filtered,
+    {
+      pageSize: RECORDS_PAGE_SIZE,
+      resetKey: `${searchQuery}|${statusFilter}`,
+    },
+  );
+
   const filtersAreActive = Boolean(searchQuery.trim()) || statusFilter !== "all";
   return <>
     <PageHeader title="المخزون" description="متابعة أرصدة المواد والدفعات والموردين وقيمة المخزون من قاعدة البيانات." />
@@ -44,7 +58,7 @@ export default function InventoryPage() {
       <InventoryToolbar searchQuery={searchQuery} statusFilter={statusFilter} filtersAreActive={filtersAreActive} onSearchChange={setSearchQuery} onStatusChange={setStatusFilter} onClearFilters={() => { setSearchQuery(""); setStatusFilter("all"); }} />
       {isLoading ? <div className="flex min-h-72 flex-col items-center justify-center gap-3 text-[var(--text-muted)]"><LoadingSpinner size="lg" /><p className="text-sm">جاري تحميل المخزون...</p></div>
       : error ? <EmptyState icon={<AlertCircle size={28} />} title="تعذر تحميل المخزون" description={error} action={<Button variant="secondary" startIcon={<RefreshCw size={16} />} onClick={() => void load()}>إعادة المحاولة</Button>} />
-      : filtered.length ? <><InventoryTable items={filtered} onViewDetails={(item) => navigate(`/inventory/${item.productId}`)} onAdjust={(item) => navigate(`/inventory/${item.productId}/adjust`)} /><TableFooter visibleCount={filtered.length} totalCount={items.length} entityName="مادة" /></>
+      : filtered.length ? <><InventoryTable items={paginatedItems} onViewDetails={(item) => navigate(`/inventory/${item.productId}`)} onAdjust={(item) => navigate(`/inventory/${item.productId}/adjust`)} /><TableFooter visibleCount={paginatedItems.length} totalCount={filtered.length} entityName="مادة" page={page} totalPages={totalPages} pageSize={RECORDS_PAGE_SIZE} onPageChange={setPage} /></>
       : <EmptyState icon={<PackageSearch size={32} />} title={filtersAreActive ? "لا توجد مواد مطابقة" : "لا توجد مواد في المخزون"} description={filtersAreActive ? "جرّب تغيير البحث أو حالة المخزون." : "أضف دفعة مخزون لتظهر الكميات هنا."} />}
     </Card>
   </>;

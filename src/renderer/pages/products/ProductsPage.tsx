@@ -14,6 +14,7 @@ import {
   PageHeader,
 } from "../../components/ui";
 import { PATHS } from "../../routes/path";
+import { RECORDS_PAGE_SIZE, useClientPagination } from "../../lib/pagination";
 
 import ProductsToolbar from "../../components/products/ProductsToolbar";
 import {
@@ -68,6 +69,19 @@ export default function ProductsPage() {
       return matchesSearch && matchesStatus;
     });
   }, [products, searchQuery, statusFilter]);
+
+  const {
+    page,
+    setPage,
+    totalPages,
+    paginatedItems,
+  } = useClientPagination(
+    filteredProducts,
+    {
+      pageSize: RECORDS_PAGE_SIZE,
+      resetKey: `${searchQuery}|${statusFilter}`,
+    },
+  );
 
   const filtersAreActive =
     searchQuery.trim().length > 0 || statusFilter !== "all";
@@ -147,15 +161,19 @@ export default function ProductsPage() {
         ) : filteredProducts.length > 0 ? (
           <>
             <ProductsTable
-              products={filteredProducts}
+              products={paginatedItems}
               onEdit={openEditPage}
               onDelete={setPendingDelete}
             />
 
             <TableFooter
-              visibleCount={filteredProducts.length}
-              totalCount={products.length}
+              visibleCount={paginatedItems.length}
+              totalCount={filteredProducts.length}
               entityName="منتج"
+              page={page}
+              totalPages={totalPages}
+              pageSize={RECORDS_PAGE_SIZE}
+              onPageChange={setPage}
             />
           </>
         ) : products.length === 0 ? (

@@ -56,12 +56,17 @@ export type ConsignmentInvoiceSummary = {
     paid_amount: number;
     /** Remaining balance still owed to the supplier based on invoice total */
     remaining_amount: number;
+    /** تكلفة النقل — مصروف مضاف للإجمالي */
+    transport_cost: number;
+    /** تكلفة العتالة — مصروف مضاف للإجمالي */
+    emptying_cost: number;
   };
   sales: { total_sales_amount: number; sold_quantity: number; sales_count: number };
   stock: { received_quantity: number; sold_quantity: number; remaining_quantity: number; damaged_quantity: number; returned_quantity: number };
   items: ConsignmentInvoiceItemSummary[];
   existing_settlement: ConsignmentSettlement | null;
 };
+
 
 export type CloseConsignmentInput = {
   commission_percentage: number;

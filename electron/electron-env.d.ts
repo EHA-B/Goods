@@ -270,6 +270,10 @@ type StockBatchRecord = {
 type InvoiceFinancialSummary = {
   subtotal: number;
   discount_amount: number;
+  /** تكلفة النقل — تُضاف للإجمالي وتُسجَّل كمصروف */
+  transport_cost?: number;
+  /** تكلفة العتالة — تُضاف للإجمالي وتُسجَّل كمصروف */
+  emptying_cost?: number;
   total_amount: number;
   paid_amount: number;
   remaining_amount: number;
@@ -302,6 +306,10 @@ type PurchaseInvoiceRecord = {
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
+  is_edited?: boolean | number;
+  edit_count?: number;
+  last_edited_at?: string | null;
+  last_edited_by?: number | null;
 };
 
 type PurchaseInvoiceDetails = {
@@ -364,6 +372,10 @@ type SaleInvoiceRecord = {
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
+  is_edited?: boolean | number;
+  edit_count?: number;
+  last_edited_at?: string | null;
+  last_edited_by?: number | null;
 };
 
 type SaleInvoiceDetails = {
@@ -556,6 +568,7 @@ interface Window {
       list(filters?: InvoiceListFilters, pagination?: PaginationInput): Promise<PaginatedInvoices<PurchaseInvoiceRecord>>;
       getDetails(id: number): Promise<PurchaseInvoiceDetails>;
       createFull(input: CreatePurchaseInvoiceInput): Promise<PurchaseInvoiceDetails>;
+      update(id: number, input: CreatePurchaseInvoiceInput, password: string): Promise<PurchaseInvoiceDetails>;
       addItems(invoiceId: number, items: unknown): Promise<PurchaseInvoiceDetails>;
       cancel(id: number, reason: string): Promise<PurchaseInvoiceDetails>;
       recordPayment(input: RecordPurchasePaymentInput): Promise<{ payment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
@@ -575,6 +588,7 @@ interface Window {
       getDetails(id: number): Promise<SaleInvoiceDetails>;
       getFull(id: number): Promise<SaleInvoiceDetails>;
       createProcess(input: CreateSaleInvoiceInput): Promise<SaleInvoiceDetails>;
+      update(id: number, input: CreateSaleInvoiceInput, password: string): Promise<SaleInvoiceDetails>;
       cancel(id: number, reason: string): Promise<SaleInvoiceDetails>;
       deleteDraft(id: number): Promise<{ success: true }>;
       availableBatches(productId: number): Promise<StockBatchRecord[]>;

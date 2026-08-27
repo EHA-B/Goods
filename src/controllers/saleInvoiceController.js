@@ -27,6 +27,67 @@ const {
     assertCashboxCurrency,
 } = require('./utils/currencyUtils');
 
+
+async function ensureInvoiceEditAuditColumns(db) {
+    const tableName = 'sale_invoices';
+    const columns = await dbAll(db, `PRAGMA table_info(${tableName})`);
+    const names = new Set(columns.map((column) => String(column.name)));
+
+    const additions = [
+        ['is_edited', 'INTEGER NOT NULL DEFAULT 0'],
+        ['edit_count', 'INTEGER NOT NULL DEFAULT 0'],
+        ['last_edited_at', 'TEXT NULL'],
+        ['last_edited_by', 'INTEGER NULL'],
+    ];
+
+    for (const [columnName, definition] of additions) {
+        if (!names.has(columnName)) {
+            await dbRun(
+                db,
+                `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`
+            );
+        }
+    }
+}
+
+function normalizeInvoiceEditError(error) {
+    if (error?.code && error?.message) {
+        return error;
+    }
+
+    const message = String(error?.message ?? error ?? '');
+
+    if (/no such column/i.test(message)) {
+        return {
+            code: 'INVOICE_EDIT_SCHEMA_ERROR',
+            message: 'تعذر تحديث بنية قاعدة البيانات اللازمة لتعديل الفاتورة. أعد تشغيل التطبيق ثم حاول مرة أخرى.',
+            details: { technicalMessage: message },
+        };
+    }
+
+    if (/FOREIGN KEY constraint failed/i.test(message)) {
+        return {
+            code: 'INVOICE_EDIT_RELATION_LOCK',
+            message: 'لا يمكن تعديل الفاتورة لأن هناك سجلات لاحقة مرتبطة بها. عالج الحركات المرتبطة أولًا.',
+            details: { technicalMessage: message },
+        };
+    }
+
+    if (/UNIQUE constraint failed/i.test(message)) {
+        return {
+            code: 'DUPLICATE_INVOICE_NUMBER',
+            message: 'رقم الفاتورة مستخدم مسبقًا.',
+            details: { technicalMessage: message },
+        };
+    }
+
+    return {
+        code: 'INVOICE_EDIT_FAILED',
+        message: 'تعذر حفظ تعديل الفاتورة بسبب خطأ في قاعدة البيانات.',
+        details: { technicalMessage: message },
+    };
+}
+
 class SaleInvoiceController {
 
     // ─── createSaleProcess ────────────────────────────────────────────────
@@ -254,6 +315,97 @@ class SaleInvoiceController {
         } catch (err) {
             await new Promise((res) => db.run('ROLLBACK', () => res()));
             throw err;
+        }
+    }
+
+
+    async updateSaleInvoice(id, input, userId) {
+        if (!id) throw { code: 'VALIDATION_ERROR', message: 'رقم الفاتورة مطلوب' };
+        const { customer_id, invoice_number, invoice_date, discount_amount = 0, notes, items, currency, exchange_rate } = input ?? {};
+        if (!Array.isArray(items) || items.length === 0) throw { code: 'SALE_ITEM_INVALID', message: 'يجب إضافة صنف واحد على الأقل' };
+
+        const db = await dbmanager.init();
+        await ensureInvoiceEditAuditColumns(db);
+        try {
+            await dbRun(db, 'BEGIN TRANSACTION');
+            const oldInvoice = await dbGet(db, 'SELECT * FROM sale_invoices WHERE id = ?', [id]);
+            if (!oldInvoice) throw { code: 'NOT_FOUND', message: 'فاتورة البيع غير موجودة' };
+            if (oldInvoice.status === 'cancelled') throw { code: 'SALE_ALREADY_CANCELLED', message: 'لا يمكن تعديل فاتورة ملغاة' };
+
+            const oldItems = await dbAll(db, 'SELECT * FROM sale_invoice_items WHERE sale_invoice_id = ? ORDER BY id', [id]);
+            const activePayments = await dbAll(db, `SELECT * FROM payments WHERE invoice_id = ? AND payment_type = 'sale' AND status = 'active'`, [id]);
+            const paidAmount = normalizeAmount(oldInvoice.paid_amount);
+            const nextCurrency = normalizeCurrency(currency ?? oldInvoice.currency);
+            const nextRate = normalizeExchangeRate(nextCurrency, exchange_rate ?? oldInvoice.exchange_rate);
+
+            if (activePayments.length && (nextCurrency !== normalizeCurrency(oldInvoice.currency) || Math.abs(nextRate - normalizeExchangeRate(oldInvoice.currency, oldInvoice.exchange_rate)) > 0.000001)) {
+                throw { code: 'INVOICE_EDIT_PAYMENT_LOCK', message: 'لا يمكن تغيير العملة أو سعر الصرف بعد وجود دفعات. اعكس الدفعات أولًا.' };
+            }
+            if (activePayments.length && Number(customer_id ?? 0) !== Number(oldInvoice.customer_id ?? 0)) {
+                throw { code: 'INVOICE_EDIT_PAYMENT_LOCK', message: 'لا يمكن تغيير العميل بعد وجود دفعات. اعكس الدفعات أولًا.' };
+            }
+
+            if (customer_id) {
+                const customer = await dbGet(db, 'SELECT * FROM customers WHERE id = ?', [customer_id]);
+                if (!customer || !customer.isActive) throw { code: 'CUSTOMER_NOT_FOUND', message: 'العميل غير موجود أو غير نشط' };
+            }
+
+            let invNumber = String(invoice_number ?? oldInvoice.invoice_number).trim();
+            const duplicate = await dbGet(db, 'SELECT id FROM sale_invoices WHERE invoice_number = ? AND id <> ?', [invNumber, id]);
+            if (duplicate) throw { code: 'DUPLICATE_INVOICE_NUMBER', message: `رقم الفاتورة ${invNumber} موجود مسبقًا` };
+            const validatedDate = validateDate(invoice_date ?? oldInvoice.invoice_date, 'invoice_date');
+
+            // Restore old stock first; transaction rollback protects consistency if new validation fails.
+            for (const oldItem of oldItems) {
+                const batch = await dbGet(db, 'SELECT * FROM stock_batches WHERE id = ?', [oldItem.stock_batch_id]);
+                if (!batch) throw { code: 'STOCK_BATCH_NOT_FOUND', message: 'إحدى دفعات الفاتورة القديمة لم تعد موجودة' };
+                const restored = Math.round((normalizeAmount(batch.remaining_quantity) + normalizeAmount(oldItem.quantity)) * 1000) / 1000;
+                await dbRun(db, `UPDATE stock_batches SET remaining_quantity = ?, isActive = 1, updated_at = datetime('now') WHERE id = ?`, [restored, batch.id]);
+            }
+            await dbRun(db, `DELETE FROM stock_movements WHERE reference_type = 'sale_invoice' AND reference_id = ? AND movement_type = 'sale_out'`, [id]);
+            await dbRun(db, 'DELETE FROM sale_invoice_items WHERE sale_invoice_id = ?', [id]);
+
+            const mappedItems = items.map((item) => ({ ...item, product_id: Number(item.product_id), stock_batch_id: Number(item.stock_batch_id), quantity: Number(item.quantity ?? 0), price: Number(item.sale_price ?? item.unit_price ?? 0), sale_price: Number(item.sale_price ?? item.unit_price ?? 0), cost_price: 0 }));
+            for (let i = 0; i < mappedItems.length; i++) {
+                const item = mappedItems[i];
+                const batch = await dbGet(db, 'SELECT * FROM stock_batches WHERE id = ?', [item.stock_batch_id]);
+                if (!batch || Number(batch.product_id) !== item.product_id || !batch.isActive) throw { code: 'STOCK_BATCH_NOT_FOUND', message: `الصنف رقم ${i + 1}: الدفعة غير صالحة` };
+                if (normalizeAmount(batch.remaining_quantity) < item.quantity - 0.001) throw { code: 'INSUFFICIENT_STOCK', message: `الصنف رقم ${i + 1}: الكمية أكبر من المتوفر` };
+                mappedItems[i].cost_price = normalizeAmount(batch.purchase_price_base ?? batch.purchase_price);
+                mappedItems[i]._batch = batch;
+            }
+
+            const { normalizedItems, subtotal, discountAmount, totalAmount } = calculateInvoiceTotals(mappedItems, discount_amount);
+            if (paidAmount > totalAmount + 0.001) throw { code: 'INVOICE_EDIT_BELOW_PAID', message: 'الإجمالي الجديد أقل من المبلغ المدفوع. اعكس جزءًا من الدفعات أولًا.' };
+            const { remainingAmount, status } = calculatePaymentState(totalAmount, paidAmount);
+            if (!customer_id && remainingAmount > 0.001) throw { code: 'VALIDATION_ERROR', message: 'البيع غير المدفوع بالكامل يحتاج عميلًا' };
+
+            const oldRate = normalizeExchangeRate(oldInvoice.currency, oldInvoice.exchange_rate);
+            const oldRemainingBase = toBaseAmount(oldInvoice.remaining_amount, oldRate);
+            const newRemainingBase = toBaseAmount(remainingAmount, nextRate);
+            if (oldInvoice.customer_id) await dbRun(db, `UPDATE customers SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`, [oldRemainingBase, oldInvoice.customer_id]);
+            if (customer_id) await dbRun(db, `UPDATE customers SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`, [newRemainingBase, customer_id]);
+
+            for (const item of normalizedItems) {
+                const batch = item._batch;
+                const costPrice = normalizeAmount(item.cost_price);
+                const profit = Math.round((toBaseAmount(item.price * item.quantity, nextRate) - costPrice * item.quantity) * 100) / 100;
+                await dbRun(db, `INSERT INTO sale_invoice_items (sale_invoice_id, stock_batch_id, quantity, unit_price, line_total, cost_price, profit, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`, [id, item.stock_batch_id, item.quantity, item.price, item.lineTotal, costPrice, profit, item.notes ?? null]);
+                const qtyBefore = normalizeAmount(batch.remaining_quantity);
+                const qtyAfter = Math.round((qtyBefore - item.quantity) * 1000) / 1000;
+                await dbRun(db, `UPDATE stock_batches SET remaining_quantity = ?, updated_at = datetime('now') WHERE id = ?`, [qtyAfter, item.stock_batch_id]);
+                await dbRun(db, `INSERT INTO stock_movements (product_id, stock_batch_id, movement_type, quantity, quantity_before, quantity_after, reference_type, reference_id, reference_number, customer_id, notes, created_at) VALUES (?, ?, 'sale_out', ?, ?, ?, 'sale_invoice', ?, ?, ?, ?, datetime('now'))`, [batch.product_id, item.stock_batch_id, item.quantity, qtyBefore, qtyAfter, id, invNumber, customer_id ?? null, `فاتورة بيع معدلة ${invNumber}`]);
+            }
+
+            await dbRun(db, `UPDATE sale_invoices SET invoice_number = ?, customer_id = ?, invoice_date = ?, subtotal = ?, discount = ?, discount_amount = ?, total = ?, remaining_amount = ?, status = ?, notes = ?, currency = ?, exchange_rate = ?, is_edited = 1, edit_count = COALESCE(edit_count, 0) + 1, last_edited_at = datetime('now'), last_edited_by = ?, updated_at = datetime('now') WHERE id = ?`, [invNumber, customer_id ?? null, validatedDate, subtotal, discountAmount, discountAmount, totalAmount, remainingAmount, status, notes ?? null, nextCurrency, nextRate, userId ?? null, id]);
+
+            const newData = { invoice_number: invNumber, customer_id: customer_id ?? null, invoice_date: validatedDate, total: totalAmount, remaining_amount: remainingAmount, currency: nextCurrency, exchange_rate: nextRate, items: normalizedItems.map(x => ({ product_id: x.product_id, stock_batch_id: x.stock_batch_id, quantity: x.quantity, sale_price: x.price })) };
+            await dbRun(db, `INSERT INTO activity_logs (user_id, action, table_name, record_id, old_data, new_data, created_at, updated_at) VALUES (?, 'sale_edited', 'sale_invoices', ?, ?, ?, datetime('now'), datetime('now'))`, [userId ?? null, id, JSON.stringify({ invoice: oldInvoice, items: oldItems }), JSON.stringify(newData)]);
+            await dbRun(db, 'COMMIT');
+            return this.getSaleInvoiceDetails(id);
+        } catch (err) {
+            await new Promise((resolve) => db.run('ROLLBACK', () => resolve()));
+            throw normalizeInvoiceEditError(err);
         }
     }
 

@@ -152,6 +152,38 @@ function statusOptionsForReport(
     ];
   }
 
+  if (
+    reportId === "sales-details" ||
+    reportId === "purchases-details"
+  ) {
+    return [
+      {
+        value: "all",
+        label: "كل الحالات",
+      },
+      {
+        value: "confirmed",
+        label: "مؤكدة / غير مدفوعة",
+      },
+      {
+        value: "partially_paid",
+        label: "مدفوعة جزئيًا",
+      },
+      {
+        value: "paid",
+        label: "مدفوعة",
+      },
+      {
+        value: "cancelled",
+        label: "ملغاة",
+      },
+      {
+        value: "draft",
+        label: "مسودة",
+      },
+    ];
+  }
+
   return [
     {
       value: "all",
@@ -939,6 +971,42 @@ export default function ReportsPage() {
             </>
           )}
 
+          {has("customer") && (
+            <label className="space-y-2 text-sm font-bold text-[var(--text-secondary)]">
+              <span>
+                العميل
+              </span>
+
+              <Select
+                value={
+                  filters.customerId ??
+                  "all"
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setFilters(
+                    (current) => ({
+                      ...current,
+                      customerId:
+                        event
+                          .target
+                          .value,
+                    }),
+                  )
+                }
+                options={[
+                  {
+                    value: "all",
+                    label:
+                      "كل العملاء",
+                  },
+                  ...options.customers,
+                ]}
+              />
+            </label>
+          )}
+
           {has("supplier") && (
             <label className="space-y-2 text-sm font-bold text-[var(--text-secondary)]">
               <span>
@@ -1274,6 +1342,33 @@ export default function ReportsPage() {
         ) : result.sections &&
           result.sections.length > 0 ? (
           <div className="flex flex-col">
+            {result.summary &&
+              result.summary.length > 0 && (
+              <div className="grid gap-3 border-b border-[var(--border)] bg-[var(--surface-subtle)] p-5 sm:grid-cols-2 xl:grid-cols-4">
+                {result.summary.map(
+                  (item) => (
+                    <div
+                      key={item.label}
+                      className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]"
+                    >
+                      <div className="absolute inset-y-0 right-0 w-1 bg-[var(--primary)]" />
+
+                      <div className="pr-2 text-xs font-medium leading-5 text-[var(--text-muted)]">
+                        {item.label}
+                      </div>
+
+                      <div
+                        dir="ltr"
+                        className="mt-2 pr-2 text-right text-lg font-bold tabular-nums text-[var(--text-primary)]"
+                      >
+                        {String(item.value)}
+                      </div>
+                    </div>
+                  ),
+                )}
+              </div>
+            )}
+
             {result.sections.map((section, sectionIndex) => (
               <div key={sectionIndex} className="border-b border-[var(--border)] last:border-0">
                 <div className="bg-[var(--surface-subtle)] px-5 py-4 font-bold text-[var(--text-primary)]">
@@ -1340,32 +1435,8 @@ export default function ReportsPage() {
                 )}
               </div>
             ))}
-            
-            {result.summary && result.summary.length > 0 && (
-              <div className="bg-[var(--surface-subtle)] p-5">
-                <h3 className="font-bold text-[var(--text-primary)] mb-4">الملخص النهائي</h3>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  {result.summary.map((item) => (
-                    <div
-                      key={item.label}
-                      className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]"
-                    >
-                      <div className="absolute inset-y-0 right-0 w-1 bg-[var(--primary)]" />
-                      <div className="pr-2 text-xs font-medium leading-5 text-[var(--text-muted)]">
-                        {item.label}
-                      </div>
-                      <div
-                        dir="ltr"
-                        className="mt-2 pr-2 text-right text-lg font-bold tabular-nums text-[var(--text-primary)]"
-                      >
-                        {String(item.value)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
+
+
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface-subtle)] px-5 py-3 text-xs text-[var(--text-muted)]">
                <span>
                  عدد النتائج:{" "}

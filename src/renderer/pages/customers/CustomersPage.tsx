@@ -33,6 +33,7 @@ import {
 } from "../../components/ui";
 
 import { PATHS } from "../../routes/path";
+import { RECORDS_PAGE_SIZE, useClientPagination } from "../../lib/pagination";
 
 import {
   customersService,
@@ -153,6 +154,19 @@ export default function CustomersPage() {
       searchQuery,
       statusFilter,
     ]);
+
+  const {
+    page,
+    setPage,
+    totalPages,
+    paginatedItems,
+  } = useClientPagination(
+    filtered,
+    {
+      pageSize: RECORDS_PAGE_SIZE,
+      resetKey: `${searchQuery}|${statusFilter}`,
+    },
+  );
 
   function clearFilters() {
     setSearchQuery("");
@@ -292,7 +306,7 @@ export default function CustomersPage() {
           0 ? (
           <>
             <CustomersTable
-              customers={filtered}
+              customers={paginatedItems}
               onView={(
                 customer,
               ) =>
@@ -313,13 +327,13 @@ export default function CustomersPage() {
             />
 
             <TableFooter
-              visibleCount={
-                filtered.length
-              }
-              totalCount={
-                customers.length
-              }
+              visibleCount={paginatedItems.length}
+              totalCount={filtered.length}
               entityName="عميل"
+              page={page}
+              totalPages={totalPages}
+              pageSize={RECORDS_PAGE_SIZE}
+              onPageChange={setPage}
             />
           </>
         ) : customers.length ===

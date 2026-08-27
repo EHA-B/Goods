@@ -17,6 +17,7 @@ import {
 } from "../../components/ui";
 import { PATHS } from "../../routes/path";
 import { transactionsService } from "./transactionsService";
+import { RECORDS_PAGE_SIZE } from "../../lib/pagination";
 
 type CashboxOption = { id: number; name: string };
 type SummaryCurrency = { currency: string; totalIncome: number; totalExpense: number; net: number };
@@ -33,6 +34,7 @@ export default function TransactionsPage() {
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -49,13 +51,14 @@ export default function TransactionsPage() {
       if (status !== "all") filters.status = status;
 
       const [data, summaryData, cashboxesData] = await Promise.all([
-        transactionsService.list(filters, { page, limit: 50 }),
+        transactionsService.list(filters, { page, limit: RECORDS_PAGE_SIZE }),
         transactionsService.getSummary(filters),
         transactionsService.loadCashboxes()
       ]);
 
       setItems(data.items);
       setTotalCount(data.pagination.total);
+      setTotalPages(data.pagination.totalPages);
       setSummary(summaryData);
       setCashboxes(cashboxesData.map((item) => ({ id: item.id, name: item.name })));
     } catch (loadError) {
@@ -119,7 +122,15 @@ export default function TransactionsPage() {
               onView={(item) => navigate(`/transactions/${item.id}`)} 
               // Edit and delete are removed per the hardening plan
             />
-            <TableFooter visibleCount={items.length} totalCount={totalCount} entityName="معاملة" />
+            <TableFooter
+              visibleCount={items.length}
+              totalCount={totalCount}
+              entityName="معاملة"
+              page={page}
+              totalPages={Math.max(1, totalPages)}
+              pageSize={RECORDS_PAGE_SIZE}
+              onPageChange={setPage}
+            />
           </>
         ) : (
           <EmptyState icon={<ReceiptText size={32} />} title="لا توجد معاملات مطابقة" description="غيّر البحث أو الفلاتر، أو سجّل معاملة جديدة." />

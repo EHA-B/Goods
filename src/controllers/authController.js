@@ -92,6 +92,36 @@ class AuthController {
     return publicUser(refreshedUser);
   }
 
+  async verifyPassword(userId, password) {
+    if (!userId) throw validationError('Authenticated user is required');
+    const candidate = String(password ?? '');
+    if (!candidate) throw validationError('Password is required', 'password');
+
+    const db = await dbmanager.init();
+    const user = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT id, password_hash, isActive FROM users WHERE id = ? LIMIT 1`,
+        [userId],
+        (error, row) => error ? reject(error) : resolve(row),
+      );
+    });
+
+    if (!user || !Boolean(user.isActive)) {
+      const error = new Error('User not found or inactive');
+      error.code = 'UNAUTHENTICATED';
+      throw error;
+    }
+
+    const matches = await bcrypt.compare(candidate, user.password_hash);
+    if (!matches) {
+      const error = new Error('كلمة المرور غير صحيحة');
+      error.code = 'INVALID_PASSWORD';
+      throw error;
+    }
+
+    return { success: true };
+  }
+
   async changePassword(userId, input) {
     if (!userId) throw validationError('Authenticated user is required');
 

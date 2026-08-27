@@ -83,9 +83,9 @@ export default function CommissionPreviewCard({ preview, loading = false, policy
             {preview.spoilage_value > 0 && (
               <SummaryRow
                 icon={<Calculator size={16} />}
-                label="قيمة التلف (تعويض للمورد)"
+                label="القيمة التقديرية للتلف"
                 value={money(preview.spoilage_value, preview.currency)}
-                danger
+                muted
               />
             )}
             {preview.return_value > 0 && (
@@ -96,12 +96,6 @@ export default function CommissionPreviewCard({ preview, loading = false, policy
                 emphasis
               />
             )}
-            <SummaryRow
-              icon={<HandCoins size={16} />}
-              label="إجمالي استحقاق المورد"
-              value={money(preview.adjusted_supplier_share, preview.currency)}
-              muted
-            />
             {preview.prepaid_amount > 0 && (
               <SummaryRow
                 icon={<Minus size={16} />}

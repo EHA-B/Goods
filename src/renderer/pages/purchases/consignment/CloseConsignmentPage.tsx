@@ -337,8 +337,8 @@ export default function CloseConsignmentPage() {
         message={`سيتم اعتماد إجمالي مبيعات ${money(
           preview?.total_sales_amount ?? 0,
           summary.invoice.currency,
-        )}، وعمولة ${commission}%، وحصة مورد إجمالية ${money(
-          preview?.adjusted_supplier_share ?? 0,
+        )}، وعمولة ${commission}%، وحصة مورد ${money(
+          preview?.supplier_share_base ?? 0,
           summary.invoice.currency,
         )}${
           (preview?.prepaid_amount ?? 0) > 0
@@ -349,6 +349,13 @@ export default function CloseConsignmentPage() {
                 preview!.net_supplier_payout,
                 summary.invoice.currency,
               )})`
+            : ""
+        }${
+          (preview?.spoilage_value ?? 0) > 0
+            ? `، وقيمة تلف تقديرية ${money(
+                preview!.spoilage_value,
+                summary.invoice.currency,
+              )}`
             : ""
         }${
           summary.invoice.transport_cost > 0 || summary.invoice.emptying_cost > 0

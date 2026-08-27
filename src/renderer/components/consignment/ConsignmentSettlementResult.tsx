@@ -15,12 +15,12 @@ export default function ConsignmentSettlementResult({ settlement }: { settlement
 
   if (settlement.remaining_stock_policy === "spoilage" && settlement.spoilage_quantity > 0) {
     rows.push(["الكمية التالفة", String(settlement.spoilage_quantity)]);
-    rows.push(["قيمة التلف (تعويض للمورد)", money(settlement.spoilage_value, settlement.currency)]);
-    rows.push(["إجمالي استحقاق المورد", money(settlement.supplier_share + settlement.spoilage_value, settlement.currency)]);
+    if (settlement.spoilage_value > 0) {
+      rows.push(["القيمة التقديرية للتلف", money(settlement.spoilage_value, settlement.currency)]);
+    }
   } else if (settlement.remaining_stock_policy === "return_to_supplier" && settlement.returned_quantity > 0) {
     rows.push(["الكمية المرتجعة", String(settlement.returned_quantity)]);
     rows.push(["قيمة المرتجع (مستردة للصندوق)", money(settlement.return_value, settlement.currency)]);
-    rows.push(["إجمالي استحقاق المورد", money(settlement.supplier_share, settlement.currency)]);
   }
 
   rows.push(["الصندوق", settlement.cashbox_name]);

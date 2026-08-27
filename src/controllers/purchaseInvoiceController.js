@@ -1105,12 +1105,13 @@ class PurchaseInvoiceController {
         const spoilageValue = remaining_stock_policy === 'spoilage'          ? leftoverValue : 0;
         const returnValue   = remaining_stock_policy === 'return_to_supplier' ? leftoverValue : 0;
 
-        // Adjusted supplier share: base commission share + spoilage compensation
-        const adjustedSupplierShare = normalizeAmount(supplierShareBase + spoilageValue);
+        // Supplier share is based strictly on sales minus commission.
+        // Spoilage is not added as compensation; its estimated value is displayed for reference only.
+        const adjustedSupplierShare = supplierShareBase;
 
         // The supplier may have already received partial payments during the consignment.
         const prepaidAmount = normalizeAmount(invoice.paid_amount ?? 0);
-        const netSupplierPayout = normalizeAmount(Math.max(0, adjustedSupplierShare - prepaidAmount));
+        const netSupplierPayout = normalizeAmount(Math.max(0, supplierShareBase - prepaidAmount));
 
         const cashboxBalance = normalizeAmount(cashbox.balance);
         if (netSupplierPayout > cashboxBalance + 0.001) {
@@ -1214,10 +1215,10 @@ class PurchaseInvoiceController {
 
             const commissionAmount = normalizeAmount((totalSalesAmount * commPct) / 100);
             const supplierShareBase = normalizeAmount(totalSalesAmount - commissionAmount);
-            const adjustedSupplierShare = normalizeAmount(supplierShareBase + spoilageValue);
+            const adjustedSupplierShare = supplierShareBase;
 
-            // Net amount still owed to supplier after deducting pre-payments
-            const netSupplierPayout = normalizeAmount(Math.max(0, adjustedSupplierShare - prepaidAmount));
+            // Net amount still owed to supplier after deducting pre-payments (based strictly on sold items)
+            const netSupplierPayout = normalizeAmount(Math.max(0, supplierShareBase - prepaidAmount));
             const netSupplierPayoutCashbox = netSupplierPayout;
 
             // Compute net cashbox impact from this settlement
@@ -1263,21 +1264,6 @@ class PurchaseInvoiceController {
                     (settlement_id, purchase_invoice_item_id, product_id, stock_batch_id, received_quantity, sold_quantity, remaining_quantity, sales_amount, resolution_policy, resolved_quantity, stock_movement_id, notes, created_at)
                     VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                 `, [settlementId, batch.product_id, batch.id, Number(batch.quantity ?? 0), soldQty, resolvedQuantity, salesAmount, remaining_stock_policy, resolvedQuantity, adjustmentId, notes ?? null]);
-            }
-
-            // ── Spoilage expense transaction ─────────────────────────────────
-            // Value is already added to supplier payout. We record the expense for bookkeeping.
-            if (spoilageValue > 0) {
-                const spoilageCat = await dbGet(db, `SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 AND name LIKE '%تلف%' LIMIT 1`) 
-                                 ?? await dbGet(db, `SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 ORDER BY id ASC LIMIT 1`);
-                if (spoilageCat) {
-                    await dbRun(db, `
-                        INSERT INTO transactions
-                        (category_id, cashbox_id, amount, direction, transaction_date,
-                         description, reference_number, notes, status, created_at, updated_at)
-                        VALUES (?, ?, ?, 'expense', ?, ?, ?, ?, 'active', datetime('now'), datetime('now'))
-                    `, [spoilageCat.id, cashbox_id, spoilageValue, settlement_date, `تلف بضاعة — تسوية أمانة ${settlementNumber}`, settlementNumber, notes ?? `إغلاق فاتورة أمانة — تلف ${remainingQuantity} وحدة`]);
-                }
             }
 
             // ── Return income transaction ──────────────────────────────────

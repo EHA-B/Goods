@@ -20,6 +20,10 @@ type Props = {
   exchangeRate?: number;
   totalBase?: number;
   extraAmount?: { label: string; value: number };
+  extraAmounts?: Array<{
+    label: string;
+    value: number;
+  }>;
   notes?: string;
 };
 const money = (value: number, currency = "SYP") =>
@@ -64,7 +68,20 @@ export default function PrintableInvoice(props: Props) {
       <div className="invoice-summary">
         <div><span>المجموع الفرعي</span><strong>{money(props.subtotal, props.currency)}</strong></div>
         <div><span>الخصم</span><strong>{money(props.discount, props.currency)}</strong></div>
-        {props.extraAmount && <div><span>{props.extraAmount.label}</span><strong>{money(props.extraAmount.value, props.currency)}</strong></div>}
+        {props.extraAmount && (
+          <div>
+            <span>{props.extraAmount.label}</span>
+            <strong>{money(props.extraAmount.value, props.currency)}</strong>
+          </div>
+        )}
+        {props.extraAmounts
+          ?.filter((item) => Number(item.value) > 0)
+          .map((item) => (
+            <div key={item.label}>
+              <span>{item.label}</span>
+              <strong>{money(Number(item.value), props.currency)}</strong>
+            </div>
+          ))}
         <div><span>الضريبة</span><strong>{money(props.tax, props.currency)}</strong></div>
         <div className="invoice-total"><span>الإجمالي النهائي</span><strong>{money(props.total, props.currency)}</strong></div>
         <div><span>المبلغ المدفوع</span><strong>{money(props.paidAmount, props.currency)}</strong></div>

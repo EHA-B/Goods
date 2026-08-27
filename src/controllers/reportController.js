@@ -573,6 +573,20 @@ class ReportController {
               ),
             },
             {
+              label: "تكلفة النقل",
+              value: formatMoney(
+                invoice.transport_cost,
+                currency,
+              ),
+            },
+            {
+              label: "تكلفة العتالة",
+              value: formatMoney(
+                invoice.emptying_cost,
+                currency,
+              ),
+            },
+            {
               label: "الإجمالي",
               value: formatMoney(
                 invoice.total,
@@ -775,6 +789,8 @@ class ReportController {
           pi.invoice_type,
           pi.subtotal,
           COALESCE(pi.discount_amount, pi.discount, 0) AS discount_amount,
+          COALESCE(pi.transport_cost, 0) AS transport_cost,
+          COALESCE(pi.emptying_cost, 0) AS emptying_cost,
           COALESCE(pi.tax, 0) AS tax,
           pi.total,
           pi.paid_amount,
@@ -1062,6 +1078,27 @@ class ReportController {
               ),
             },
             {
+              label: "تكلفة النقل",
+              value: formatMoney(
+                invoice.transport_cost,
+                currency,
+              ),
+            },
+            {
+              label: "تكلفة العتالة",
+              value: formatMoney(
+                invoice.emptying_cost,
+                currency,
+              ),
+            },
+            {
+              label: "الضريبة",
+              value: formatMoney(
+                invoice.tax,
+                currency,
+              ),
+            },
+            {
               label: "الإجمالي",
               value: formatMoney(
                 invoice.total,
@@ -1171,6 +1208,67 @@ class ReportController {
           invoices,
           "إجمالي المشتريات الفعلية",
         ),
+
+        ...[
+          ...new Set(
+            invoices.map((invoice) =>
+              normalizeCurrency(
+                invoice.currency,
+              ),
+            ),
+          ),
+        ].flatMap((currency) => {
+          const effectiveInvoices =
+            invoices.filter(
+              (invoice) =>
+                normalizeCurrency(
+                  invoice.currency,
+                ) === currency &&
+                String(
+                  invoice.status || "",
+                ).toLowerCase() !==
+                  "cancelled",
+            );
+
+          const transportTotal =
+            effectiveInvoices.reduce(
+              (sum, invoice) =>
+                sum +
+                number(
+                  invoice.transport_cost,
+                ),
+              0,
+            );
+
+          const emptyingTotal =
+            effectiveInvoices.reduce(
+              (sum, invoice) =>
+                sum +
+                number(
+                  invoice.emptying_cost,
+                ),
+              0,
+            );
+
+          return [
+            {
+              label:
+                `إجمالي تكلفة النقل (${currency})`,
+              value: formatMoney(
+                transportTotal,
+                currency,
+              ),
+            },
+            {
+              label:
+                `إجمالي تكلفة العتالة (${currency})`,
+              value: formatMoney(
+                emptyingTotal,
+                currency,
+              ),
+            },
+          ];
+        }),
       ],
       totalRows: totalItems,
     };
@@ -1718,6 +1816,27 @@ class ReportController {
       });
     }
 
+    const purchaseExtraCostColumns = [
+      { key: "invoice_number", label: "فاتورة الشراء", format: "text" },
+      { key: "supplier_name", label: "المورد", format: "text" },
+      { key: "cost_label", label: "نوع التكلفة", format: "text" },
+      { key: "date", label: "التاريخ", format: "date" },
+      { key: "original_amount", label: "المبلغ بعملة الفاتورة", format: "currency" },
+      { key: "amount_base", label: "القيمة الأساسية", format: "currency" },
+    ];
+
+    const purchaseExtraCostRows =
+      (detailed.purchase_extra_costs?.details ?? []).map((item) => ({
+        invoice_number: item.invoice_number || "—",
+        supplier_name: item.supplier_name || "—",
+        cost_label: item.cost_type === "transport" ? "تكلفة النقل" : "تكلفة العتالة",
+        date: item.transaction_date || "—",
+        original_amount: number(item.original_amount),
+        amount_base: number(item.amount),
+        currency: item.original_currency || "SYP",
+        base_currency: "SYP",
+      }));
+
     for (const item of detailed.stock_losses.details) {
       expensesRows.push({
         metric: `خسارة مخزون (${item.product_name}): ${item.reason || item.notes || ""}`,
@@ -1727,6 +1846,18 @@ class ReportController {
         currency: "SYP", // Base currency based on purchase price
       });
     }
+
+    const purchaseExtraCostsSection = {
+      title: "تكاليف النقل والعتالة حسب فواتير الشراء",
+      columns: purchaseExtraCostColumns,
+      rows: purchaseExtraCostRows,
+      summary: [
+        {
+          label: "إجمالي تكاليف النقل والعتالة",
+          value: `${number(detailed.purchase_extra_costs?.total_base).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
+        },
+      ],
+    };
 
     const sections = [
       {
@@ -1744,6 +1875,7 @@ class ReportController {
           }
         ]
       },
+      ...(purchaseExtraCostRows.length > 0 ? [purchaseExtraCostsSection] : []),
       {
         title: "التكاليف والمصروفات",
         columns: expensesColumns,
@@ -1755,7 +1887,7 @@ class ReportController {
           },
           {
             label: "المصروفات العامة وخسائر المخزون",
-            value: `${(number(summary.total_expenses_native) + number(summary.total_stock_loss_base)).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
+            value: `${(number(summary.total_general_expenses_native) + number(summary.total_stock_loss_base)).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
           }
         ]
       }
@@ -1775,6 +1907,10 @@ class ReportController {
         {
           label: "إجمالي التكلفة والمصروفات",
           value: `${(number(summary.total_cogs_base) + number(summary.total_expenses_native) + number(summary.total_stock_loss_base)).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
+        },
+        {
+          label: "منها نقل وعتالة",
+          value: `${number(summary.total_purchase_extra_costs_base).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
         },
         {
           label: "صافي الربح / الخسارة",
@@ -1883,6 +2019,10 @@ class ReportController {
           LEFT JOIN transaction_categories tc ON tc.id = t.category_id
           WHERE t.direction = 'expense'
             AND t.status = 'active'
+            AND NOT (
+              t.cashbox_id IS NULL
+              AND (t.description LIKE 'تكلفة نقل — فاتورة شراء #%' OR t.description LIKE 'تكلفة عتالة — فاتورة شراء #%')
+            )
             AND t.transaction_date >= ?
             AND t.transaction_date <= ?
           ORDER BY t.transaction_date DESC, t.id DESC
@@ -1909,6 +2049,58 @@ class ReportController {
             AND t.transaction_date <= ?
           ORDER BY t.transaction_date DESC, t.id DESC
       `, [dateFrom, dateTo]);
+
+      // 6.25. PURCHASE INVOICE EXTRA COSTS (transport / handling)
+      // Read directly from purchase invoices so financial reports remain complete even
+      // if the auxiliary non-cash transaction could not be created. Values are converted
+      // to the base currency using the invoice exchange rate.
+      const purchaseExtraCostRows = await all(db, `
+          SELECT
+              pi.id AS purchase_invoice_id,
+              pi.invoice_number,
+              pi.invoice_date,
+              pi.currency,
+              COALESCE(NULLIF(pi.exchange_rate, 0), 1) AS exchange_rate,
+              s.name AS supplier_name,
+              COALESCE(pi.transport_cost, 0) AS transport_cost,
+              COALESCE(pi.emptying_cost, 0) AS emptying_cost
+          FROM purchase_invoices pi
+          LEFT JOIN suppliers s ON s.id = pi.supplier_id
+          WHERE pi.status != 'cancelled'
+            AND pi.invoice_date >= ?
+            AND pi.invoice_date <= ?
+            AND (COALESCE(pi.transport_cost, 0) > 0 OR COALESCE(pi.emptying_cost, 0) > 0)
+          ORDER BY pi.invoice_date DESC, pi.id DESC
+      `, [dateFrom, dateTo]);
+
+      const purchaseExtraCostDetails = [];
+      for (const row of purchaseExtraCostRows) {
+          const rate = number(row.exchange_rate) || 1;
+          const originalCurrency = normalizeCurrency(row.currency);
+          for (const [kind, label, rawAmount] of [
+              ['transport', 'تكلفة نقل', row.transport_cost],
+              ['emptying', 'تكلفة عتالة', row.emptying_cost],
+          ]) {
+              const nativeAmount = number(rawAmount);
+              if (!(nativeAmount > 0)) continue;
+              const baseAmount = Math.round((nativeAmount * rate) * 100) / 100;
+              purchaseExtraCostDetails.push({
+                  id: `purchase-${row.purchase_invoice_id}-${kind}`,
+                  transaction_date: row.invoice_date,
+                  category_name: label,
+                  description: `${label} — فاتورة شراء #${row.invoice_number}${row.supplier_name ? ` — ${row.supplier_name}` : ''}`,
+                  notes: `تكلفة إضافية مرتبطة بفاتورة الشراء ${row.invoice_number}`,
+                  currency: 'SYP',
+                  original_currency: originalCurrency,
+                  original_amount: nativeAmount,
+                  amount: baseAmount,
+                  purchase_invoice_id: number(row.purchase_invoice_id),
+                  invoice_number: row.invoice_number,
+                  supplier_name: row.supplier_name || '—',
+                  cost_type: kind,
+              });
+          }
+      }
 
       // ────────────────────────────────────────────────────────────────────
       // 6.5. STOCK ADJUSTMENT LOSSES (negative adjustments)
@@ -1982,7 +2174,9 @@ class ReportController {
       const totalCogsBase                = number(cogsRow?.cogs_base);
       const totalGrossProfitBase         = number(grossProfitRow?.gross_profit_base);
       const totalConsignmentPayoutBase   = consignmentPayoutRows.reduce((s, r) => s + number(r.payout_base), 0);
-      const totalExpensesNative          = expenseRows.reduce((s, r) => s + number(r.expense_native), 0);
+      const totalGeneralExpenses         = expenseRows.reduce((s, r) => s + number(r.expense_native), 0);
+      const totalPurchaseExtraCostsBase  = purchaseExtraCostDetails.reduce((s, r) => s + number(r.amount), 0);
+      const totalExpensesNative          = totalGeneralExpenses + totalPurchaseExtraCostsBase;
       const totalIncomeNative            = incomeRows.reduce((s, r) => s + number(r.income_native), 0);
       const totalStockLossBase           = stockLossRows.reduce((s, r) => s + number(r.loss_amount), 0);
 
@@ -2033,7 +2227,12 @@ class ReportController {
                   currency:    r.currency,
                   amount:      number(r.expense_native),
               })),
-              total_native: number(totalExpensesNative),
+              total_native: number(totalGeneralExpenses),
+          },
+
+          purchase_extra_costs: {
+              details: purchaseExtraCostDetails,
+              total_base: number(totalPurchaseExtraCostsBase),
           },
 
           other_income: {
@@ -2083,6 +2282,8 @@ class ReportController {
               gross_profit_base:               number(totalGrossProfitBase),
               total_consignment_payout_base:   number(totalConsignmentPayoutBase),
               total_expenses_native:           number(totalExpensesNative),
+              total_general_expenses_native:   number(totalGeneralExpenses),
+              total_purchase_extra_costs_base: number(totalPurchaseExtraCostsBase),
               total_other_income_native:       number(totalIncomeNative),
               total_stock_loss_base:           number(totalStockLossBase),
               net_profit_base:                 number(netProfitBase),

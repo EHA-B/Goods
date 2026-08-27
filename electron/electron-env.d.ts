@@ -295,6 +295,8 @@ type PurchaseInvoiceRecord = {
   subtotal: number;
   discount: number;
   discount_amount: number;
+  transport_cost?: number;
+  emptying_cost?: number;
   settlement_status: 'settled' | 'paid' | 'partial' | 'overdue';
   tax: number;
   total: number;

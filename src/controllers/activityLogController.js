@@ -36,8 +36,8 @@ function moduleFor(tableName, action) {
 function descriptionFor(action, tableName, recordId) {
   const labels = {
     auth_login: 'تسجيل الدخول إلى النظام', auth_logout: 'تسجيل الخروج من النظام', password_changed: 'تغيير كلمة المرور',
-    sale_created: 'إنشاء فاتورة بيع', sale_cancelled: 'إلغاء فاتورة بيع', sale_payment_recorded: 'تسجيل دفعة بيع', sale_payment_reversed: 'عكس دفعة بيع',
-    purchase_created: 'إنشاء فاتورة شراء', purchase_cancelled: 'إلغاء فاتورة شراء', purchase_payment_recorded: 'تسجيل دفعة شراء', purchase_payment_reversed: 'عكس دفعة شراء',
+    sale_created: 'إنشاء فاتورة بيع', sale_edited: 'تعديل فاتورة بيع', sale_cancelled: 'إلغاء فاتورة بيع', sale_payment_recorded: 'تسجيل دفعة بيع', sale_payment_reversed: 'عكس دفعة بيع',
+    purchase_created: 'إنشاء فاتورة شراء', purchase_edited: 'تعديل فاتورة شراء', purchase_cancelled: 'إلغاء فاتورة شراء', purchase_payment_recorded: 'تسجيل دفعة شراء', purchase_payment_reversed: 'عكس دفعة شراء',
     purchase_commission_closed: 'إغلاق تسوية أمانة', purchase_commission_reversed: 'عكس تسوية أمانة',
     backup_created: 'إنشاء نسخة احتياطية', backup_restored: 'استعادة نسخة احتياطية',
   };

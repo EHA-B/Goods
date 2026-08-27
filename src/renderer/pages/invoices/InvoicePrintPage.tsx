@@ -170,6 +170,20 @@ export default function InvoicePrintPage({ type }: { type: "sale" | "purchase" }
           currency={purchaseDetails.invoice.currency}
           exchangeRate={purchaseDetails.invoice.exchange_rate}
           totalBase={purchaseDetails.financial_summary.total_base}
+          extraAmounts={[
+            {
+              label: "تكلفة النقل",
+              value: Number(
+                purchaseDetails.financial_summary.transport_cost ?? 0,
+              ),
+            },
+            {
+              label: "تكلفة العتالة",
+              value: Number(
+                purchaseDetails.financial_summary.emptying_cost ?? 0,
+              ),
+            },
+          ]}
           notes={purchaseDetails.invoice.notes || undefined}
         />
       ) : null}

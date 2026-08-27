@@ -296,19 +296,28 @@ export default function CashboxDetailsPage() {
                     <DataTableRow key={m.id}>
                       <DataTableCell>{m.transaction_date}</DataTableCell>
                       <DataTableCell>
-                        <span
-                          className={
-                            isOpening  ? "text-[var(--primary)] font-semibold" :
-                            isTransfer ? "text-[var(--warning)]" :
-                            isReversal ? "text-[var(--text-muted)] italic" :
-                            ""
-                          }
-                        >
-                          {MOVEMENT_LABELS[m.reference_type] ?? m.reference_type}
-                          {(m.reference_type === 'sale' || m.reference_type === 'purchase') && m.reference_display_id
-                            ? ` #${m.reference_display_id}`
-                            : ''}
-                        </span>
+                        {(m.reference_type === "sale" || m.reference_type === "purchase") && m.reference_id ? (
+                          <button
+                            type="button"
+                            className="font-semibold text-[var(--primary)] underline-offset-4 transition-colors hover:underline"
+                            title={m.reference_type === "sale" ? "فتح تفاصيل فاتورة البيع" : "فتح تفاصيل فاتورة الشراء"}
+                            onClick={() => nav(m.reference_type === "sale" ? `/sales/${m.reference_id}` : `/purchases/${m.reference_id}`)}
+                          >
+                            {MOVEMENT_LABELS[m.reference_type] ?? m.reference_type}
+                            {m.reference_display_id ? ` #${m.reference_display_id}` : ""}
+                          </button>
+                        ) : (
+                          <span
+                            className={
+                              isOpening  ? "text-[var(--primary)] font-semibold" :
+                              isTransfer ? "text-[var(--warning)]" :
+                              isReversal ? "text-[var(--text-muted)] italic" :
+                              ""
+                            }
+                          >
+                            {MOVEMENT_LABELS[m.reference_type] ?? m.reference_type}
+                          </span>
+                        )}
                       </DataTableCell>
                       <DataTableCell>
                         {m.direction === "in" ? (

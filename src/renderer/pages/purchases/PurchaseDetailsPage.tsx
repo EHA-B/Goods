@@ -132,6 +132,33 @@ export default function PurchaseDetailsPage() {
           </DataTable>
         </Card>
 
+        {((financial_summary.transport_cost ?? 0) > 0 ||
+          (financial_summary.emptying_cost ?? 0) > 0) && (
+          <Card
+            header="التكاليف الإضافية"
+            description="تكاليف مرتبطة مباشرة بهذه الفاتورة وتدخل ضمن إجماليها."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(financial_summary.transport_cost ?? 0) > 0 && (
+                <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
+                  <div className="text-xs font-medium text-[var(--text-muted)]">تكلفة النقل</div>
+                  <div dir="ltr" className="mt-2 text-right text-lg font-extrabold tabular-nums text-[var(--text-primary)]">
+                    {money(Number(financial_summary.transport_cost ?? 0), invoice.currency)}
+                  </div>
+                </div>
+              )}
+              {(financial_summary.emptying_cost ?? 0) > 0 && (
+                <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
+                  <div className="text-xs font-medium text-[var(--text-muted)]">تكلفة العتالة</div>
+                  <div dir="ltr" className="mt-2 text-right text-lg font-extrabold tabular-nums text-[var(--text-primary)]">
+                    {money(Number(financial_summary.emptying_cost ?? 0), invoice.currency)}
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+
         <Card padding={false} header="سجل الدفعات" description="كل الدفعات المسجلة على فاتورة الشراء.">
           {payments.length ? (
             <DataTable>

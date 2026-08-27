@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ArrowDownLeft, ArrowUpRight, RefreshCw, RotateCcw,
 } from "lucide-react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   DataTable, DataTableBody, DataTableCell, DataTableHead,
   DataTableHeaderCell, DataTableRow,
@@ -58,6 +58,7 @@ type ReversalState = {
 };
 
 export default function CashboxMovementsPage() {
+  const nav = useNavigate();
   const { id } = useParams();
 
   const [cashbox, setCashbox] = useState<CashboxApiRecord | null>(null);
@@ -288,17 +289,26 @@ export default function CashboxMovementsPage() {
                       <DataTableCell className="text-[var(--text-muted)] text-xs">{m.id}</DataTableCell>
                       <DataTableCell>{m.transaction_date}</DataTableCell>
                       <DataTableCell>
-                        <span className={
-                          isOpening  ? "text-[var(--primary)] font-semibold text-sm" :
-                          isTransfer ? "text-[var(--warning)] text-sm" :
-                          isReversal ? "text-[var(--text-muted)] italic text-sm" :
-                          "text-sm"
-                        }>
-                          {MOVEMENT_LABELS[m.reference_type] ?? m.reference_type}
-                          {(m.reference_type === 'sale' || m.reference_type === 'purchase') && m.reference_display_id
-                            ? ` #${m.reference_display_id}`
-                            : ''}
-                        </span>
+                        {(m.reference_type === "sale" || m.reference_type === "purchase") && m.reference_id ? (
+                          <button
+                            type="button"
+                            className="text-sm font-semibold text-[var(--primary)] underline-offset-4 transition-colors hover:underline"
+                            title={m.reference_type === "sale" ? "فتح تفاصيل فاتورة البيع" : "فتح تفاصيل فاتورة الشراء"}
+                            onClick={() => nav(m.reference_type === "sale" ? `/sales/${m.reference_id}` : `/purchases/${m.reference_id}`)}
+                          >
+                            {MOVEMENT_LABELS[m.reference_type] ?? m.reference_type}
+                            {m.reference_display_id ? ` #${m.reference_display_id}` : ""}
+                          </button>
+                        ) : (
+                          <span className={
+                            isOpening  ? "text-[var(--primary)] font-semibold text-sm" :
+                            isTransfer ? "text-[var(--warning)] text-sm" :
+                            isReversal ? "text-[var(--text-muted)] italic text-sm" :
+                            "text-sm"
+                          }>
+                            {MOVEMENT_LABELS[m.reference_type] ?? m.reference_type}
+                          </span>
+                        )}
                         {m.transfer_group_id && (
                           <p className="text-xs text-[var(--text-muted)] mt-0.5">مجموعة: {m.transfer_group_id.slice(-8)}</p>
                         )}

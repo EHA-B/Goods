@@ -192,14 +192,14 @@ export default function PurchaseFormPage() {
     if (!isEdit || !lookups) return;
     purchasesService.getDetails(editingId).then((data) => {
       const draft = consumeInvoiceDraft<any>(draftKey);
-      const source = draft ?? { supplierId: Number(data.invoice.supplier_id), invoiceNumber: data.invoice.invoice_number, invoiceDate: data.invoice.invoice_date, invoiceType: data.invoice.invoice_type, discount: Number(data.invoice.discount_amount ?? data.invoice.discount ?? 0), notes: data.invoice.notes ?? "", currency: data.invoice.currency ?? "SYP", exchangeRate: Number(data.invoice.exchange_rate ?? 1), items: data.items.map((row: any) => ({ product_id: Number(row.product_id), productName: String(row.product_name ?? ""), quantity: Number(row.quantity ?? 1), purchase_price: Number(row.unit_price ?? 0), estimated_purchase_price: Number(row.estimated_purchase_price ?? row.unit_price ?? 0), batch_code: String(row.batch_code ?? ""), received_date: String(row.batch_received_date ?? row.received_date ?? data.invoice.invoice_date), expiry_date: String(row.batch_expiry_date ?? row.expiry_date ?? "") })) };
-      setSupplierId(source.supplierId); setInvoiceNumber(source.invoiceNumber); setInvoiceDate(source.invoiceDate); setInvoiceType(source.invoiceType); setDiscount(source.discount); setNotes(source.notes); setCurrency(source.currency); setExchangeRate(source.exchangeRate); setItems(source.items); setPaymentAmount(0); setExistingPaidAmount(Number(data.invoice.paid_amount ?? 0)); setRestoredDraft(Boolean(draft)); setDraftInitialized(true);
+      const source = draft ?? { supplierId: Number(data.invoice.supplier_id), invoiceNumber: data.invoice.invoice_number, invoiceDate: data.invoice.invoice_date, invoiceType: data.invoice.invoice_type, discount: Number(data.invoice.discount_amount ?? data.invoice.discount ?? 0), transportCost: Number((data.invoice as any).transport_cost ?? 0), emptyingCost: Number((data.invoice as any).emptying_cost ?? 0), notes: data.invoice.notes ?? "", currency: data.invoice.currency ?? "SYP", exchangeRate: Number(data.invoice.exchange_rate ?? 1), items: data.items.map((row: any) => ({ product_id: Number(row.product_id), productName: String(row.product_name ?? ""), quantity: Number(row.quantity ?? 1), purchase_price: Number(row.unit_price ?? 0), estimated_purchase_price: Number(row.estimated_purchase_price ?? row.unit_price ?? 0), batch_code: String(row.batch_code ?? ""), received_date: String(row.batch_received_date ?? row.received_date ?? data.invoice.invoice_date), expiry_date: String(row.batch_expiry_date ?? row.expiry_date ?? "") })) };
+      setSupplierId(source.supplierId); setInvoiceNumber(source.invoiceNumber); setInvoiceDate(source.invoiceDate); setInvoiceType(source.invoiceType); setDiscount(source.discount); setTransportCost(source.transportCost ?? 0); setEmptyingCost(source.emptyingCost ?? 0); setNotes(source.notes); setCurrency(source.currency); setExchangeRate(source.exchangeRate); setItems(source.items); setPaymentAmount(0); setExistingPaidAmount(Number(data.invoice.paid_amount ?? 0)); setRestoredDraft(Boolean(draft)); setDraftInitialized(true);
     }).catch((err: Error) => setError(getArabicErrorMessage(err, "تعذر تحميل الفاتورة للتعديل")));
   }, [isEdit, editingId, lookups, draftKey]);
 
   useEffect(() => {
     if (isEdit || draftInitialized) return; const draft = consumeInvoiceDraft<any>(draftKey); if (!draft) { setDraftInitialized(true); return; }
-    setSupplierId(draft.supplierId ?? 0); setInvoiceNumber(draft.invoiceNumber ?? ""); setInvoiceDate(draft.invoiceDate ?? invoiceDate); setInvoiceType(draft.invoiceType ?? "standard"); setDiscount(draft.discount ?? 0); setNotes(draft.notes ?? ""); setItems(draft.items ?? [emptyItem()]); setPaymentAmount(draft.paymentAmount ?? 0); setPaymentCashboxId(draft.paymentCashboxId ?? 0); setPaymentDate(draft.paymentDate ?? paymentDate); setPaymentExchangeRate(draft.paymentExchangeRate ?? ""); setCurrency(draft.currency ?? "SYP"); setExchangeRate(draft.exchangeRate ?? 1); setRestoredDraft(true); setDraftInitialized(true);
+    setSupplierId(draft.supplierId ?? 0); setInvoiceNumber(draft.invoiceNumber ?? ""); setInvoiceDate(draft.invoiceDate ?? invoiceDate); setInvoiceType(draft.invoiceType ?? "standard"); setDiscount(draft.discount ?? 0); setTransportCost(draft.transportCost ?? 0); setEmptyingCost(draft.emptyingCost ?? 0); setNotes(draft.notes ?? ""); setItems(draft.items ?? [emptyItem()]); setPaymentAmount(draft.paymentAmount ?? 0); setPaymentCashboxId(draft.paymentCashboxId ?? 0); setPaymentDate(draft.paymentDate ?? paymentDate); setPaymentExchangeRate(draft.paymentExchangeRate ?? ""); setCurrency(draft.currency ?? "SYP"); setExchangeRate(draft.exchangeRate ?? 1); setRestoredDraft(true); setDraftInitialized(true);
   }, [isEdit, draftKey, draftInitialized]);
 
   useEffect(() => {
@@ -213,6 +213,8 @@ export default function PurchaseFormPage() {
       invoiceDate,
       invoiceType,
       discount,
+      transportCost,
+      emptyingCost,
       notes,
       items,
       paymentAmount,
@@ -270,6 +272,8 @@ export default function PurchaseFormPage() {
     invoiceDate,
     invoiceType,
     discount,
+    transportCost,
+    emptyingCost,
     notes,
     items,
     paymentAmount,

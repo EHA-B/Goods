@@ -37,6 +37,8 @@ class PurchaseInvoiceController {
             invoice_date,
             invoice_type = 'standard',
             discount_amount = 0,
+            transport_cost = 0,
+            emptying_cost = 0,
             notes,
             items,
             initial_payment,
@@ -83,12 +85,19 @@ class PurchaseInvoiceController {
             }
 
             // 4. Calculate totals (validates items)
-            const { normalizedItems, subtotal, discountAmount, totalAmount } = calculateInvoiceTotals(
+            const { normalizedItems, subtotal, discountAmount, totalAmount: itemsTotal } = calculateInvoiceTotals(
                 mappedItems, discount_amount
             );
             if (discountAmount > subtotal) {
                 throw { code: 'VALIDATION_ERROR', message: 'الخصم لا يمكن أن يتجاوز المجموع الفرعي' };
             }
+
+            // Add transport and emptying costs to the invoice total (they are expenses, not part of items subtotal)
+            const normalizedTransportCost = normalizeAmount(Number(transport_cost) || 0);
+            const normalizedEmptyingCost  = normalizeAmount(Number(emptying_cost)  || 0);
+            if (normalizedTransportCost < 0) throw { code: 'VALIDATION_ERROR', message: 'تكلفة النقل لا يمكن أن تكون سالبة' };
+            if (normalizedEmptyingCost  < 0) throw { code: 'VALIDATION_ERROR', message: 'تكلفة العتالة لا يمكن أن تكون سالبة' };
+            const totalAmount = normalizeAmount(itemsTotal + normalizedTransportCost + normalizedEmptyingCost);
 
             // 5. Validate/generate invoice number
             let invNumber = invoice_number?.trim();
@@ -110,13 +119,16 @@ class PurchaseInvoiceController {
                 `INSERT INTO purchase_invoices
                    (invoice_number, supplier_id, invoice_type, invoice_date,
                     subtotal, discount, discount_amount, tax, total, paid_amount, remaining_amount, status, notes,
-                    currency, exchange_rate,
+                    currency, exchange_rate, transport_cost, emptying_cost,
                     created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
                 [invNumber, supplier_id, invoice_type, validatedDate,
                  subtotal, discountAmount, discountAmount, totalAmount, totalAmount, status, notes ?? null,
-                 invoiceCurrency, invoiceRate]
+                 invoiceCurrency, invoiceRate, normalizedTransportCost, normalizedEmptyingCost]
             );
+
+            // NOTE: transport_cost & emptying_cost are part of totalAmount (already included above).
+            // They will be recorded as expense transactions after invoice creation (step 12).
 
             // 8. Insert items + create stock batches + stock movements
             for (let i = 0; i < normalizedItems.length; i++) {
@@ -169,8 +181,10 @@ class PurchaseInvoiceController {
                 );
             }
 
-            // 9. Increase supplier payable balance by invoice total
-            const supplierBaseAmount = toBaseAmount(totalAmount, invoiceRate);
+            // 9. Increase supplier payable balance by invoice items total only.
+            // Transport and emptying costs are our own expenses, NOT part of what
+            // we owe to the supplier, so only itemsTotal is added to supplier balance.
+            const supplierBaseAmount = toBaseAmount(itemsTotal, invoiceRate);
             await dbRun(db,
                 `UPDATE suppliers SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`,
                 [supplierBaseAmount, supplier_id]
@@ -248,8 +262,57 @@ class PurchaseInvoiceController {
                 [finalPaid, remainingAmount, finalStatus, invoiceId]
             );
 
-            // 12. Activity log
-            await logActivity(db, 'purchase_created', 'purchase_invoices', invoiceId, { invoice_number: invNumber, supplier_id, total: totalAmount });
+            // 12. Record transport cost as an expense transaction (if provided)
+            if (normalizedTransportCost > 0) {
+                try {
+                    const transportCat = await dbGet(db,
+                        `SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 AND (name LIKE '%نقل%' OR name LIKE '%شحن%') LIMIT 1`
+                    ) ?? await dbGet(db,
+                        `SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 ORDER BY id ASC LIMIT 1`
+                    );
+                    if (transportCat) {
+                        await dbRun(db,
+                            `INSERT INTO transactions
+                               (category_id, cashbox_id, amount, direction, transaction_date,
+                                description, reference_number, notes, status, created_at, updated_at)
+                             VALUES (?, NULL, ?, 'expense', ?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
+                            [transportCat.id, normalizedTransportCost, validatedDate,
+                             `تكلفة نقل — فاتورة شراء #${invNumber}`, invNumber,
+                             `تكلفة نقل بضاعة مرتبطة بفاتورة الشراء ${invNumber}`]
+                        );
+                    }
+                } catch (txErr) {
+                    // Log but don't fail the invoice — the cost is already in the total
+                    console.error('[PurchaseInvoice] Failed to record transport_cost transaction:', txErr);
+                }
+            }
+
+            // 13. Record emptying (عتالة) cost as an expense transaction (if provided)
+            if (normalizedEmptyingCost > 0) {
+                try {
+                    const emptyingCat = await dbGet(db,
+                        `SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 AND (name LIKE '%عتال%' OR name LIKE '%تفريغ%') LIMIT 1`
+                    ) ?? await dbGet(db,
+                        `SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 ORDER BY id ASC LIMIT 1`
+                    );
+                    if (emptyingCat) {
+                        await dbRun(db,
+                            `INSERT INTO transactions
+                               (category_id, cashbox_id, amount, direction, transaction_date,
+                                description, reference_number, notes, status, created_at, updated_at)
+                             VALUES (?, NULL, ?, 'expense', ?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
+                            [emptyingCat.id, normalizedEmptyingCost, validatedDate,
+                             `تكلفة عتالة — فاتورة شراء #${invNumber}`, invNumber,
+                             `تكلفة تفريغ بضاعة (عتالة) مرتبطة بفاتورة الشراء ${invNumber}`]
+                        );
+                    }
+                } catch (txErr) {
+                    console.error('[PurchaseInvoice] Failed to record emptying_cost transaction:', txErr);
+                }
+            }
+
+            // 14. Activity log
+            await logActivity(db, 'purchase_created', 'purchase_invoices', invoiceId, { invoice_number: invNumber, supplier_id, total: totalAmount, transport_cost: normalizedTransportCost, emptying_cost: normalizedEmptyingCost });
 
             await dbRun(db, 'COMMIT');
 

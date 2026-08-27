@@ -29,12 +29,13 @@ import * as m20260814000001_make_transaction_cashbox_nullable from './migrations
 import * as paymentInvoiceOptionalMigration from './migrations/20260823120000_make_payment_invoice_optional';
 import * as cashboxesSeed from './seeds/01_cashboxes';
 import * as usersSeed from './seeds/02_users';
+import * as addPurchaseExtraCostsMigration from './migrations/20260827000000_add_purchase_extra_costs';
 
 let knexInstance: Knex | null = null;
 
 class MigrationSource {
   async getMigrations() {
-    return Promise.resolve([
+    return Promise.resolve([  
       '20250101000000_initial_schema.ts',
       '20260728141424_consignment_support.ts',
       '20260731190000_add_product_code.ts',
@@ -59,6 +60,7 @@ class MigrationSource {
       '20260814000000_consignment_settlement_monetary_values.ts',
       '20260814000001_make_transaction_cashbox_nullable.ts',
       '20260823120000_make_payment_invoice_optional.ts',
+      '20260827000000_add_purchase_extra_costs.ts',
     ]);
   }
   getMigrationName(migration: string) {
@@ -136,6 +138,9 @@ class MigrationSource {
     }
     if (migration === '20260804_sales_purchases_hardening.ts') {
       return sales_purchases_hardening;
+    }
+    if (migration === '20260827000000_add_purchase_extra_costs.ts') {
+      return addPurchaseExtraCostsMigration;
     }
     throw new Error(`Migration ${migration} not found`);
   }

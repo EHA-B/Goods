@@ -90,6 +90,8 @@ export default function PurchaseFormPage() {
   >("standard");
 
   const [discount, setDiscount] = useState(0);
+  const [transportCost, setTransportCost] = useState(0);
+  const [emptyingCost, setEmptyingCost] = useState(0);
   const [notes, setNotes] = useState("");
 
   const [items, setItems] = useState<PurchaseItemForm[]>([
@@ -201,10 +203,13 @@ export default function PurchaseFormPage() {
   /**
    * المجموع الكلي — للأمانة يستخدم سعر التسويق كأساس الفاتورة.
    * هذا يسمح بتسجيل دفعات جزئية للمورد.
+   * تكاليف النقل والعتالة تُضاف دائمًا للإجمالي بغض النظر عن نوع الفاتورة.
    */
   const total = Math.max(
     0,
-    isConsignment ? estimatedSubtotal : standardSubtotal - discount,
+    (isConsignment ? estimatedSubtotal : standardSubtotal - discount) +
+      transportCost +
+      emptyingCost,
   );
 
   /**
@@ -596,6 +601,12 @@ export default function PurchaseFormPage() {
         discount_amount: isConsignment
           ? 0
           : discount,
+
+        /** تكلفة النقل — مصروف يُضاف للإجمالي */
+        transport_cost: transportCost > 0 ? transportCost : undefined,
+
+        /** تكلفة العتالة — مصروف يُضاف للإجمالي */
+        emptying_cost: emptyingCost > 0 ? emptyingCost : undefined,
 
         notes: notes || undefined,
 
@@ -1144,6 +1155,45 @@ export default function PurchaseFormPage() {
           </div>
         </Card>
 
+        {/* ── Extra Costs (shown for ALL invoice types) ─────────────────── */}
+        {(transportCost > 0 || emptyingCost > 0 || true) && (
+          <FormSection
+            title="تكاليف إضافية"
+            description="تكاليف النقل والعتالة — تُضاف للإجمالي وتُسجَّل كمصروفات في الحسابات."
+            icon={<Calculator size={18} />}
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField label="تكلفة النقل">
+                <Input
+                  id="transportCost"
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={transportCost}
+                  placeholder="0"
+                  onChange={(e) =>
+                    setTransportCost(Number(e.target.value))
+                  }
+                />
+              </FormField>
+
+              <FormField label="تكلفة العتالة (عتالة)">
+                <Input
+                  id="emptyingCost"
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={emptyingCost}
+                  placeholder="0"
+                  onChange={(e) =>
+                    setEmptyingCost(Number(e.target.value))
+                  }
+                />
+              </FormField>
+            </div>
+          </FormSection>
+        )}
+
         {!isConsignment && (
           <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
             <FormSection
@@ -1240,6 +1290,8 @@ export default function PurchaseFormPage() {
                     standardSubtotal,
                   ],
                   ["الخصم", -discount],
+                  ...(transportCost > 0 ? [["تكلفة النقل", transportCost]] : []),
+                  ...(emptyingCost > 0 ? [["تكلفة العتالة", emptyingCost]] : []),
                   ["المدفوع", paymentAmount],
                   ["المتبقي", remaining],
                 ].map(([label, value]) => (

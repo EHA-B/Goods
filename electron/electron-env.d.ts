@@ -330,6 +330,10 @@ type CreatePurchaseInvoiceInput = {
   invoice_date?: string;
   invoice_type?: 'standard' | 'consignment';
   discount_amount?: number;
+  /** تكلفة نقل البضاعة — تُضاف للإجمالي وتُسجَّل كمصروف */
+  transport_cost?: number;
+  /** تكلفة العتالة (تفريغ البضاعة) — تُضاف للإجمالي وتُسجَّل كمصروف */
+  emptying_cost?: number;
   notes?: string;
   items: PurchaseInvoiceItem[];
   initial_payment?: InitialPaymentInput;

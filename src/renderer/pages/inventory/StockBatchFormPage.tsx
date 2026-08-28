@@ -73,7 +73,7 @@ export default function StockBatchFormPage() {
   if (!product) return <Card><p className="text-sm text-[var(--danger)]">{error || "تعذر العثور على المادة."}</p></Card>;
   return <form onSubmit={submit} className="space-y-6">
     <PageHeader title="إضافة دفعة مخزون" description="ربط دفعة حقيقية بالمادة والمورد." actions={<BackButton />} />
-    <Card header="المادة المحددة"><div className="grid gap-4 md:grid-cols-3"><Info label="المادة" value={product.productName} /><Info label="الكود" value={product.productCode} /><Info label="الرصيد الحالي" value={`${product.totalQuantity.toLocaleString()} ${product.unit}`} /></div></Card>
+    <Card header="المادة المحددة"><div className="grid gap-4 md:grid-cols-3"><Info label="المادة" value={product.productName} /><Info label="الكود" value={product.productCode} /><Info label="الرصيد الحالي" value={`${product.totalQuantity.toLocaleString("en-US")} ${product.unit}`} /></div></Card>
     <Card header="بيانات الدفعة"><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
       <FormField label="رقم الدفعة" hint="اختياري"><Input dir="ltr" value={batchCode} placeholder="مثال: BAT-2026-001" onChange={(e) => setBatchCode(e.target.value)} /></FormField>
       <FormField label="اسم المورد" required><Select value={supplierId} placeholder="اختر المورد" options={suppliers.map((s) => ({ value: String(s.id), label: s.name }))} onChange={(e) => setSupplierId(e.target.value)} /></FormField>

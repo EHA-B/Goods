@@ -67,7 +67,7 @@ export default function HelpArticlePage() {
             <Card key={section.id} id={section.id} className="scroll-mt-6">
               <div className="flex items-start gap-3">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--primary-subtle)] text-sm font-extrabold text-[var(--primary)]">
-                  {(sectionIndex + 1).toLocaleString("ar-SY")}
+                  {(sectionIndex + 1).toLocaleString("en-US")}
                 </span>
                 <div className="min-w-0 flex-1">
                   <h2 className="text-lg font-bold text-[var(--text-primary)]">
@@ -85,7 +85,7 @@ export default function HelpArticlePage() {
                       {section.steps.map((step, index) => (
                         <li key={step} className="flex items-start gap-3 text-sm leading-7 text-[var(--text-secondary)]">
                           <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--primary)]/30 bg-[var(--primary-subtle)] text-xs font-extrabold text-[var(--primary)]">
-                            {(index + 1).toLocaleString("ar-SY")}
+                            {(index + 1).toLocaleString("en-US")}
                           </span>
                           <span>{step}</span>
                         </li>
@@ -131,7 +131,7 @@ export default function HelpArticlePage() {
                   href={`#${section.id}`}
                   className="flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm leading-6 text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--primary)]"
                 >
-                  <span className="font-bold">{(index + 1).toLocaleString("ar-SY")}.</span>
+                  <span className="font-bold">{(index + 1).toLocaleString("en-US")}.</span>
                   <span>{section.title}</span>
                 </a>
               ))}

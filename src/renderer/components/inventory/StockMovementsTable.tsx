@@ -53,13 +53,13 @@ export default function StockMovementsTable({ movements, onView }: Props) {
                     incoming ? "text-[var(--success)]" : "text-[var(--danger)]"
                   }`}
                 >
-                  {incoming ? "+" : ""}{movement.quantity.toLocaleString()} {movement.unit}
+                  {incoming ? "+" : ""}{movement.quantity.toLocaleString("en-US")} {movement.unit}
                 </span>
               </DataTableCell>
 
               <DataTableCell>
                 <span dir="ltr" className="inline-block font-bold">
-                  {movement.balanceAfter.toLocaleString()} {movement.unit}
+                  {movement.balanceAfter.toLocaleString("en-US")} {movement.unit}
                 </span>
               </DataTableCell>
 

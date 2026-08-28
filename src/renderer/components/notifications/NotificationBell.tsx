@@ -316,7 +316,7 @@ export default function NotificationBell() {
             <div>
               <h3 className="font-bold text-[var(--text-primary)]">الإشعارات</h3>
               <p className="text-xs text-[var(--text-muted)]">
-                {count} غير مقروء
+                {count.toLocaleString("en-US")} غير مقروء
               </p>
             </div>
             <button
@@ -401,7 +401,7 @@ export default function NotificationBell() {
       <button
         ref={buttonRef}
         type="button"
-        aria-label={count ? `الإشعارات، ${count} غير مقروء` : "الإشعارات"}
+        aria-label={count ? `الإشعارات، ${count.toLocaleString("en-US")} غير مقروء` : "الإشعارات"}
         onClick={() => setOpen((value) => !value)}
         className="relative inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--text-muted)] transition hover:bg-[var(--surface-subtle)] hover:text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]/30"
       >

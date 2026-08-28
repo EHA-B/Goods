@@ -27,35 +27,35 @@ export default function InventoryStatsGrid({
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
       <InventoryStatCard
         title="إجمالي الوحدات"
-        value={totalUnits.toLocaleString()}
+        value={totalUnits.toLocaleString("en-US")}
         description="مجموع الكميات المتبقية في الدفعات"
         icon={<Boxes size={20} />}
       />
 
       <InventoryStatCard
         title="قيمة المخزون"
-        value={`${inventoryValue.toLocaleString()} ل.س`}
+        value={`${inventoryValue.toLocaleString("en-US")} ل.س`}
         description="بحسب سعر شراء الكميات المتبقية"
         icon={<CircleDollarSign size={20} />}
       />
 
       <InventoryStatCard
         title="مخزون منخفض"
-        value={lowStockCount.toLocaleString()}
+        value={lowStockCount.toLocaleString("en-US")}
         description="منتجات وصلت إلى حد التنبيه"
         icon={<AlertTriangle size={20} />}
       />
 
       <InventoryStatCard
         title="نافد من المخزون"
-        value={outOfStockCount.toLocaleString()}
+        value={outOfStockCount.toLocaleString("en-US")}
         description="منتجات لا تملك كمية متبقية"
         icon={<PackageX size={20} />}
       />
 
       <InventoryStatCard
         title="قريب الانتهاء"
-        value={expiringBatchesCount.toLocaleString()}
+        value={expiringBatchesCount.toLocaleString("en-US")}
         description="دفعات تحتاج إلى متابعة"
         icon={<TimerReset size={20} />}
       />

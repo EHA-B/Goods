@@ -42,10 +42,10 @@ export default function InventoryRow({
             dir="ltr"
             className="inline-block text-base font-bold text-[var(--text-primary)]"
           >
-            {item.totalQuantity.toLocaleString()} {item.unit}
+            {item.totalQuantity.toLocaleString("en-US")} {item.unit}
           </span>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            الحد الأدنى {item.minimumStock.toLocaleString()}
+            الحد الأدنى {item.minimumStock.toLocaleString("en-US")}
           </p>
         </div>
       </DataTableCell>
@@ -56,7 +56,7 @@ export default function InventoryRow({
             {getSuppliersLabel(item.supplierNames)}
           </p>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            {item.batchesCount.toLocaleString()} دفعة
+            {item.batchesCount.toLocaleString("en-US")} دفعة
           </p>
         </div>
       </DataTableCell>
@@ -64,10 +64,10 @@ export default function InventoryRow({
       <DataTableCell>
         <div>
           <span dir="ltr" className="inline-block font-bold text-[var(--text-primary)]">
-            {item.stockValue.toLocaleString()} ل.س
+            {item.stockValue.toLocaleString("en-US")} ل.س
           </span>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            متوسط الشراء {item.averagePurchasePrice.toLocaleString()} ل.س
+            متوسط الشراء {item.averagePurchasePrice.toLocaleString("en-US")} ل.س
           </p>
         </div>
       </DataTableCell>

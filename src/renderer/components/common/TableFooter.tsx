@@ -1,3 +1,4 @@
+import { formatNumber } from "../../utils/numberFormat";
 import {
   ChevronLeft,
   ChevronRight,
@@ -58,15 +59,15 @@ export default function TableFooter({
       <p className="text-xs font-medium text-[var(--text-secondary)]">
         عرض{" "}
         <span className="font-bold tabular-nums text-[var(--text-primary)]">
-          {firstVisible}
+          {formatNumber(firstVisible)}
         </span>
         {" - "}
         <span className="font-bold tabular-nums text-[var(--text-primary)]">
-          {lastVisible}
+          {formatNumber(lastVisible)}
         </span>
         {" من "}
         <span className="font-bold tabular-nums text-[var(--text-primary)]">
-          {totalCount}
+          {formatNumber(totalCount)}
         </span>{" "}
         {entityName}
       </p>
@@ -92,8 +93,8 @@ export default function TableFooter({
           </button>
 
           <div className="flex min-w-[92px] items-center justify-center rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-bold tabular-nums text-[var(--text-primary)]">
-            صفحة {safePage} من{" "}
-            {totalPages}
+            صفحة {formatNumber(safePage)} من{" "}
+            {formatNumber(totalPages)}
           </div>
 
           <button

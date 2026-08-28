@@ -590,7 +590,7 @@ export default function SupplierDetailsPage() {
                 {label}
 
                 <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs">
-                  {count}
+                  {count.toLocaleString("en-US")}
                 </span>
               </button>
             ),

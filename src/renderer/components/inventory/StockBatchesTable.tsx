@@ -33,9 +33,9 @@ export default function StockBatchesTable({ batches, unit }: Props) {
           <DataTableRow key={batch.id}>
             <DataTableCell><span dir="ltr">{batch.batchCode}</span></DataTableCell>
             <DataTableCell>{batch.supplierName ?? "بدون مورد"}</DataTableCell>
-            <DataTableCell><span dir="ltr">{batch.quantity.toLocaleString()} {unit}</span></DataTableCell>
-            <DataTableCell><span dir="ltr" className="font-bold">{batch.remainingQuantity.toLocaleString()} {unit}</span></DataTableCell>
-            <DataTableCell><span dir="ltr">{batch.purchasePrice.toLocaleString()} ل.س</span></DataTableCell>
+            <DataTableCell><span dir="ltr">{batch.quantity.toLocaleString("en-US")} {unit}</span></DataTableCell>
+            <DataTableCell><span dir="ltr" className="font-bold">{batch.remainingQuantity.toLocaleString("en-US")} {unit}</span></DataTableCell>
+            <DataTableCell><span dir="ltr">{batch.purchasePrice.toLocaleString("en-US")} ل.س</span></DataTableCell>
             <DataTableCell><span dir="ltr">{batch.receivedDate}</span></DataTableCell>
             <DataTableCell><span dir="ltr">{batch.expiryDate ?? "—"}</span></DataTableCell>
           </DataTableRow>

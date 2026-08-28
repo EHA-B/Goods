@@ -573,16 +573,9 @@ class ReportController {
               ),
             },
             {
-              label: "تكلفة النقل",
+              label: "الضريبة",
               value: formatMoney(
-                invoice.transport_cost,
-                currency,
-              ),
-            },
-            {
-              label: "تكلفة العتالة",
-              value: formatMoney(
-                invoice.emptying_cost,
+                invoice.tax,
                 currency,
               ),
             },

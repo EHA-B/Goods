@@ -498,7 +498,7 @@ export default function SaleFormPage() {
                       { value: "0", label: item.availableBatches.length === 0 ? "اختر المنتج أولًا" : "اختر الدفعة" },
                       ...item.availableBatches.map((b) => ({
                         value: String(b.id),
-                        label: `${b.batch_code ?? "—"} — كمية متاحة: ${b.remaining_quantity}`
+                        label: `${b.batch_code ?? "—"} — كمية متاحة: ${Number(b.remaining_quantity || 0).toLocaleString("en-US")}`
                       })),
                     ]}
                     disabled={item.availableBatches.length === 0}

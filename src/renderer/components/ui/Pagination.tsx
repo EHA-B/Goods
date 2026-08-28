@@ -1,3 +1,4 @@
+import { formatNumber } from "../../utils/numberFormat";
 import {
   ChevronLeft,
   ChevronRight,
@@ -42,8 +43,8 @@ export default function Pagination({
       </button>
 
       <div className="flex min-w-[92px] items-center justify-center rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-bold tabular-nums text-[var(--text-primary)]">
-        صفحة {safePage} من{" "}
-        {totalPages}
+        صفحة {formatNumber(safePage)} من{" "}
+        {formatNumber(totalPages)}
       </div>
 
       <button

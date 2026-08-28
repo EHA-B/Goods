@@ -277,6 +277,283 @@ function numericSummaryValue(
     : 0;
 }
 
+
+const invoiceFinancialLabels = new Set([
+  "المجموع الفرعي",
+  "الخصم",
+  "تكلفة النقل",
+  "تكلفة العتالة",
+  "الضريبة",
+  "الإجمالي",
+  "المدفوع",
+  "المتبقي",
+  "ربح الأصناف الأساسي",
+]);
+
+const invoiceOperationalLabels = new Set([
+  "الكمية الكلية",
+  "الكمية المستلمة",
+  "المتبقي بالمخزون",
+  "عدد الدفعات",
+  "آخر دفعة",
+]);
+
+function isInvoiceStatusSummary(label: string) {
+  return (
+    label === "الحالة" ||
+    label === "حالة الأمانة"
+  );
+}
+
+function DetailedInvoicePreview({
+  result,
+  kind,
+}: {
+  result: ReportResult;
+  kind: "sales" | "purchases";
+}) {
+  const sections = result.sections ?? [];
+
+  return (
+    <div
+      dir="rtl"
+      className="space-y-5 p-5 text-right"
+    >
+      {!!result.summary?.length && (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {result.summary.map((item) => (
+            <div
+              key={item.label}
+              className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]"
+            >
+              <div className="absolute inset-y-0 right-0 w-1 bg-[var(--primary)]" />
+              <div className="pr-2 text-xs font-semibold leading-5 text-[var(--text-muted)]">
+                {item.label}
+              </div>
+              <div
+                dir="ltr"
+                className="mt-2 pr-2 text-right text-lg font-extrabold tabular-nums text-[var(--text-primary)] [unicode-bidi:isolate]"
+              >
+                {String(item.value)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-5">
+        {sections.map((section, sectionIndex) => {
+          const summary = section.summary ?? [];
+          const financial = summary.filter((item) =>
+            invoiceFinancialLabels.has(item.label),
+          );
+          const operational = summary.filter((item) =>
+            invoiceOperationalLabels.has(item.label),
+          );
+          const identity = summary.filter(
+            (item) =>
+              !invoiceFinancialLabels.has(item.label) &&
+              !invoiceOperationalLabels.has(item.label),
+          );
+
+          return (
+            <section
+              key={`${section.title}-${sectionIndex}`}
+              className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)]"
+            >
+              <div className="border-b border-[var(--border)] bg-[var(--surface-subtle)] px-5 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-base font-extrabold leading-7 text-[var(--text-primary)]">
+                    {section.title}
+                  </h3>
+                  <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs font-bold text-[var(--text-muted)]">
+                    {kind === "sales"
+                      ? "فاتورة مبيعات"
+                      : "فاتورة مشتريات"}
+                  </span>
+                </div>
+
+                {!!identity.length && (
+                  <div className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {identity.map((item) => (
+                      <div
+                        key={item.label}
+                        className="min-w-0"
+                      >
+                        <div className="text-[11px] font-bold text-[var(--text-muted)]">
+                          {item.label}
+                        </div>
+                        <div className="mt-1 min-w-0 text-sm font-bold text-[var(--text-primary)]">
+                          {isInvoiceStatusSummary(item.label)
+                            ? renderStatus(item.value)
+                            : String(item.value)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="overflow-x-auto">
+                <table
+                  dir="rtl"
+                  className="w-full min-w-[760px] border-collapse text-sm"
+                >
+                  <thead className="bg-[var(--surface-subtle)]">
+                    <tr>
+                      {section.columns.map((column) => (
+                        <th
+                          key={column.key}
+                          className="border-b border-[var(--border)] px-4 py-3 text-right text-xs font-extrabold text-[var(--text-secondary)]"
+                        >
+                          {column.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {section.rows.length ? (
+                      section.rows.map((row, rowIndex) => (
+                        <tr
+                          key={rowIndex}
+                          className={[
+                            "border-b border-[var(--border)] last:border-b-0",
+                            rowIndex % 2
+                              ? "bg-[var(--surface-subtle)]/40"
+                              : "bg-[var(--surface)]",
+                          ].join(" ")}
+                        >
+                          {section.columns.map((column) => (
+                            <td
+                              key={column.key}
+                              className={[
+                                "px-4 py-3 align-middle text-[var(--text-primary)]",
+                                isNumericColumn(column)
+                                  ? "whitespace-nowrap text-center font-semibold tabular-nums [unicode-bidi:isolate]"
+                                  : "text-right",
+                              ].join(" ")}
+                              dir={
+                                isNumericColumn(column)
+                                  ? "ltr"
+                                  : "rtl"
+                              }
+                            >
+                              {isStatusColumn(column.key)
+                                ? renderStatus(row[column.key])
+                                : formatCell(row, column)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={section.columns.length}
+                          className="px-5 py-8 text-center text-sm text-[var(--text-muted)]"
+                        >
+                          لا توجد أصناف ضمن هذه الفاتورة.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {(operational.length > 0 || financial.length > 0) && (
+                <div className="grid border-t border-[var(--border)] lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
+                  <div className="border-b border-[var(--border)] bg-[var(--surface)] p-4 lg:border-b-0 lg:border-l">
+                    <div className="mb-3 text-xs font-extrabold text-[var(--text-secondary)]">
+                      معلومات الحركة
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {operational.map((item) => (
+                        <div
+                          key={item.label}
+                          className="flex items-center justify-between gap-3 rounded-[var(--radius-sm)] bg-[var(--surface-subtle)] px-3 py-2"
+                        >
+                          <span className="text-xs font-semibold text-[var(--text-muted)]">
+                            {item.label}
+                          </span>
+                          <strong
+                            dir={item.label === "آخر دفعة" ? "ltr" : undefined}
+                            className="text-sm font-extrabold text-[var(--text-primary)]"
+                          >
+                            {String(item.value)}
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-[var(--surface-subtle)] p-4">
+                    <div className="mb-3 text-xs font-extrabold text-[var(--text-secondary)]">
+                      الملخص المالي للفاتورة
+                    </div>
+                    <div className="space-y-2">
+                      {financial.map((item) => {
+                        const important =
+                          item.label === "الإجمالي" ||
+                          item.label === "المتبقي" ||
+                          item.label === "ربح الأصناف الأساسي";
+
+                        return (
+                          <div
+                            key={item.label}
+                            className={[
+                              "flex items-center justify-between gap-4 rounded-[var(--radius-sm)] px-3 py-2",
+                              important
+                                ? "border border-[var(--border)] bg-[var(--surface)]"
+                                : "",
+                            ].join(" ")}
+                          >
+                            <span className="text-xs font-semibold text-[var(--text-muted)]">
+                              {item.label}
+                            </span>
+                            <strong
+                              dir="ltr"
+                              className={[
+                                "text-sm font-extrabold tabular-nums [unicode-bidi:isolate]",
+                                important
+                                  ? "text-[var(--primary)]"
+                                  : "text-[var(--text-primary)]",
+                              ].join(" ")}
+                            >
+                              {String(item.value)}
+                            </strong>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3 text-xs text-[var(--text-muted)]">
+        <span>
+          عدد بنود الأصناف: {" "}
+          <strong className="text-[var(--text-primary)]">
+            {result.totalRows ??
+              sections.reduce(
+                (sum, section) => sum + section.rows.length,
+                0,
+              )}
+          </strong>
+        </span>
+        <span>
+          عدد الفواتير: {" "}
+          <strong className="text-[var(--text-primary)]">
+            {sections.length}
+          </strong>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function ProfitLossPreview({
   result,
 }: {
@@ -866,6 +1143,14 @@ export default function ReportsPage() {
     selectedReport.id ===
     "sales-profit";
 
+  const isDetailedSales =
+    selectedReport.id ===
+    "sales-details";
+
+  const isDetailedPurchases =
+    selectedReport.id ===
+    "purchases-details";
+
   return (
     <>
       <PageHeader
@@ -1339,9 +1624,16 @@ export default function ReportsPage() {
           <ProfitLossPreview
             result={result}
           />
+        ) : (isDetailedSales || isDetailedPurchases) &&
+          result.sections &&
+          result.sections.length > 0 ? (
+          <DetailedInvoicePreview
+            result={result}
+            kind={isDetailedSales ? "sales" : "purchases"}
+          />
         ) : result.sections &&
           result.sections.length > 0 ? (
-          <div className="flex flex-col">
+          <div dir="rtl" className="flex flex-col text-right">
             {result.summary &&
               result.summary.length > 0 && (
               <div className="grid gap-3 border-b border-[var(--border)] bg-[var(--surface-subtle)] p-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -1441,7 +1733,7 @@ export default function ReportsPage() {
                <span>
                  عدد النتائج:{" "}
                  <strong className="text-[var(--text-primary)]">
-                   {result.totalRows ?? result.sections.reduce((acc, sec) => acc + sec.rows.length, 0)}
+                   {Number(result.totalRows ?? result.sections.reduce((acc, sec) => acc + sec.rows.length, 0)).toLocaleString("en-US")}
                  </strong>
                </span>
                <span>

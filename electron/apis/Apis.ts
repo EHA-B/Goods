@@ -149,80 +149,198 @@ function formatReportExportCell(value, format, row) {
   return normalizeLatinDigits(String(value));
 }
 
-function renderReportHtml(report) {
-  const columns = Array.isArray(report?.columns)
-    ? report.columns
-    : [];
-  const rows = Array.isArray(report?.rows)
-    ? report.rows
-    : [];
-  const summary = Array.isArray(report?.summary)
-    ? report.summary
-    : [];
-  const sections = Array.isArray(report?.sections)
-    ? report.sections
-    : [];
+const invoiceFinancialSummaryLabels = new Set([
+  'المجموع الفرعي',
+  'الخصم',
+  'تكلفة النقل',
+  'تكلفة العتالة',
+  'الضريبة',
+  'الإجمالي',
+  'المدفوع',
+  'المتبقي',
+  'ربح الأصناف الأساسي',
+]);
 
-  const summaryHtml = summary.length
-    ? `<section class="summary">${summary.map((item) => `
-        <div class="summary-card">
-          <div class="summary-label">${escapeReportHtml(item.label)}</div>
-          <div class="summary-value">${escapeReportHtml(normalizeLatinDigits(item.value))}</div>
-        </div>
-      `).join('')}</section>`
-    : '';
+const invoiceOperationalSummaryLabels = new Set([
+  'الكمية الكلية',
+  'الكمية المستلمة',
+  'المتبقي بالمخزون',
+  'عدد الدفعات',
+  'آخر دفعة',
+]);
 
-  const renderTable = (tableColumns, tableRows) => {
-    if (!Array.isArray(tableColumns) || !tableColumns.length) {
-      return '';
-    }
+function isDetailedInvoiceReport(report) {
+  const title = String(report?.title || '');
+  return (
+    title.includes('المبيعات التفصيلي') ||
+    title.includes('المشتريات التفصيلي')
+  );
+}
 
-    const tableHead = tableColumns
-      .map((column) =>
-        `<th>${escapeReportHtml(column.label)}</th>`,
-      )
-      .join('');
+function splitInvoiceSummary(summary) {
+  const items = Array.isArray(summary) ? summary : [];
 
-    const body = Array.isArray(tableRows) && tableRows.length
-      ? tableRows
-          .map((row) => `
-            <tr>
-              ${tableColumns.map((column) => `
-                <td class="${
-                  column.format === 'currency' ||
-                  column.format === 'number'
-                    ? 'numeric'
-                    : ''
-                }">${escapeReportHtml(
-                  formatReportExportCell(
-                    row?.[column.key],
-                    column.format,
-                    row,
-                  ),
-                )}</td>
-              `).join('')}
-            </tr>
-          `)
-          .join('')
-      : `<tr><td class="empty" colspan="${tableColumns.length}">لا توجد بيانات</td></tr>`;
+  return {
+    financial: items.filter((item) =>
+      invoiceFinancialSummaryLabels.has(String(item?.label || '')),
+    ),
+    operational: items.filter((item) =>
+      invoiceOperationalSummaryLabels.has(String(item?.label || '')),
+    ),
+    identity: items.filter((item) => {
+      const label = String(item?.label || '');
+      return (
+        !invoiceFinancialSummaryLabels.has(label) &&
+        !invoiceOperationalSummaryLabels.has(label)
+      );
+    }),
+  };
+}
+
+function renderReportSummaryCards(summary) {
+  if (!Array.isArray(summary) || !summary.length) return '';
+
+  return `<section class="summary-grid">${summary.map((item) => `
+    <div class="summary-card">
+      <div class="summary-label">${escapeReportHtml(item.label)}</div>
+      <div class="summary-value">${escapeReportHtml(normalizeLatinDigits(item.value))}</div>
+    </div>
+  `).join('')}</section>`;
+}
+
+function renderReportTable(tableColumns, tableRows) {
+  const columns = Array.isArray(tableColumns) ? tableColumns : [];
+  const rows = Array.isArray(tableRows) ? tableRows : [];
+
+  if (!columns.length) return '';
+
+  const tableHead = columns
+    .map((column) => `<th class="${column.format === 'currency' || column.format === 'number' ? 'numeric-head' : ''}">${escapeReportHtml(column.label)}</th>`)
+    .join('');
+
+  const body = rows.length
+    ? rows.map((row) => `
+        <tr>
+          ${columns.map((column) => `
+            <td class="${
+              column.format === 'currency' || column.format === 'number'
+                ? 'numeric'
+                : column.format === 'date'
+                  ? 'date-cell'
+                  : ''
+            }">${escapeReportHtml(
+              formatReportExportCell(
+                row?.[column.key],
+                column.format,
+                row,
+              ),
+            )}</td>
+          `).join('')}
+        </tr>
+      `).join('')
+    : `<tr><td class="empty" colspan="${columns.length}">لا توجد بيانات</td></tr>`;
+
+  return `
+    <div class="table-wrap">
+      <table class="data-table" dir="rtl">
+        <thead><tr>${tableHead}</tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderInvoiceMeta(items) {
+  if (!items.length) return '';
+
+  return `<div class="invoice-meta">${items.map((item) => `
+    <div class="meta-item">
+      <span>${escapeReportHtml(item.label)}</span>
+      <strong>${escapeReportHtml(normalizeLatinDigits(item.value))}</strong>
+    </div>
+  `).join('')}</div>`;
+}
+
+function renderInvoiceOperational(items) {
+  if (!items.length) return '';
+
+  return `
+    <div class="invoice-info-block">
+      <div class="block-title">معلومات الحركة</div>
+      <div class="compact-grid">
+        ${items.map((item) => `
+          <div class="compact-row">
+            <span>${escapeReportHtml(item.label)}</span>
+            <strong>${escapeReportHtml(normalizeLatinDigits(item.value))}</strong>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderInvoiceFinancial(items) {
+  if (!items.length) return '';
+
+  return `
+    <div class="invoice-financial-block">
+      <div class="block-title">الملخص المالي للفاتورة</div>
+      <div class="financial-list">
+        ${items.map((item) => {
+          const label = String(item?.label || '');
+          const important = [
+            'الإجمالي',
+            'المتبقي',
+            'ربح الأصناف الأساسي',
+          ].includes(label);
+
+          return `
+            <div class="financial-row ${important ? 'important' : ''}">
+              <span>${escapeReportHtml(label)}</span>
+              <strong>${escapeReportHtml(normalizeLatinDigits(item.value))}</strong>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderDetailedInvoiceSections(sections) {
+  return sections.map((section) => {
+    const grouped = splitInvoiceSummary(section?.summary);
 
     return `
-      <div class="table-wrap">
-        <table>
-          <thead><tr>${tableHead}</tr></thead>
-          <tbody>${body}</tbody>
-        </table>
-      </div>
+      <section class="invoice-card">
+        <div class="invoice-heading">
+          <div class="invoice-title">${escapeReportHtml(section?.title || '')}</div>
+          ${renderInvoiceMeta(grouped.identity)}
+        </div>
+
+        ${renderReportTable(section?.columns || [], section?.rows || [])}
+
+        ${(grouped.operational.length || grouped.financial.length)
+          ? `<div class="invoice-footer-grid">
+              ${renderInvoiceOperational(grouped.operational)}
+              ${renderInvoiceFinancial(grouped.financial)}
+            </div>`
+          : ''}
+      </section>
     `;
-  };
+  }).join('');
+}
 
-  const sectionsHtml = sections.length
-    ? sections.map((section) => {
-        const sectionSummary = Array.isArray(section?.summary)
-          ? section.summary
-          : [];
+function renderGenericReportSections(sections) {
+  return sections.map((section) => {
+    const sectionSummary = Array.isArray(section?.summary)
+      ? section.summary
+      : [];
 
-        const sectionSummaryHtml = sectionSummary.length
+    return `
+      <section class="report-section">
+        <div class="section-title">${escapeReportHtml(section?.title || '')}</div>
+        ${renderReportTable(section?.columns || [], section?.rows || [])}
+        ${sectionSummary.length
           ? `<div class="section-summary">
               ${sectionSummary.map((item) => `
                 <div>
@@ -231,17 +349,26 @@ function renderReportHtml(report) {
                 </div>
               `).join('')}
             </div>`
-          : '';
+          : ''}
+      </section>
+    `;
+  }).join('');
+}
 
-        return `
-          <section class="report-section">
-            <div class="section-title">${escapeReportHtml(section?.title || '')}</div>
-            ${renderTable(section?.columns || [], section?.rows || [])}
-            ${sectionSummaryHtml}
-          </section>
-        `;
-      }).join('')
-    : renderTable(columns, rows);
+function renderReportHtml(report) {
+  const columns = Array.isArray(report?.columns) ? report.columns : [];
+  const rows = Array.isArray(report?.rows) ? report.rows : [];
+  const summary = Array.isArray(report?.summary) ? report.summary : [];
+  const sections = Array.isArray(report?.sections) ? report.sections : [];
+  const detailedInvoices = isDetailedInvoiceReport(report);
+
+  const summaryHtml = renderReportSummaryCards(summary);
+
+  const contentHtml = sections.length
+    ? detailedInvoices
+      ? renderDetailedInvoiceSections(sections)
+      : renderGenericReportSections(sections)
+    : renderReportTable(columns, rows);
 
   const isProfitLoss =
     String(report?.title || '').includes('أرباح') ||
@@ -257,16 +384,17 @@ function renderReportHtml(report) {
       .replace(/[^\d.-]/g, ''),
   );
 
-  const netHtml =
-    isProfitLoss && netItem
-      ? `<section class="net-result ${Number.isFinite(netValue) && netValue < 0 ? 'loss' : 'profit'}">
-          <div>
-            <span class="net-caption">النتيجة النهائية للفترة</span>
-            <strong>${Number.isFinite(netValue) && netValue < 0 ? 'صافي خسارة' : 'صافي ربح'}</strong>
-          </div>
-          <div class="net-number">${escapeReportHtml(normalizeLatinDigits(netItem.value))}</div>
-        </section>`
-      : '';
+  const netHtml = isProfitLoss && netItem
+    ? `<section class="net-result ${Number.isFinite(netValue) && netValue < 0 ? 'loss' : 'profit'}">
+        <div>
+          <span class="net-caption">النتيجة النهائية للفترة</span>
+          <strong>${Number.isFinite(netValue) && netValue < 0 ? 'صافي خسارة' : 'صافي ربح'}</strong>
+        </div>
+        <div class="net-number">${escapeReportHtml(normalizeLatinDigits(netItem.value))}</div>
+      </section>`
+    : '';
+
+  const totalRows = report?.totalRows ?? rows.length;
 
   return `<!doctype html>
 <html lang="ar" dir="rtl">
@@ -276,109 +404,398 @@ function renderReportHtml(report) {
   <style>
     * { box-sizing: border-box; }
 
+    html, body { direction: rtl; }
+
     body {
       margin: 0;
-      padding: 14px;
-      direction: rtl;
-      font-family: Arial, Tahoma, sans-serif;
+      padding: 0;
+      font-family: Tahoma, Arial, sans-serif;
       color: #17211f;
       background: #ffffff;
       font-size: 9px;
+      text-align: right;
+    }
+
+    .report-page {
+      width: 100%;
+      direction: rtl;
     }
 
     .report-header {
-      direction: rtl;
-      text-align: right;
       display: flex;
+      direction: rtl;
       align-items: flex-start;
       justify-content: space-between;
-      gap: 20px;
+      gap: 18px;
       border-bottom: 2px solid #1f7664;
-      padding-bottom: 12px;
-      margin-bottom: 14px;
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+      text-align: right;
     }
 
     h1 {
-      direction: rtl;
-      text-align: right;
       margin: 0;
-      font-size: 18px;
       color: #153e35;
+      font-size: 18px;
+      line-height: 1.5;
+      text-align: right;
     }
 
     .meta {
-      direction: rtl;
-      text-align: right;
-      margin-top: 5px;
+      margin-top: 4px;
       color: #71807c;
-      font-size: 9px;
+      font-size: 8px;
+      text-align: right;
+    }
+
+    .latin,
+    .summary-value,
+    .numeric,
+    .date-cell,
+    .meta-item strong,
+    .compact-row strong,
+    .financial-row strong,
+    .net-number {
+      unicode-bidi: isolate;
+      font-variant-numeric: tabular-nums lining-nums;
     }
 
     .brand {
       border: 1px solid #d9e5e1;
-      border-radius: 8px;
-      padding: 7px 10px;
+      border-radius: 7px;
+      padding: 6px 10px;
       color: #1f7664;
       font-weight: 700;
       white-space: nowrap;
     }
 
-    .summary {
+    .summary-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 7px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
       margin-bottom: 12px;
+      direction: rtl;
     }
 
     .summary-card {
       position: relative;
       overflow: hidden;
+      min-height: 48px;
       border: 1px solid #dfe7e4;
-      border-radius: 8px;
-      padding: 9px 10px;
+      border-radius: 7px;
+      padding: 7px 9px 7px 8px;
       background: #f8fbfa;
+      text-align: right;
     }
 
     .summary-card::before {
       content: "";
       position: absolute;
-      top: 0;
+      inset-block: 0;
       right: 0;
-      bottom: 0;
       width: 3px;
       background: #1f7664;
     }
 
     .summary-label {
-      direction: rtl;
-      text-align: right;
-      color: #71807c;
-      font-size: 8px;
       padding-right: 4px;
+      color: #71807c;
+      font-size: 7px;
+      line-height: 1.4;
+      text-align: right;
     }
 
     .summary-value {
-      direction: ltr;
-      unicode-bidi: isolate;
-      text-align: right;
-      margin-top: 4px;
+      margin-top: 3px;
       padding-right: 4px;
-      font-size: 11px;
-      font-weight: 700;
       color: #17211f;
-      font-variant-numeric: tabular-nums lining-nums;
+      font-size: 10px;
+      font-weight: 800;
+      text-align: right;
+    }
+
+    .invoice-card {
+      overflow: hidden;
+      margin: 0 0 12px;
+      border: 1px solid #cfdad6;
+      border-radius: 8px;
+      background: #fff;
+      break-inside: auto;
+      page-break-inside: auto;
+    }
+
+    .invoice-heading {
+      direction: rtl;
+      padding: 9px 10px;
+      border-bottom: 1px solid #cfdad6;
+      background: #eef5f2;
+      text-align: right;
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+
+    .invoice-title {
+      color: #214c41;
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1.5;
+      text-align: right;
+    }
+
+    .invoice-meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px 12px;
+      margin-top: 8px;
+      direction: rtl;
+    }
+
+    .meta-item {
+      min-width: 0;
+      text-align: right;
+    }
+
+    .meta-item span {
+      display: block;
+      margin-bottom: 2px;
+      color: #71807c;
+      font-size: 6.5px;
+      font-weight: 700;
+    }
+
+    .meta-item strong {
+      display: block;
+      color: #17211f;
+      font-size: 8px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+      text-align: right;
+    }
+
+    .table-wrap {
+      width: 100%;
+      overflow: hidden;
+      direction: rtl;
+    }
+
+    .data-table {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      direction: rtl;
+      font-size: 7px;
+    }
+
+    .data-table thead {
+      display: table-header-group;
+    }
+
+    .data-table th,
+    .data-table td {
+      border-left: 1px solid #d9e2df;
+      border-bottom: 1px solid #d9e2df;
+      padding: 4px 4px;
+      vertical-align: middle;
+      line-height: 1.35;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: normal;
+      text-align: right;
+    }
+
+    .data-table th:last-child,
+    .data-table td:last-child {
+      border-left: 0;
+    }
+
+    .data-table th {
+      background: #f6f9f8;
+      color: #40534e;
+      font-size: 6.5px;
+      font-weight: 800;
+      text-align: right;
+    }
+
+    .data-table tbody tr:nth-child(even) td {
+      background: #fbfcfc;
+    }
+
+    .data-table td.numeric,
+    .data-table th.numeric-head {
+      direction: ltr;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .data-table td.date-cell {
+      direction: ltr;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .empty {
+      padding: 10px !important;
+      color: #71807c;
+      text-align: center !important;
+    }
+
+    .invoice-footer-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+      direction: rtl;
+      border-top: 1px solid #cfdad6;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .invoice-info-block,
+    .invoice-financial-block {
+      min-width: 0;
+      padding: 8px 10px;
+      text-align: right;
+    }
+
+    .invoice-info-block {
+      border-left: 1px solid #d9e2df;
+      background: #fff;
+    }
+
+    .invoice-financial-block {
+      background: #f8fbfa;
+    }
+
+    .block-title {
+      margin-bottom: 6px;
+      color: #40534e;
+      font-size: 7px;
+      font-weight: 800;
+      text-align: right;
+    }
+
+    .compact-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px 8px;
+    }
+
+    .compact-row,
+    .financial-row {
+      display: flex;
+      direction: rtl;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+      text-align: right;
+    }
+
+    .compact-row {
+      padding: 4px 6px;
+      border-radius: 4px;
+      background: #f7f9f8;
+    }
+
+    .compact-row span,
+    .financial-row span {
+      color: #71807c;
+      font-size: 6.5px;
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .compact-row strong,
+    .financial-row strong {
+      color: #17211f;
+      font-size: 7.5px;
+      font-weight: 800;
+      text-align: left;
+    }
+
+    .financial-list {
+      display: grid;
+      gap: 3px;
+    }
+
+    .financial-row {
+      padding: 3px 5px;
+      border-bottom: 1px solid #e8eeec;
+    }
+
+    .financial-row:last-child {
+      border-bottom: 0;
+    }
+
+    .financial-row.important {
+      margin-top: 1px;
+      border: 1px solid #cfdad6;
+      border-radius: 4px;
+      background: #fff;
+    }
+
+    .financial-row.important strong {
+      color: #1f7664;
+      font-size: 8px;
+    }
+
+    .report-section {
+      margin: 0 0 10px;
+      border: 1px solid #cfdad6;
+      border-radius: 7px;
+      overflow: hidden;
+    }
+
+    .section-title {
+      padding: 7px 9px;
+      border-bottom: 1px solid #cfdad6;
+      background: #eef5f2;
+      color: #294b43;
+      font-size: 9px;
+      font-weight: 800;
+      text-align: right;
+    }
+
+    .section-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 5px;
+      padding: 7px 9px;
+      border-top: 1px solid #cfdad6;
+      background: #f8fbfa;
+      direction: rtl;
+    }
+
+    .section-summary div {
+      min-width: 0;
+      text-align: right;
+    }
+
+    .section-summary span {
+      display: block;
+      margin-bottom: 2px;
+      color: #71807c;
+      font-size: 6.5px;
+      font-weight: 700;
+    }
+
+    .section-summary strong {
+      display: block;
+      color: #17211f;
+      font-size: 7.5px;
+      font-weight: 800;
+      text-align: right;
     }
 
     .net-result {
       display: flex;
+      direction: rtl;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
+      gap: 14px;
+      margin-bottom: 10px;
+      padding: 8px 10px;
       border: 1px solid #9ccdbf;
-      border-radius: 8px;
+      border-radius: 7px;
       background: #f1faf7;
-      padding: 10px 12px;
-      margin-bottom: 12px;
     }
 
     .net-result.loss {
@@ -388,14 +805,22 @@ function renderReportHtml(report) {
 
     .net-caption {
       display: block;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
       color: #71807c;
-      font-size: 8px;
+      font-size: 7px;
     }
 
     .net-result strong {
-      font-size: 12px;
       color: #153e35;
+      font-size: 10px;
+    }
+
+    .net-number {
+      direction: ltr;
+      color: #1f7664;
+      font-size: 12px;
+      font-weight: 900;
+      text-align: left;
     }
 
     .net-result.loss strong,
@@ -403,172 +828,261 @@ function renderReportHtml(report) {
       color: #9f2f2f;
     }
 
-    .latin {
-      direction: ltr;
-      unicode-bidi: isolate;
-      display: inline-block;
-      font-variant-numeric: tabular-nums lining-nums;
-    }
-
-    .net-number {
-      direction: ltr;
-      font-size: 15px;
-      font-weight: 800;
-      color: #1f7664;
-      font-variant-numeric: tabular-nums lining-nums;
-    }
-
-    .report-section {
-      margin-top: 12px;
-      break-inside: auto;
-    }
-
-    .section-title {
-      direction: rtl;
-      text-align: right;
-      border: 1px solid #cfdad6;
-      border-bottom: 0;
-      border-radius: 7px 7px 0 0;
-      background: #eef5f2;
-      padding: 7px 9px;
-      font-size: 10px;
-      font-weight: 700;
-      color: #294b43;
-    }
-
-    .table-wrap {
-      width: 100%;
-      overflow: hidden;
-      border: 1px solid #cfdad6;
-      border-radius: 0 0 7px 7px;
-    }
-
-    table {
-      width: 100%;
-      table-layout: fixed;
-      border-collapse: collapse;
-      font-size: 7.2px;
-    }
-
-    th,
-    td {
-      border: 1px solid #cfdad6;
-      padding: 4px 4px;
-      text-align: right;
-      vertical-align: middle;
-      white-space: normal;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-      line-height: 1.35;
-    }
-
-    th {
-      background: #f4f8f6;
-      color: #40534e;
-      font-weight: 700;
-      text-align: center;
-    }
-
-    tbody tr:nth-child(even) td {
-      background: #fafcfb;
-    }
-
-    td.numeric {
-      direction: ltr;
-      unicode-bidi: isolate;
-      text-align: center;
-      font-variant-numeric: tabular-nums lining-nums;
-    }
-
-    td.empty {
-      text-align: center;
-      color: #71807c;
-      padding: 10px;
-    }
-
-    .section-summary {
+    .report-footer {
       display: flex;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-      gap: 12px;
-      border: 1px solid #cfdad6;
-      border-top: 0;
-      border-radius: 0 0 7px 7px;
-      background: #f8fbfa;
-      padding: 6px 8px;
-      margin-top: -1px;
-    }
-
-    .section-summary div {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
-
-    .section-summary span {
       direction: rtl;
-      text-align: right;
-      color: #71807c;
-      font-size: 7.5px;
-    }
-
-    .section-summary strong {
-      direction: ltr;
-      unicode-bidi: isolate;
-      text-align: left;
-      font-size: 8.5px;
-      font-variant-numeric: tabular-nums lining-nums;
-    }
-
-    .footer {
-      direction: rtl;
-      text-align: right;
-      display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
-      margin-top: 10px;
+      gap: 12px;
+      margin-top: 8px;
       color: #71807c;
-      font-size: 8px;
+      font-size: 7px;
+      text-align: right;
+    }
+
+    @media print {
+      .invoice-heading,
+      .invoice-footer-grid,
+      .section-title,
+      .summary-card {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
     }
 
     @page {
       size: A4 portrait;
-      margin: 8mm;
+      margin: 7mm;
     }
   </style>
 </head>
 <body>
-  <div class="report-header">
-    <div>
-      <h1>${escapeReportHtml(report?.title || 'تقرير')}</h1>
-      <div class="meta">
-        <span>تم التوليد:</span>
-        <span class="latin">${escapeReportHtml(
-          normalizeLatinDigits(
-            new Date(
-              report?.generatedAt || Date.now(),
-            ).toLocaleString('en-US'),
-          ),
-        )}</span>
+  <main class="report-page">
+    <header class="report-header">
+      <div>
+        <h1>${escapeReportHtml(report?.title || 'تقرير')}</h1>
+        <div class="meta">
+          <span>تم التوليد:</span>
+          <span class="latin" dir="ltr">${escapeReportHtml(
+            normalizeLatinDigits(
+              new Date(report?.generatedAt || Date.now()).toLocaleString('en-US'),
+            ),
+          )}</span>
+        </div>
       </div>
-    </div>
-    <div class="brand">StockLite</div>
-  </div>
+      <div class="brand">StockLite</div>
+    </header>
 
-  ${summaryHtml}
-  ${netHtml}
-  ${sectionsHtml}
+    ${summaryHtml}
+    ${netHtml}
+    ${contentHtml}
 
-  <div class="footer">
-    <span>عدد النتائج: ${escapeReportHtml(
-      normalizeLatinDigits(
-        report?.totalRows ??
-        rows.length,
-      ),
-    )}</span>
-    <span>تقرير صادر إلكترونيًا من StockLite</span>
-  </div>
+    <footer class="report-footer">
+      <span>عدد النتائج: <strong>${escapeReportHtml(normalizeLatinDigits(totalRows))}</strong></span>
+      <span>تقرير صادر إلكترونيًا من StockLite</span>
+    </footer>
+  </main>
+</body>
+</html>`;
+}
+
+function chunkArray(items, size) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function renderExcelKeyValueRows(items, pairsPerRow = 2) {
+  if (!Array.isArray(items) || !items.length) return '';
+
+  return chunkArray(items, pairsPerRow)
+    .map((chunk) => `
+      <tr>
+        ${chunk.map((item) => `
+          <th class="kv-label">${escapeReportHtml(item.label)}</th>
+          <td class="kv-value">${escapeReportHtml(normalizeLatinDigits(item.value))}</td>
+        `).join('')}
+        ${Array.from({ length: pairsPerRow - chunk.length })
+          .map(() => '<th class="kv-label"></th><td class="kv-value"></td>')
+          .join('')}
+      </tr>
+    `)
+    .join('');
+}
+
+function renderExcelDataTable(columns, rows) {
+  if (!Array.isArray(columns) || !columns.length) return '';
+
+  return `
+    <table class="excel-table data" dir="rtl">
+      <thead>
+        <tr>${columns.map((column) => `<th>${escapeReportHtml(column.label)}</th>`).join('')}</tr>
+      </thead>
+      <tbody>
+        ${Array.isArray(rows) && rows.length
+          ? rows.map((row) => `
+              <tr>
+                ${columns.map((column) => `
+                  <td class="${column.format === 'currency' || column.format === 'number' || column.format === 'date' ? 'latin-cell' : ''}">${escapeReportHtml(
+                    formatReportExportCell(
+                      row?.[column.key],
+                      column.format,
+                      row,
+                    ),
+                  )}</td>
+                `).join('')}
+              </tr>
+            `).join('')
+          : `<tr><td colspan="${columns.length}">لا توجد بيانات</td></tr>`}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderReportExcelHtml(report) {
+  const summary = Array.isArray(report?.summary) ? report.summary : [];
+  const sections = Array.isArray(report?.sections) ? report.sections : [];
+  const rows = Array.isArray(report?.rows) ? report.rows : [];
+  const columns = Array.isArray(report?.columns) ? report.columns : [];
+  const detailedInvoices = isDetailedInvoiceReport(report);
+
+  const summaryTable = summary.length
+    ? `<table class="excel-table summary-table" dir="rtl">
+        <tbody>${renderExcelKeyValueRows(summary, 2)}</tbody>
+      </table>`
+    : '';
+
+  const sectionHtml = sections.length
+    ? sections.map((section) => {
+        const grouped = detailedInvoices
+          ? splitInvoiceSummary(section?.summary)
+          : {
+              identity: Array.isArray(section?.summary) ? section.summary : [],
+              operational: [],
+              financial: [],
+            };
+
+        return `
+          <div class="excel-section">
+            <table class="excel-table section-title-table" dir="rtl">
+              <tr><th>${escapeReportHtml(section?.title || '')}</th></tr>
+            </table>
+
+            ${grouped.identity.length
+              ? `<table class="excel-table meta-table" dir="rtl"><tbody>${renderExcelKeyValueRows(grouped.identity, 2)}</tbody></table>`
+              : ''}
+
+            ${renderExcelDataTable(section?.columns || [], section?.rows || [])}
+
+            ${grouped.operational.length
+              ? `<table class="excel-table detail-table" dir="rtl">
+                  <tr><th colspan="4" class="sub-title">معلومات الحركة</th></tr>
+                  ${renderExcelKeyValueRows(grouped.operational, 2)}
+                </table>`
+              : ''}
+
+            ${grouped.financial.length
+              ? `<table class="excel-table detail-table financial" dir="rtl">
+                  <tr><th colspan="4" class="sub-title">الملخص المالي للفاتورة</th></tr>
+                  ${renderExcelKeyValueRows(grouped.financial, 2)}
+                </table>`
+              : ''}
+          </div>
+        `;
+      }).join('')
+    : renderExcelDataTable(columns, rows);
+
+  return `<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    html, body { direction: rtl; }
+    body {
+      font-family: Tahoma, Arial, sans-serif;
+      direction: rtl;
+      text-align: right;
+      color: #17211f;
+    }
+    .report-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #153e35;
+      text-align: right;
+      margin-bottom: 4px;
+    }
+    .generated-at {
+      direction: rtl;
+      text-align: right;
+      color: #71807c;
+      margin-bottom: 12px;
+    }
+    .excel-table {
+      border-collapse: collapse;
+      direction: rtl;
+      width: 100%;
+      margin-bottom: 8px;
+    }
+    .excel-table th,
+    .excel-table td {
+      border: 1px solid #cfdad6;
+      padding: 6px;
+      text-align: right;
+      vertical-align: middle;
+    }
+    .excel-table th {
+      background: #eef5f2;
+      color: #294b43;
+      font-weight: bold;
+    }
+    .summary-table .kv-label,
+    .meta-table .kv-label,
+    .detail-table .kv-label {
+      background: #f4f8f6;
+      color: #5e706b;
+      font-weight: bold;
+      width: 16%;
+    }
+    .kv-value {
+      direction: rtl;
+      text-align: right;
+      font-weight: bold;
+      width: 34%;
+    }
+    .section-title-table th {
+      background: #1f7664;
+      color: #ffffff;
+      font-size: 13px;
+      text-align: right;
+    }
+    .sub-title {
+      background: #e8f2ef !important;
+      color: #294b43;
+      text-align: right !important;
+    }
+    .data th { background: #eef5f2; }
+    .data td { background: #ffffff; }
+    .latin-cell {
+      direction: ltr;
+      mso-number-format: "@";
+      text-align: center !important;
+    }
+    .financial .kv-value { color: #153e35; }
+    .excel-section { margin-top: 14px; }
+  </style>
+</head>
+<body>
+  <div class="report-title">${escapeReportHtml(report?.title || 'تقرير')}</div>
+  <div class="generated-at">تم التوليد: ${escapeReportHtml(
+    normalizeLatinDigits(
+      new Date(report?.generatedAt || Date.now()).toLocaleString('en-US'),
+    ),
+  )}</div>
+
+  ${summaryTable}
+  ${sectionHtml}
 </body>
 </html>`;
 }
@@ -750,7 +1264,7 @@ ipcMain.handle('api:report:export', async (event, input) => {
         return success({ success: false, canceled: true });
       }
 
-      const html = renderReportHtml(report);
+      const html = renderReportExcelHtml(report);
       await writeFile(result.filePath, `\ufeff${html}`, 'utf8');
 
       return success({

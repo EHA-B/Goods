@@ -367,7 +367,7 @@ export default function CashboxMovementsPage() {
 
             <TableFooter
               visibleCount={items.length}
-              totalCount={pagination.total}
+              totalCount={pagination.total.toLocaleString("en-US")}
               entityName="حركة"
               page={pagination.page}
               totalPages={Math.max(1, pagination.totalPages)}

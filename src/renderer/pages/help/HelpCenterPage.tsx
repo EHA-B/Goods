@@ -193,7 +193,7 @@ export default function HelpCenterPage() {
             <div>
               <h2 className="text-lg font-bold text-[var(--text-primary)]">المقالات</h2>
               <p className="mt-1 text-xs text-[var(--text-muted)]">
-                {filteredArticles.length.toLocaleString("ar-SY")} موضوع مطابق
+                {filteredArticles.length.toLocaleString("en-US")} موضوع مطابق
               </p>
             </div>
           </div>

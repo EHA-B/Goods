@@ -8,7 +8,7 @@ export default function ConsignmentSettlementResult({ settlement }: { settlement
     ["رقم التسوية", settlement.settlement_number],
     ["تاريخ التسوية", settlement.settlement_date],
     ["إجمالي المبيعات", money(settlement.total_sales_amount, settlement.currency)],
-    ["نسبة العمولة", `${settlement.commission_percentage}%`],
+    ["نسبة العمولة", `${Number(settlement.commission_percentage || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}%`],
     ["قيمة العمولة", money(settlement.commission_amount, settlement.currency)],
     ["حصة المورد من المبيعات", money(settlement.supplier_share, settlement.currency)],
   ];

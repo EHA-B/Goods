@@ -101,7 +101,7 @@ export default function ContextHelpDrawer({ open, config, onClose }: Props) {
                   <div key={section.id} className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
                     <div className="flex items-start gap-3">
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--surface)] text-xs font-extrabold text-[var(--primary)] shadow-sm">
-                        {(index + 1).toLocaleString("ar-SY")}
+                        {(index + 1).toLocaleString("en-US")}
                       </span>
                       <div className="min-w-0">
                         <h4 className="text-sm font-bold text-[var(--text-primary)]">{section.title}</h4>

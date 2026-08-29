@@ -97,9 +97,9 @@ class BackupController {
                                     return;
                                 }
 
-                                const tables = new Set((rows || []).map((row) => row.name));
+                                const tables = new Set((rows || []).map((row) => String(row.name).toLowerCase()));
                                 const requiredTables = ['settings', 'products', 'customers', 'suppliers', 'cashboxes'];
-                                const missingTables = requiredTables.filter((name) => !tables.has(name));
+                                const missingTables = requiredTables.filter((name) => !tables.has(name.toLowerCase()));
                                 if (missingTables.length > 0) {
                                     reject(createError(
                                         'INCOMPATIBLE_BACKUP',
@@ -143,15 +143,15 @@ class BackupController {
         await knex.raw('PRAGMA wal_checkpoint(FULL)');
 
         const temporaryPath = `${destination}.tmp-${process.pid}-${Date.now()}`;
-        await fs.promises.rm(temporaryPath, { force: true });
+        await fs.promises.rm(temporaryPath, { force: true }).catch(() => undefined);
 
         try {
             // VACUUM INTO creates a consistent standalone SQLite snapshot while the app is running.
             await knex.raw(`VACUUM INTO '${escapeSqliteString(temporaryPath)}'`);
             const validation = await this.validateBackupFile(temporaryPath);
 
-            await fs.promises.rm(destination, { force: true });
-            await fs.promises.rename(temporaryPath, destination);
+            await fs.promises.copyFile(temporaryPath, destination);
+            await fs.promises.rm(temporaryPath, { force: true }).catch(() => undefined);
 
             const result = {
                 success: true,
@@ -199,22 +199,22 @@ class BackupController {
         await this.validateBackupFile(source);
 
         const dbPath = path.resolve(this.getDatabasePath());
-        const restoreTempPath = `${dbPath}.restore-${process.pid}-${Date.now()}`;
         const walPath = `${dbPath}-wal`;
         const shmPath = `${dbPath}-shm`;
 
         try {
-            await fs.promises.copyFile(source, restoreTempPath);
-            await this.validateBackupFile(restoreTempPath);
+            // Pause slightly to ensure SQLite file handles are released by OS
+            await new Promise((resolve) => setTimeout(resolve, 150));
 
-            await fs.promises.rm(walPath, { force: true });
-            await fs.promises.rm(shmPath, { force: true });
-            await fs.promises.rm(dbPath, { force: true });
-            await fs.promises.rename(restoreTempPath, dbPath);
+            // Clean up journal files if present
+            await fs.promises.rm(walPath, { force: true }).catch(() => undefined);
+            await fs.promises.rm(shmPath, { force: true }).catch(() => undefined);
+
+            // Directly copy the backup file over the active database file
+            await fs.promises.copyFile(source, dbPath);
 
             return { success: true, restoredFrom: source };
         } catch (error) {
-            await fs.promises.rm(restoreTempPath, { force: true }).catch(() => undefined);
             if (error && error.code) throw error;
             throw createError('RESTORE_APPLY_FAILED', 'Failed to replace the active database', error?.message);
         }

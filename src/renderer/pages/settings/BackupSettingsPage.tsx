@@ -103,6 +103,8 @@ export default function BackupSettingsPage() {
       setRestoringBackup(true);
       notifyLoading("جارٍ فحص النسخة واستعادة البيانات...", "database-restore");
       await window.stockliteApi.system.restore(selection.path);
+      dismissNotification("database-restore");
+      notifySuccess("تمت استعادة البيانات بنجاح، جاري إعادة تشغيل التطبيق...");
     } catch (error) {
       dismissNotification("database-restore");
       notifyError(error, { title: "تعذر استعادة البيانات" });

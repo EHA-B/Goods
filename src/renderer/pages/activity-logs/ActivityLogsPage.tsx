@@ -47,7 +47,7 @@ export default function ActivityLogsPage() {
         : error ? <div className="p-10 text-center text-sm text-red-600">{error}</div>
         : items.length ? <><ActivityLogsTable items={items} onView={(item) => navigate(PATHS.ACTIVITY_LOG_DETAILS.replace(":activityLogId", String(item.id)))} /><TableFooter
           visibleCount={items.length}
-          totalCount={totalCount.toLocaleString("en-US")}
+          totalCount={totalCount}
           entityName="سجل"
           page={Math.min(page, Math.max(1, totalPages))}
           totalPages={Math.max(1, totalPages)}

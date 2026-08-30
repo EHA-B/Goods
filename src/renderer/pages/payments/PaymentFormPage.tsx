@@ -3,7 +3,7 @@ import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { useEffect, useState } from "react";
 import { Banknote, Save } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { BackButton, Button, FormField, FormSection, Input, PageHeader, Select, Textarea } from "../../components/ui";
+import { BackButton, Button, FormField, FormSection, Input, PageHeader, SearchableSelect, Select, Textarea } from "../../components/ui";
 
 export default function PaymentFormPage() {
   const navigate = useNavigate();
@@ -116,10 +116,16 @@ export default function PaymentFormPage() {
           </FormField>
           
           <FormField label="الحساب" htmlFor="partyId" required>
-            <Select id="partyId" value={String(partyId)} options={[
-              { value: "0", label: "اختر الحساب" },
-              ...partyOptions
-            ]} onChange={(e) => setPartyId(Number(e.target.value))} disabled={!!initialPartyId} />
+            <SearchableSelect
+              id="partyId"
+              value={partyId ? String(partyId) : ""}
+              options={partyOptions}
+              onValueChange={(value) => setPartyId(Number(value))}
+              placeholder="اختر الحساب"
+              searchPlaceholder={partyType === "customer" ? "ابحث باسم العميل..." : "ابحث باسم المورد..."}
+              emptyMessage={partyType === "customer" ? "لا يوجد عميل بهذا الاسم" : "لا يوجد مورد بهذا الاسم"}
+              disabled={!!initialPartyId}
+            />
           </FormField>
           
           <FormField label="المبلغ" htmlFor="amount" required>

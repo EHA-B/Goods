@@ -1275,6 +1275,165 @@ export default function PurchaseFormPage() {
           </div>
         </Card>
 
+        {!isConsignment && (
+          <>
+          {!isEdit ? <FormSection
+            title="الدفع الأولي"
+            description="يمكن تسجيل دفعة مع إنشاء الفاتورة."
+            icon={<Calculator size={18} />}
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField label="المبلغ المدفوع">
+                <Input
+                  type="number"
+                  min="0"
+                  max={total}
+                  value={paymentAmount}
+                  onChange={(e) =>
+                    setPaymentAmount(
+                      Number(e.target.value),
+                    )
+                  }
+                />
+              </FormField>
+
+              <FormField label="الصندوق">
+                <Select
+                  value={String(
+                    paymentCashboxId,
+                  )}
+                  disabled={
+                    lookupsLoading ||
+                    paymentAmount <= 0
+                  }
+                  options={[
+                    {
+                      value: "0",
+                      label:
+                        paymentAmount <= 0
+                          ? "لا توجد دفعة أولية"
+                          : lookupsLoading
+                            ? "جاري تحميل الصناديق..."
+                            : "اختر الصندوق",
+                    },
+
+                    ...activeCashboxes.map(
+                      (cashbox) => ({
+                        value: String(
+                          cashbox.id,
+                        ),
+                        label: `${cashbox.name} — ${Number(
+                          cashbox.balance,
+                        ).toLocaleString(
+                          "en-US",
+                        )} ${cashbox.currency}`,
+                      }),
+                    ),
+                  ]}
+                  onChange={(e) =>
+                    setPaymentCashboxId(
+                      Number(
+                        e.target.value,
+                      ),
+                    )
+                  }
+                />
+              </FormField>
+
+              {paymentCashboxId > 0 && activeCashboxes.find((c) => c.id === paymentCashboxId)?.currency !== currency && (
+                <FormField label="سعر صرف الدفعة" required>
+                  <Input type="number" min="0" step="any" value={paymentExchangeRate} onChange={(e) => setPaymentExchangeRate(e.target.value)} placeholder={`سعر صرف ${activeCashboxes.find((c) => c.id === paymentCashboxId)?.currency} مقابل ${currency}`} />
+                </FormField>
+              )}
+
+              <FormField label="تاريخ الدفع">
+                <Input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) =>
+                    setPaymentDate(
+                      e.target.value,
+                    )
+                  }
+                />
+              </FormField>
+            </div>
+          </FormSection> : <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4 text-sm text-[var(--text-secondary)]">الدفعات السابقة تبقى كما هي ولا يتم تعديلها من نموذج الفاتورة.</div>}
+          </>
+        )}
+
+        <Card
+          padding={false}
+          header="ملخص المنتجات"
+          description="يتحدث تلقائيًا أثناء إدخال أو تعديل أصناف الفاتورة للمراجعة قبل الحفظ."
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-sm" dir="rtl">
+              <thead className="bg-[var(--surface-subtle)] text-[var(--text-secondary)]">
+                <tr>
+                  <th className="px-4 py-3 text-right">#</th>
+                  <th className="px-4 py-3 text-right">المنتج</th>
+                  <th className="px-4 py-3 text-right">الكمية</th>
+                  <th className="px-4 py-3 text-right">{isConsignment ? "سعر التسويق" : "سعر الشراء"}</th>
+                  <th className="px-4 py-3 text-right">إجمالي السطر</th>
+                  <th className="px-4 py-3 text-right">كود الدفعة</th>
+                  <th className="px-4 py-3 text-right">تاريخ الاستلام</th>
+                  <th className="px-4 py-3 text-right">تاريخ الانتهاء</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, index) => {
+                  const price = isConsignment ? item.estimated_purchase_price : item.purchase_price;
+                  return (
+                    <tr key={`purchase-summary-${index}`} className="border-t border-[var(--border)]">
+                      <td className="px-4 py-3">{index + 1}</td>
+                      <td className="px-4 py-3 font-medium">{item.productName || "لم يتم اختيار المنتج"}</td>
+                      <td className="px-4 py-3" dir="ltr">{money(item.quantity)}</td>
+                      <td className="px-4 py-3" dir="ltr">{money(price)} {currency}</td>
+                      <td className="px-4 py-3 font-bold" dir="ltr">{money(item.quantity * price)} {currency}</td>
+                      <td className="px-4 py-3">{item.batch_code || "تلقائي"}</td>
+                      <td className="px-4 py-3" dir="ltr">{item.received_date || "—"}</td>
+                      <td className="px-4 py-3" dir="ltr">{item.expiry_date || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="border-t-2 border-[var(--border-strong)] bg-[var(--surface-subtle)]">
+                <tr>
+                  <td colSpan={2} className="px-4 py-3 font-bold">إجمالي المنتجات</td>
+                  <td className="px-4 py-3 font-bold" dir="ltr">{money(items.reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</td>
+                  <td className="px-4 py-3">—</td>
+                  <td className="px-4 py-3 font-bold text-[var(--primary)]" dir="ltr">{money(isConsignment ? estimatedSubtotal : standardSubtotal)} {currency}</td>
+                  <td colSpan={3} className="px-4 py-3">—</td>
+                </tr>
+                {transportCost > 0 && (
+                  <tr className="border-t border-[var(--border)]">
+                    <td colSpan={4} className="px-4 py-3 font-medium">تكلفة النقل</td>
+                    <td className="px-4 py-3 font-bold" dir="ltr">{money(transportCost)} {currency}</td>
+                    <td colSpan={3} className="px-4 py-3">—</td>
+                  </tr>
+                )}
+                {emptyingCost > 0 && (
+                  <tr className="border-t border-[var(--border)]">
+                    <td colSpan={4} className="px-4 py-3 font-medium">تكلفة العتالة</td>
+                    <td className="px-4 py-3 font-bold" dir="ltr">{money(emptyingCost)} {currency}</td>
+                    <td colSpan={3} className="px-4 py-3">—</td>
+                  </tr>
+                )}
+                {(transportCost > 0 || emptyingCost > 0) && (
+                  <tr className="border-t-2 border-[var(--border-strong)]">
+                    <td colSpan={4} className="px-4 py-3 text-base font-bold">الإجمالي مع النقل والعتالة</td>
+                    <td className="px-4 py-3 text-base font-bold text-[var(--primary)]" dir="ltr">
+                      {money((isConsignment ? estimatedSubtotal : standardSubtotal) + transportCost + emptyingCost)} {currency}
+                    </td>
+                    <td colSpan={3} className="px-4 py-3">—</td>
+                  </tr>
+                )}
+              </tfoot>
+            </table>
+          </div>
+        </Card>
+
         {/* ── Extra Costs (shown for ALL invoice types) ─────────────────── */}
         {(transportCost > 0 || emptyingCost > 0 || true) && (
           <FormSection
@@ -1315,90 +1474,7 @@ export default function PurchaseFormPage() {
         )}
 
         {!isConsignment && (
-          <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
-            {!isEdit ? <FormSection
-              title="الدفع الأولي"
-              description="يمكن تسجيل دفعة مع إنشاء الفاتورة."
-              icon={<Calculator size={18} />}
-            >
-              <div className="grid gap-4 md:grid-cols-2">
-                <FormField label="المبلغ المدفوع">
-                  <Input
-                    type="number"
-                    min="0"
-                    max={total}
-                    value={paymentAmount}
-                    onChange={(e) =>
-                      setPaymentAmount(
-                        Number(e.target.value),
-                      )
-                    }
-                  />
-                </FormField>
-
-                <FormField label="الصندوق">
-                  <Select
-                    value={String(
-                      paymentCashboxId,
-                    )}
-                    disabled={
-                      lookupsLoading ||
-                      paymentAmount <= 0
-                    }
-                    options={[
-                      {
-                        value: "0",
-                        label:
-                          paymentAmount <= 0
-                            ? "لا توجد دفعة أولية"
-                            : lookupsLoading
-                              ? "جاري تحميل الصناديق..."
-                              : "اختر الصندوق",
-                      },
-
-                      ...activeCashboxes.map(
-                        (cashbox) => ({
-                          value: String(
-                            cashbox.id,
-                          ),
-                          label: `${cashbox.name} — ${Number(
-                            cashbox.balance,
-                          ).toLocaleString(
-                            "en-US",
-                          )} ${cashbox.currency}`,
-                        }),
-                      ),
-                    ]}
-                    onChange={(e) =>
-                      setPaymentCashboxId(
-                        Number(
-                          e.target.value,
-                        ),
-                      )
-                    }
-                  />
-                </FormField>
-
-                {paymentCashboxId > 0 && activeCashboxes.find((c) => c.id === paymentCashboxId)?.currency !== currency && (
-                  <FormField label="سعر صرف الدفعة" required>
-                    <Input type="number" min="0" step="any" value={paymentExchangeRate} onChange={(e) => setPaymentExchangeRate(e.target.value)} placeholder={`سعر صرف ${activeCashboxes.find((c) => c.id === paymentCashboxId)?.currency} مقابل ${currency}`} />
-                  </FormField>
-                )}
-
-                <FormField label="تاريخ الدفع">
-                  <Input
-                    type="date"
-                    value={paymentDate}
-                    onChange={(e) =>
-                      setPaymentDate(
-                        e.target.value,
-                      )
-                    }
-                  />
-                </FormField>
-              </div>
-            </FormSection> : <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4 text-sm text-[var(--text-secondary)]">الدفعات السابقة تبقى كما هي ولا يتم تعديلها من نموذج الفاتورة.</div>}
-
+          <div>
             <Card
               header="ملخص الفاتورة"
               className="h-fit"

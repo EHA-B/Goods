@@ -1,14 +1,12 @@
-import { ReactNode } from "react";
+import { TdHTMLAttributes } from "react";
 import { cn } from "../../utils/utils";
 
-type Props = {
-  children: ReactNode;
-  className?: string;
-};
+type Props = TdHTMLAttributes<HTMLTableCellElement>;
 
 export default function DataTableCell({
   children,
   className,
+  ...rest
 }: Props) {
   return (
     <td
@@ -20,6 +18,7 @@ export default function DataTableCell({
         "text-[var(--text-secondary)]",
         className
       )}
+      {...rest}
     >
       {children}
     </td>

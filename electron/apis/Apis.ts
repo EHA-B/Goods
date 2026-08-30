@@ -2150,24 +2150,48 @@ ipcMain.handle('api:system:restore', async (_event, sourcePath) => {
   try {
     if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
 
-    // Validate the selected backup and create an emergency snapshot before closing SQLite.
+    // 1. Validate the selected backup and create an emergency snapshot before closing database connections
     const prepared = await backupController.prepareRestore(sourcePath);
-    const { closeDatabase } = await import('../../src/main/database/dbmanager');
+
+    // 2. Close active sqlite3 connections (both legacy sqlite3 manager and Knex)
+    try {
+      const legacyDb = require(path.join(__dirname, '../../src/database/databaseManager.js'));
+      if (legacyDb && typeof legacyDb.close === 'function') {
+        await legacyDb.close();
+      }
+    } catch (err) {
+      console.warn('Failed to close legacy database manager before restore:', err);
+    }
+
+    const { closeDatabase, initDatabase } = await import('../../src/main/database/dbmanager');
     await closeDatabase();
 
+    // 3. Apply the restore
     try {
       const result = await backupController.applyRestore(prepared.sourcePath);
-      app.relaunch();
-      app.exit(0);
+      // Restart application after a short delay so the IPC call completes
+      setTimeout(() => {
+        app.relaunch();
+        app.exit(0);
+      }, 500);
       return success({ ...result, emergencyBackupPath: prepared.emergencyBackupPath });
     } catch (restoreError) {
-      // The active connection is already closed; relaunch so startup can report/recover cleanly.
-      app.relaunch();
-      app.exit(1);
+      // If restore failed to apply, restore the emergency backup and re-initialize database
+      try {
+        await backupController.applyRestore(prepared.emergencyBackupPath);
+      } catch (recoverError) {
+        console.error('Failed to recover emergency backup:', recoverError);
+      }
+      try {
+        await initDatabase();
+      } catch (reInitError) {
+        console.error('Failed to re-initialize database:', reInitError);
+      }
       throw restoreError;
     }
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+  } catch (e: any) {
+    console.error('Database restore failed:', e);
+    return failure(e.code || 'RESTORE_FAILED', e.message || 'فشلت عملية استعادة قاعدة البيانات', e.details);
   }
 });
 

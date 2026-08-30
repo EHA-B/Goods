@@ -77,7 +77,7 @@ export default function SalesPage() {
         <SalesTable sales={sales} onView={(s) => navigate(`/sales/${s.id}`)} onDelete={setPendingCancel} />
         <TableFooter
           visibleCount={sales.length}
-          totalCount={pagination.total.toLocaleString("en-US")}
+          totalCount={pagination.total}
           entityName="فاتورة"
           page={pagination.page}
           totalPages={Math.max(1, pagination.totalPages)}

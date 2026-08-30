@@ -170,11 +170,50 @@ export const ERROR_MESSAGES_AR: Record<string, string> = {
   INVALID_BACKUP:
     "ملف النسخة الاحتياطية غير صالح أو غير متوافق.",
 
+  INVALID_BACKUP_FILE:
+    "الملف المحدد ليس ملف قاعدة بيانات SQLite صالح.",
+
+  BACKUP_FILE_NOT_FOUND:
+    "تعذر العثور على ملف النسخة الاحتياطية المحدد.",
+
+  SOURCE_PATH_REQUIRED:
+    "يرجى تحديد مسار ملف النسخة الاحتياطية.",
+
+  DESTINATION_PATH_REQUIRED:
+    "يرجى تحديد مكان حفظ النسخة الاحتياطية.",
+
+  INVALID_BACKUP_DESTINATION:
+    "لا يمكن حفظ النسخة الاحتياطية فوق قاعدة البيانات الحالية مباشرة.",
+
+  INVALID_RESTORE_SOURCE:
+    "لا يمكن استعادة قاعدة البيانات الحالية على نفسها.",
+
+  BACKUP_OPEN_FAILED:
+    "تعذر فتح ملف النسخة الاحتياطية للتحقق منها.",
+
+  BACKUP_INTEGRITY_CHECK_FAILED:
+    "فشل فحص تكامل ملف النسخة الاحتياطية.",
+
+  CORRUPTED_BACKUP:
+    "ملف النسخة الاحتياطية تالف أو غير مكتمل.",
+
+  BACKUP_SCHEMA_CHECK_FAILED:
+    "تعذر فحص هيكل الجداول داخل النسخة الاحتياطية.",
+
+  INCOMPATIBLE_BACKUP:
+    "الملف المحدد غير متوافق مع نظام التطبيق (جداول أساسية مفقودة).",
+
   BACKUP_FAILED:
     "تعذر إنشاء النسخة الاحتياطية.",
 
+  BACKUP_CREATE_FAILED:
+    "فشل إنشاء ملف النسخة الاحتياطية.",
+
   RESTORE_FAILED:
     "تعذر استعادة النسخة الاحتياطية.",
+
+  RESTORE_APPLY_FAILED:
+    "فشل استبدال قاعدة البيانات النشطة بالنسخة المحددة. يرجى التأكد من إغلاق أي برامج تفتح الملف.",
 
   // IPC
   INVALID_RESPONSE:

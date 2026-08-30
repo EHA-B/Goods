@@ -196,5 +196,6 @@ export async function closeKnex(): Promise<void> {
   if (knexInstance) {
     await knexInstance.destroy();
     knexInstance = null;
+    (global as any).__knex = null;
   }
 }

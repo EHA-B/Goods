@@ -78,7 +78,7 @@ export default function PurchasesPage() {
         <PurchasesTable purchases={purchases} onView={(p) => navigate(`/purchases/${p.id}`)} onDelete={setPendingDelete} />
         <TableFooter
           visibleCount={purchases.length}
-          totalCount={pagination.total.toLocaleString("en-US")}
+          totalCount={pagination.total}
           entityName="فاتورة"
           page={pagination.page}
           totalPages={Math.max(1, pagination.totalPages)}

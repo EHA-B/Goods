@@ -1379,14 +1379,14 @@ export default function PurchaseFormPage() {
             <table className="w-full min-w-[760px] text-sm" dir="rtl">
               <thead className="bg-[var(--surface-subtle)] text-[var(--text-secondary)]">
                 <tr>
-                  <th className="px-4 py-3 text-right">#</th>
-                  <th className="px-4 py-3 text-right">المنتج</th>
-                  <th className="px-4 py-3 text-right">الكمية</th>
-                  <th className="px-4 py-3 text-right">{isConsignment ? "سعر التسويق" : "سعر الشراء"}</th>
-                  <th className="px-4 py-3 text-right">إجمالي السطر</th>
-                  <th className="px-4 py-3 text-right">كود الدفعة</th>
-                  <th className="px-4 py-3 text-right">تاريخ الاستلام</th>
-                  <th className="px-4 py-3 text-right">تاريخ الانتهاء</th>
+                  <th className="px-4 py-3 text-center">#</th>
+                  <th className="px-4 py-3 text-center">المنتج</th>
+                  <th className="px-4 py-3 text-center">الكمية</th>
+                  <th className="px-4 py-3 text-center">{isConsignment ? "سعر التسويق" : "سعر الشراء"}</th>
+                  <th className="px-4 py-3 text-center">إجمالي السطر</th>
+                  <th className="px-4 py-3 text-center">كود الدفعة</th>
+                  <th className="px-4 py-3 text-center">تاريخ الاستلام</th>
+                  <th className="px-4 py-3 text-center">تاريخ الانتهاء</th>
                 </tr>
               </thead>
               <tbody>
@@ -1394,47 +1394,47 @@ export default function PurchaseFormPage() {
                   const price = isConsignment ? item.estimated_purchase_price : item.purchase_price;
                   return (
                     <tr key={`purchase-summary-${index}`} className="border-t border-[var(--border)]">
-                      <td className="px-4 py-3">{index + 1}</td>
-                      <td className="px-4 py-3 font-medium">{item.productName || "لم يتم اختيار المنتج"}</td>
-                      <td className="px-4 py-3" dir="ltr">{money(item.quantity)}</td>
-                      <td className="px-4 py-3" dir="ltr">{money(price)} {currency}</td>
-                      <td className="px-4 py-3 font-bold" dir="ltr">{money(item.quantity * price)} {currency}</td>
-                      <td className="px-4 py-3">{item.batch_code || "تلقائي"}</td>
-                      <td className="px-4 py-3" dir="ltr">{item.received_date || "—"}</td>
-                      <td className="px-4 py-3" dir="ltr">{item.expiry_date || "—"}</td>
+                      <td className="px-4 py-3 text-center align-middle">{index + 1}</td>
+                      <td className="px-4 py-3 text-center align-middle font-medium">{item.productName || "لم يتم اختيار المنتج"}</td>
+                      <td className="px-4 py-3 text-center align-middle" dir="ltr">{money(item.quantity)}</td>
+                      <td className="px-4 py-3 text-center align-middle" dir="ltr">{money(price)} {currency}</td>
+                      <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{money(item.quantity * price)} {currency}</td>
+                      <td className="px-4 py-3 text-center align-middle">{item.batch_code || "تلقائي"}</td>
+                      <td className="px-4 py-3 text-center align-middle" dir="ltr">{item.received_date || "—"}</td>
+                      <td className="px-4 py-3 text-center align-middle" dir="ltr">{item.expiry_date || "—"}</td>
                     </tr>
                   );
                 })}
               </tbody>
               <tfoot className="border-t-2 border-[var(--border-strong)] bg-[var(--surface-subtle)]">
                 <tr>
-                  <td colSpan={2} className="px-4 py-3 font-bold">إجمالي المنتجات</td>
-                  <td className="px-4 py-3 font-bold" dir="ltr">{money(items.reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</td>
-                  <td className="px-4 py-3">—</td>
-                  <td className="px-4 py-3 font-bold text-[var(--primary)]" dir="ltr">{money(isConsignment ? estimatedSubtotal : standardSubtotal)} {currency}</td>
-                  <td colSpan={3} className="px-4 py-3">—</td>
+                  <td colSpan={2} className="px-4 py-3 text-center align-middle font-bold">إجمالي المنتجات</td>
+                  <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{money(items.reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</td>
+                  <td className="px-4 py-3 text-center align-middle">—</td>
+                  <td className="px-4 py-3 text-center align-middle font-bold text-[var(--primary)]" dir="ltr">{money(isConsignment ? estimatedSubtotal : standardSubtotal)} {currency}</td>
+                  <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                 </tr>
                 {transportCost > 0 && (
                   <tr className="border-t border-[var(--border)]">
-                    <td colSpan={4} className="px-4 py-3 font-medium">تكلفة النقل — {transportCostBearer === "company" ? "علينا" : "على المورد"}</td>
-                    <td className="px-4 py-3 font-bold" dir="ltr">{transportCostBearer === "supplier" ? "− " : "+ "}{money(transportCost)} {currency}</td>
-                    <td colSpan={3} className="px-4 py-3">—</td>
+                    <td colSpan={4} className="px-4 py-3 text-center align-middle font-medium">تكلفة النقل — {transportCostBearer === "company" ? "علينا" : "على المورد"}</td>
+                    <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{transportCostBearer === "supplier" ? "− " : "+ "}{money(transportCost)} {currency}</td>
+                    <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                   </tr>
                 )}
                 {emptyingCost > 0 && (
                   <tr className="border-t border-[var(--border)]">
-                    <td colSpan={4} className="px-4 py-3 font-medium">تكلفة العتالة — {emptyingCostBearer === "company" ? "علينا" : "على المورد"}</td>
-                    <td className="px-4 py-3 font-bold" dir="ltr">{emptyingCostBearer === "supplier" ? "− " : "+ "}{money(emptyingCost)} {currency}</td>
-                    <td colSpan={3} className="px-4 py-3">—</td>
+                    <td colSpan={4} className="px-4 py-3 text-center align-middle font-medium">تكلفة العتالة — {emptyingCostBearer === "company" ? "علينا" : "على المورد"}</td>
+                    <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{emptyingCostBearer === "supplier" ? "− " : "+ "}{money(emptyingCost)} {currency}</td>
+                    <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                   </tr>
                 )}
                 {(transportCost > 0 || emptyingCost > 0) && (
                   <tr className="border-t-2 border-[var(--border-strong)]">
-                    <td colSpan={4} className="px-4 py-3 text-base font-bold">الإجمالي مع النقل والعتالة</td>
-                    <td className="px-4 py-3 text-base font-bold text-[var(--primary)]" dir="ltr">
+                    <td colSpan={4} className="px-4 py-3 text-center align-middle text-base font-bold">الإجمالي مع النقل والعتالة</td>
+                    <td className="px-4 py-3 text-center align-middle text-base font-bold text-[var(--primary)]" dir="ltr">
                       {money((isConsignment ? estimatedSubtotal : standardSubtotal) + transportCost * (transportCostBearer === "company" ? 1 : -1) + emptyingCost * (emptyingCostBearer === "company" ? 1 : -1))} {currency}
                     </td>
-                    <td colSpan={3} className="px-4 py-3">—</td>
+                    <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                   </tr>
                 )}
               </tfoot>

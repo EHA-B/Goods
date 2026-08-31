@@ -137,12 +137,12 @@ export default function PurchaseDetailsPage() {
           (financial_summary.emptying_cost ?? 0) > 0) && (
           <Card
             header="التكاليف الإضافية"
-            description="تكاليف مرتبطة مباشرة بهذه الفاتورة وتدخل ضمن إجماليها."
+            description="التكلفة التي علينا تزيد الإجمالي، والتي على المورد تُخصم منه."
           >
             <div className="grid gap-3 sm:grid-cols-2">
               {(financial_summary.transport_cost ?? 0) > 0 && (
                 <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
-                  <div className="text-xs font-medium text-[var(--text-muted)]">تكلفة النقل</div>
+                  <div className="text-xs font-medium text-[var(--text-muted)]">تكلفة النقل — {financial_summary.transport_cost_bearer === "supplier" ? "على المورد" : "علينا"}</div>
                   <div dir="ltr" className="mt-2 text-right text-lg font-extrabold tabular-nums text-[var(--text-primary)]">
                     {money(Number(financial_summary.transport_cost ?? 0), invoice.currency)}
                   </div>
@@ -150,7 +150,7 @@ export default function PurchaseDetailsPage() {
               )}
               {(financial_summary.emptying_cost ?? 0) > 0 && (
                 <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
-                  <div className="text-xs font-medium text-[var(--text-muted)]">تكلفة العتالة</div>
+                  <div className="text-xs font-medium text-[var(--text-muted)]">تكلفة العتالة — {financial_summary.emptying_cost_bearer === "supplier" ? "على المورد" : "علينا"}</div>
                   <div dir="ltr" className="mt-2 text-right text-lg font-extrabold tabular-nums text-[var(--text-primary)]">
                     {money(Number(financial_summary.emptying_cost ?? 0), invoice.currency)}
                   </div>
@@ -207,8 +207,8 @@ export default function PurchaseDetailsPage() {
             [
               ["المجموع الفرعي", financial_summary.subtotal],
               financial_summary.discount_amount > 0 ? ["الخصم", -financial_summary.discount_amount] : null,
-              (financial_summary.transport_cost ?? 0) > 0 ? ["تكلفة النقل", financial_summary.transport_cost ?? 0] : null,
-              (financial_summary.emptying_cost ?? 0) > 0 ? ["تكلفة العتالة", financial_summary.emptying_cost ?? 0] : null,
+              (financial_summary.transport_cost ?? 0) > 0 ? [`تكلفة النقل (${financial_summary.transport_cost_bearer === "supplier" ? "على المورد" : "علينا"})`, (financial_summary.transport_cost ?? 0) * (financial_summary.transport_cost_bearer === "supplier" ? -1 : 1)] : null,
+              (financial_summary.emptying_cost ?? 0) > 0 ? [`تكلفة العتالة (${financial_summary.emptying_cost_bearer === "supplier" ? "على المورد" : "علينا"})`, (financial_summary.emptying_cost ?? 0) * (financial_summary.emptying_cost_bearer === "supplier" ? -1 : 1)] : null,
               ["المدفوع", financial_summary.paid_amount],
               ["المتبقي", financial_summary.remaining_amount],
             ] as ([string, number] | null)[]

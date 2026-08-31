@@ -217,10 +217,10 @@ export default function CloseConsignmentPage() {
                   ["الكمية المتبقية", summary.stock.remaining_quantity],
                   ["العملة", summary.invoice.currency],
                   ...(summary.invoice.transport_cost > 0
-                    ? [["تكلفة النقل", money(summary.invoice.transport_cost, summary.invoice.currency)]]
+                    ? [[`تكلفة النقل (${summary.invoice.transport_cost_bearer === "supplier" ? "على المورد" : "علينا"})`, `${summary.invoice.transport_cost_bearer === "supplier" ? "− " : "+ "}${money(summary.invoice.transport_cost, summary.invoice.currency)}`]]
                     : []),
                   ...(summary.invoice.emptying_cost > 0
-                    ? [["تكلفة العتالة", money(summary.invoice.emptying_cost, summary.invoice.currency)]]
+                    ? [[`تكلفة العتالة (${summary.invoice.emptying_cost_bearer === "supplier" ? "على المورد" : "علينا"})`, `${summary.invoice.emptying_cost_bearer === "supplier" ? "− " : "+ "}${money(summary.invoice.emptying_cost, summary.invoice.currency)}`]]
                     : []),
                 ] as [string, React.ReactNode][]
               ).map(([label, value]) => (
@@ -361,13 +361,13 @@ export default function CloseConsignmentPage() {
           summary.invoice.transport_cost > 0 || summary.invoice.emptying_cost > 0
             ? `\n\nالمصاريف الإضافية المسجلة: ${
                 summary.invoice.transport_cost > 0
-                  ? `تكلفة نقل ${money(summary.invoice.transport_cost, summary.invoice.currency)}`
+                  ? `تكلفة نقل (${summary.invoice.transport_cost_bearer === "supplier" ? "على المورد" : "علينا"}) ${money(summary.invoice.transport_cost, summary.invoice.currency)}`
                   : ""
               }${
                 summary.invoice.transport_cost > 0 && summary.invoice.emptying_cost > 0 ? "، " : ""
               }${
                 summary.invoice.emptying_cost > 0
-                  ? `تكلفة عتالة ${money(summary.invoice.emptying_cost, summary.invoice.currency)}`
+                  ? `تكلفة عتالة (${summary.invoice.emptying_cost_bearer === "supplier" ? "على المورد" : "علينا"}) ${money(summary.invoice.emptying_cost, summary.invoice.currency)}`
                   : ""
               } (مسجلة كمصروفات ضمن الحسابات).`
             : ""

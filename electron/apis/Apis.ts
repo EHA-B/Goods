@@ -177,12 +177,17 @@ function isDetailedInvoiceReport(report) {
   );
 }
 
+function isInvoiceFinancialSummaryLabel(label) {
+  const value = String(label || '');
+  return invoiceFinancialSummaryLabels.has(value) || value.startsWith('تكلفة النقل (') || value.startsWith('تكلفة العتالة (');
+}
+
 function splitInvoiceSummary(summary) {
   const items = Array.isArray(summary) ? summary : [];
 
   return {
     financial: items.filter((item) =>
-      invoiceFinancialSummaryLabels.has(String(item?.label || '')),
+      isInvoiceFinancialSummaryLabel(item?.label),
     ),
     operational: items.filter((item) =>
       invoiceOperationalSummaryLabels.has(String(item?.label || '')),
@@ -190,7 +195,7 @@ function splitInvoiceSummary(summary) {
     identity: items.filter((item) => {
       const label = String(item?.label || '');
       return (
-        !invoiceFinancialSummaryLabels.has(label) &&
+        !isInvoiceFinancialSummaryLabel(label) &&
         !invoiceOperationalSummaryLabels.has(label)
       );
     }),

@@ -109,7 +109,9 @@ export default function PurchaseFormPage() {
 
   const [discount, setDiscount] = useState(0);
   const [transportCost, setTransportCost] = useState(0);
+  const [transportCostBearer, setTransportCostBearer] = useState<"company" | "supplier">("company");
   const [emptyingCost, setEmptyingCost] = useState(0);
+  const [emptyingCostBearer, setEmptyingCostBearer] = useState<"company" | "supplier">("company");
   const [notes, setNotes] = useState("");
 
   const [items, setItems] = useState<PurchaseItemForm[]>([
@@ -192,14 +194,14 @@ export default function PurchaseFormPage() {
     if (!isEdit || !lookups) return;
     purchasesService.getDetails(editingId).then((data) => {
       const draft = consumeInvoiceDraft<any>(draftKey);
-      const source = draft ?? { supplierId: Number(data.invoice.supplier_id), invoiceNumber: data.invoice.invoice_number, invoiceDate: data.invoice.invoice_date, invoiceType: data.invoice.invoice_type, discount: Number(data.invoice.discount_amount ?? data.invoice.discount ?? 0), transportCost: Number((data.invoice as any).transport_cost ?? 0), emptyingCost: Number((data.invoice as any).emptying_cost ?? 0), notes: data.invoice.notes ?? "", currency: data.invoice.currency ?? "SYP", exchangeRate: Number(data.invoice.exchange_rate ?? 1), items: data.items.map((row: any) => ({ product_id: Number(row.product_id), productName: String(row.product_name ?? ""), quantity: Number(row.quantity ?? 1), purchase_price: Number(row.unit_price ?? 0), estimated_purchase_price: Number(row.estimated_purchase_price ?? row.unit_price ?? 0), batch_code: String(row.batch_code ?? ""), received_date: String(row.batch_received_date ?? row.received_date ?? data.invoice.invoice_date), expiry_date: String(row.batch_expiry_date ?? row.expiry_date ?? "") })) };
-      setSupplierId(source.supplierId); setInvoiceNumber(source.invoiceNumber); setInvoiceDate(source.invoiceDate); setInvoiceType(source.invoiceType); setDiscount(source.discount); setTransportCost(source.transportCost ?? 0); setEmptyingCost(source.emptyingCost ?? 0); setNotes(source.notes); setCurrency(source.currency); setExchangeRate(source.exchangeRate); setItems(source.items); setPaymentAmount(0); setExistingPaidAmount(Number(data.invoice.paid_amount ?? 0)); setRestoredDraft(Boolean(draft)); setDraftInitialized(true);
+      const source = draft ?? { supplierId: Number(data.invoice.supplier_id), invoiceNumber: data.invoice.invoice_number, invoiceDate: data.invoice.invoice_date, invoiceType: data.invoice.invoice_type, discount: Number(data.invoice.discount_amount ?? data.invoice.discount ?? 0), transportCost: Number((data.invoice as any).transport_cost ?? 0), transportCostBearer: ((data.invoice as any).transport_cost_bearer === "supplier" ? "supplier" : "company"), emptyingCost: Number((data.invoice as any).emptying_cost ?? 0), emptyingCostBearer: ((data.invoice as any).emptying_cost_bearer === "supplier" ? "supplier" : "company"), notes: data.invoice.notes ?? "", currency: data.invoice.currency ?? "SYP", exchangeRate: Number(data.invoice.exchange_rate ?? 1), items: data.items.map((row: any) => ({ product_id: Number(row.product_id), productName: String(row.product_name ?? ""), quantity: Number(row.quantity ?? 1), purchase_price: Number(row.unit_price ?? 0), estimated_purchase_price: Number(row.estimated_purchase_price ?? row.unit_price ?? 0), batch_code: String(row.batch_code ?? ""), received_date: String(row.batch_received_date ?? row.received_date ?? data.invoice.invoice_date), expiry_date: String(row.batch_expiry_date ?? row.expiry_date ?? "") })) };
+      setSupplierId(source.supplierId); setInvoiceNumber(source.invoiceNumber); setInvoiceDate(source.invoiceDate); setInvoiceType(source.invoiceType); setDiscount(source.discount); setTransportCost(source.transportCost ?? 0); setTransportCostBearer(source.transportCostBearer ?? "company"); setEmptyingCost(source.emptyingCost ?? 0); setEmptyingCostBearer(source.emptyingCostBearer ?? "company"); setNotes(source.notes); setCurrency(source.currency); setExchangeRate(source.exchangeRate); setItems(source.items); setPaymentAmount(0); setExistingPaidAmount(Number(data.invoice.paid_amount ?? 0)); setRestoredDraft(Boolean(draft)); setDraftInitialized(true);
     }).catch((err: Error) => setError(getArabicErrorMessage(err, "تعذر تحميل الفاتورة للتعديل")));
   }, [isEdit, editingId, lookups, draftKey]);
 
   useEffect(() => {
     if (isEdit || draftInitialized) return; const draft = consumeInvoiceDraft<any>(draftKey); if (!draft) { setDraftInitialized(true); return; }
-    setSupplierId(draft.supplierId ?? 0); setInvoiceNumber(draft.invoiceNumber ?? ""); setInvoiceDate(draft.invoiceDate ?? invoiceDate); setInvoiceType(draft.invoiceType ?? "standard"); setDiscount(draft.discount ?? 0); setTransportCost(draft.transportCost ?? 0); setEmptyingCost(draft.emptyingCost ?? 0); setNotes(draft.notes ?? ""); setItems(draft.items ?? [emptyItem()]); setPaymentAmount(draft.paymentAmount ?? 0); setPaymentCashboxId(draft.paymentCashboxId ?? 0); setPaymentDate(draft.paymentDate ?? paymentDate); setPaymentExchangeRate(draft.paymentExchangeRate ?? ""); setCurrency(draft.currency ?? "SYP"); setExchangeRate(draft.exchangeRate ?? 1); setRestoredDraft(true); setDraftInitialized(true);
+    setSupplierId(draft.supplierId ?? 0); setInvoiceNumber(draft.invoiceNumber ?? ""); setInvoiceDate(draft.invoiceDate ?? invoiceDate); setInvoiceType(draft.invoiceType ?? "standard"); setDiscount(draft.discount ?? 0); setTransportCost(draft.transportCost ?? 0); setTransportCostBearer(draft.transportCostBearer ?? "company"); setEmptyingCost(draft.emptyingCost ?? 0); setEmptyingCostBearer(draft.emptyingCostBearer ?? "company"); setNotes(draft.notes ?? ""); setItems(draft.items ?? [emptyItem()]); setPaymentAmount(draft.paymentAmount ?? 0); setPaymentCashboxId(draft.paymentCashboxId ?? 0); setPaymentDate(draft.paymentDate ?? paymentDate); setPaymentExchangeRate(draft.paymentExchangeRate ?? ""); setCurrency(draft.currency ?? "SYP"); setExchangeRate(draft.exchangeRate ?? 1); setRestoredDraft(true); setDraftInitialized(true);
   }, [isEdit, draftKey, draftInitialized]);
 
   useEffect(() => {
@@ -214,7 +216,9 @@ export default function PurchaseFormPage() {
       invoiceType,
       discount,
       transportCost,
+      transportCostBearer,
       emptyingCost,
+      emptyingCostBearer,
       notes,
       items,
       paymentAmount,
@@ -273,7 +277,9 @@ export default function PurchaseFormPage() {
     invoiceType,
     discount,
     transportCost,
+    transportCostBearer,
     emptyingCost,
+    emptyingCostBearer,
     notes,
     items,
     paymentAmount,
@@ -318,13 +324,13 @@ export default function PurchaseFormPage() {
   /**
    * المجموع الكلي — للأمانة يستخدم سعر التسويق كأساس الفاتورة.
    * هذا يسمح بتسجيل دفعات جزئية للمورد.
-   * تكاليف النقل والعتالة تُضاف دائمًا للإجمالي بغض النظر عن نوع الفاتورة.
+   * تكاليف النقل والعتالة تؤثر على الإجمالي حسب الجهة التي تتحمل كل تكلفة.
    */
   const total = Math.max(
     0,
     (isConsignment ? estimatedSubtotal : standardSubtotal - discount) +
-      transportCost +
-      emptyingCost,
+      transportCost * (transportCostBearer === "company" ? 1 : -1) +
+      emptyingCost * (emptyingCostBearer === "company" ? 1 : -1),
   );
 
   /**
@@ -723,9 +729,11 @@ export default function PurchaseFormPage() {
 
         /** تكلفة النقل — مصروف يُضاف للإجمالي */
         transport_cost: transportCost > 0 ? transportCost : undefined,
+        transport_cost_bearer: transportCostBearer,
 
-        /** تكلفة العتالة — مصروف يُضاف للإجمالي */
+        /** تكلفة العتالة */
         emptying_cost: emptyingCost > 0 ? emptyingCost : undefined,
+        emptying_cost_bearer: emptyingCostBearer,
 
         notes: notes || undefined,
 
@@ -1371,14 +1379,14 @@ export default function PurchaseFormPage() {
             <table className="w-full min-w-[760px] text-sm" dir="rtl">
               <thead className="bg-[var(--surface-subtle)] text-[var(--text-secondary)]">
                 <tr>
-                  <th className="px-4 py-3 text-right">#</th>
-                  <th className="px-4 py-3 text-right">المنتج</th>
-                  <th className="px-4 py-3 text-right">الكمية</th>
-                  <th className="px-4 py-3 text-right">{isConsignment ? "سعر التسويق" : "سعر الشراء"}</th>
-                  <th className="px-4 py-3 text-right">إجمالي السطر</th>
-                  <th className="px-4 py-3 text-right">كود الدفعة</th>
-                  <th className="px-4 py-3 text-right">تاريخ الاستلام</th>
-                  <th className="px-4 py-3 text-right">تاريخ الانتهاء</th>
+                  <th className="px-4 py-3 text-center">#</th>
+                  <th className="px-4 py-3 text-center">المنتج</th>
+                  <th className="px-4 py-3 text-center">الكمية</th>
+                  <th className="px-4 py-3 text-center">{isConsignment ? "سعر التسويق" : "سعر الشراء"}</th>
+                  <th className="px-4 py-3 text-center">إجمالي السطر</th>
+                  <th className="px-4 py-3 text-center">كود الدفعة</th>
+                  <th className="px-4 py-3 text-center">تاريخ الاستلام</th>
+                  <th className="px-4 py-3 text-center">تاريخ الانتهاء</th>
                 </tr>
               </thead>
               <tbody>
@@ -1386,47 +1394,47 @@ export default function PurchaseFormPage() {
                   const price = isConsignment ? item.estimated_purchase_price : item.purchase_price;
                   return (
                     <tr key={`purchase-summary-${index}`} className="border-t border-[var(--border)]">
-                      <td className="px-4 py-3">{index + 1}</td>
-                      <td className="px-4 py-3 font-medium">{item.productName || "لم يتم اختيار المنتج"}</td>
-                      <td className="px-4 py-3" dir="ltr">{money(item.quantity)}</td>
-                      <td className="px-4 py-3" dir="ltr">{money(price)} {currency}</td>
-                      <td className="px-4 py-3 font-bold" dir="ltr">{money(item.quantity * price)} {currency}</td>
-                      <td className="px-4 py-3">{item.batch_code || "تلقائي"}</td>
-                      <td className="px-4 py-3" dir="ltr">{item.received_date || "—"}</td>
-                      <td className="px-4 py-3" dir="ltr">{item.expiry_date || "—"}</td>
+                      <td className="px-4 py-3 text-center align-middle">{index + 1}</td>
+                      <td className="px-4 py-3 text-center align-middle font-medium">{item.productName || "لم يتم اختيار المنتج"}</td>
+                      <td className="px-4 py-3 text-center align-middle" dir="ltr">{money(item.quantity)}</td>
+                      <td className="px-4 py-3 text-center align-middle" dir="ltr">{money(price)} {currency}</td>
+                      <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{money(item.quantity * price)} {currency}</td>
+                      <td className="px-4 py-3 text-center align-middle">{item.batch_code || "تلقائي"}</td>
+                      <td className="px-4 py-3 text-center align-middle" dir="ltr">{item.received_date || "—"}</td>
+                      <td className="px-4 py-3 text-center align-middle" dir="ltr">{item.expiry_date || "—"}</td>
                     </tr>
                   );
                 })}
               </tbody>
               <tfoot className="border-t-2 border-[var(--border-strong)] bg-[var(--surface-subtle)]">
                 <tr>
-                  <td colSpan={2} className="px-4 py-3 font-bold">إجمالي المنتجات</td>
-                  <td className="px-4 py-3 font-bold" dir="ltr">{money(items.reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</td>
-                  <td className="px-4 py-3">—</td>
-                  <td className="px-4 py-3 font-bold text-[var(--primary)]" dir="ltr">{money(isConsignment ? estimatedSubtotal : standardSubtotal)} {currency}</td>
-                  <td colSpan={3} className="px-4 py-3">—</td>
+                  <td colSpan={2} className="px-4 py-3 text-center align-middle font-bold">إجمالي المنتجات</td>
+                  <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{money(items.reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</td>
+                  <td className="px-4 py-3 text-center align-middle">—</td>
+                  <td className="px-4 py-3 text-center align-middle font-bold text-[var(--primary)]" dir="ltr">{money(isConsignment ? estimatedSubtotal : standardSubtotal)} {currency}</td>
+                  <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                 </tr>
                 {transportCost > 0 && (
                   <tr className="border-t border-[var(--border)]">
-                    <td colSpan={4} className="px-4 py-3 font-medium">تكلفة النقل</td>
-                    <td className="px-4 py-3 font-bold" dir="ltr">{money(transportCost)} {currency}</td>
-                    <td colSpan={3} className="px-4 py-3">—</td>
+                    <td colSpan={4} className="px-4 py-3 text-center align-middle font-medium">تكلفة النقل — {transportCostBearer === "company" ? "علينا" : "على المورد"}</td>
+                    <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{transportCostBearer === "supplier" ? "− " : "+ "}{money(transportCost)} {currency}</td>
+                    <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                   </tr>
                 )}
                 {emptyingCost > 0 && (
                   <tr className="border-t border-[var(--border)]">
-                    <td colSpan={4} className="px-4 py-3 font-medium">تكلفة العتالة</td>
-                    <td className="px-4 py-3 font-bold" dir="ltr">{money(emptyingCost)} {currency}</td>
-                    <td colSpan={3} className="px-4 py-3">—</td>
+                    <td colSpan={4} className="px-4 py-3 text-center align-middle font-medium">تكلفة العتالة — {emptyingCostBearer === "company" ? "علينا" : "على المورد"}</td>
+                    <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{emptyingCostBearer === "supplier" ? "− " : "+ "}{money(emptyingCost)} {currency}</td>
+                    <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                   </tr>
                 )}
                 {(transportCost > 0 || emptyingCost > 0) && (
                   <tr className="border-t-2 border-[var(--border-strong)]">
-                    <td colSpan={4} className="px-4 py-3 text-base font-bold">الإجمالي مع النقل والعتالة</td>
-                    <td className="px-4 py-3 text-base font-bold text-[var(--primary)]" dir="ltr">
-                      {money((isConsignment ? estimatedSubtotal : standardSubtotal) + transportCost + emptyingCost)} {currency}
+                    <td colSpan={4} className="px-4 py-3 text-center align-middle text-base font-bold">الإجمالي مع النقل والعتالة</td>
+                    <td className="px-4 py-3 text-center align-middle text-base font-bold text-[var(--primary)]" dir="ltr">
+                      {money((isConsignment ? estimatedSubtotal : standardSubtotal) + transportCost * (transportCostBearer === "company" ? 1 : -1) + emptyingCost * (emptyingCostBearer === "company" ? 1 : -1))} {currency}
                     </td>
-                    <td colSpan={3} className="px-4 py-3">—</td>
+                    <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                   </tr>
                 )}
               </tfoot>
@@ -1438,38 +1446,29 @@ export default function PurchaseFormPage() {
         {(transportCost > 0 || emptyingCost > 0 || true) && (
           <FormSection
             title="تكاليف إضافية"
-            description="تكاليف النقل والعتالة — تُضاف للإجمالي وتُسجَّل كمصروفات في الحسابات."
+            description="حدد قيمة كل تكلفة والجهة التي تتحملها؛ علينا تُضاف، وعلى المورد تُخصم."
             icon={<Calculator size={18} />}
           >
             <div className="grid gap-4 md:grid-cols-2">
-              <FormField label="تكلفة النقل">
-                <Input
-                  id="transportCost"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={transportCost}
-                  placeholder="0"
-                  onChange={(e) =>
-                    setTransportCost(Number(e.target.value))
-                  }
-                />
-              </FormField>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <FormField label="تكلفة النقل">
+                  <Input id="transportCost" type="number" min="0" step="any" value={transportCost} placeholder="0" onChange={(e) => setTransportCost(Number(e.target.value))} />
+                </FormField>
+                <FormField label="حساب النقل على">
+                  <Select id="transportCostBearer" value={transportCostBearer} options={[{ value: "company", label: "علينا — تُضاف للفاتورة" }, { value: "supplier", label: "على المورد — تُخصم من الفاتورة" }]} onChange={(e) => setTransportCostBearer(e.target.value as "company" | "supplier")} />
+                </FormField>
+              </div>
 
-              <FormField label="تكلفة العتالة (عتالة)">
-                <Input
-                  id="emptyingCost"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={emptyingCost}
-                  placeholder="0"
-                  onChange={(e) =>
-                    setEmptyingCost(Number(e.target.value))
-                  }
-                />
-              </FormField>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <FormField label="تكلفة العتالة (عتالة)">
+                  <Input id="emptyingCost" type="number" min="0" step="any" value={emptyingCost} placeholder="0" onChange={(e) => setEmptyingCost(Number(e.target.value))} />
+                </FormField>
+                <FormField label="حساب العتالة على">
+                  <Select id="emptyingCostBearer" value={emptyingCostBearer} options={[{ value: "company", label: "علينا — تُضاف للفاتورة" }, { value: "supplier", label: "على المورد — تُخصم من الفاتورة" }]} onChange={(e) => setEmptyingCostBearer(e.target.value as "company" | "supplier")} />
+                </FormField>
+              </div>
             </div>
+            <p className="mt-3 text-xs text-[var(--text-muted)]">التكلفة التي علينا تزيد الإجمالي، والتكلفة التي على المورد تُخصم من إجمالي الفاتورة ولا تُسجّل كمصروف علينا.</p>
           </FormSection>
         )}
 
@@ -1486,8 +1485,8 @@ export default function PurchaseFormPage() {
                     standardSubtotal,
                   ],
                   ["الخصم", -discount],
-                  ...(transportCost > 0 ? [["تكلفة النقل", transportCost]] : []),
-                  ...(emptyingCost > 0 ? [["تكلفة العتالة", emptyingCost]] : []),
+                  ...(transportCost > 0 ? [[`تكلفة النقل (${transportCostBearer === "company" ? "علينا" : "على المورد"})`, transportCost * (transportCostBearer === "company" ? 1 : -1)]] : []),
+                  ...(emptyingCost > 0 ? [[`تكلفة العتالة (${emptyingCostBearer === "company" ? "علينا" : "على المورد"})`, emptyingCost * (emptyingCostBearer === "company" ? 1 : -1)]] : []),
                   ["المدفوع", paymentAmount],
                   ["المتبقي", remaining],
                 ].map(([label, value]) => (

@@ -272,8 +272,10 @@ type InvoiceFinancialSummary = {
   discount_amount: number;
   /** تكلفة النقل — تُضاف للإجمالي وتُسجَّل كمصروف */
   transport_cost?: number;
+  transport_cost_bearer?: 'company' | 'supplier';
   /** تكلفة العتالة — تُضاف للإجمالي وتُسجَّل كمصروف */
   emptying_cost?: number;
+  emptying_cost_bearer?: 'company' | 'supplier';
   total_amount: number;
   paid_amount: number;
   remaining_amount: number;
@@ -296,7 +298,9 @@ type PurchaseInvoiceRecord = {
   discount: number;
   discount_amount: number;
   transport_cost?: number;
+  transport_cost_bearer?: 'company' | 'supplier';
   emptying_cost?: number;
+  emptying_cost_bearer?: 'company' | 'supplier';
   settlement_status: 'settled' | 'paid' | 'partial' | 'overdue';
   tax: number;
   total: number;
@@ -342,8 +346,10 @@ type CreatePurchaseInvoiceInput = {
   discount_amount?: number;
   /** تكلفة نقل البضاعة — تُضاف للإجمالي وتُسجَّل كمصروف */
   transport_cost?: number;
+  transport_cost_bearer?: 'company' | 'supplier';
   /** تكلفة العتالة (تفريغ البضاعة) — تُضاف للإجمالي وتُسجَّل كمصروف */
   emptying_cost?: number;
+  emptying_cost_bearer?: 'company' | 'supplier';
   notes?: string;
   items: PurchaseInvoiceItem[];
   initial_payment?: InitialPaymentInput;

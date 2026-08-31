@@ -172,16 +172,12 @@ export default function InvoicePrintPage({ type }: { type: "sale" | "purchase" }
           totalBase={purchaseDetails.financial_summary.total_base}
           extraAmounts={[
             {
-              label: "تكلفة النقل",
-              value: Number(
-                purchaseDetails.financial_summary.transport_cost ?? 0,
-              ),
+              label: `تكلفة النقل (${purchaseDetails.financial_summary.transport_cost_bearer === "supplier" ? "على المورد" : "علينا"})`,
+              value: Number(purchaseDetails.financial_summary.transport_cost ?? 0) * (purchaseDetails.financial_summary.transport_cost_bearer === "supplier" ? -1 : 1),
             },
             {
-              label: "تكلفة العتالة",
-              value: Number(
-                purchaseDetails.financial_summary.emptying_cost ?? 0,
-              ),
+              label: `تكلفة العتالة (${purchaseDetails.financial_summary.emptying_cost_bearer === "supplier" ? "على المورد" : "علينا"})`,
+              value: Number(purchaseDetails.financial_summary.emptying_cost ?? 0) * (purchaseDetails.financial_summary.emptying_cost_bearer === "supplier" ? -1 : 1),
             },
           ]}
           notes={purchaseDetails.invoice.notes || undefined}

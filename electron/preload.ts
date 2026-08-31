@@ -317,6 +317,8 @@ const stockliteApi = {
       invokeApi("api:purchase:recordPayment", input),
     reversePayment: (paymentId: number, reason: string) =>
       invokeApi("api:purchase:reversePayment", paymentId, reason),
+    recordPaymentRefund: (input: unknown) =>
+      invokeApi("api:purchase:recordPaymentRefund", input),
     deleteDraft: (id: number) =>
       invokeApi("api:purchase:deleteDraft", id),
     getSalesDetails: (id: number) =>

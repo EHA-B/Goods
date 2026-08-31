@@ -22,6 +22,7 @@ const MOVEMENT_LABELS: Record<string, string> = {
   opening_balance: "رصيد افتتاحي",
   sale:            "دفعة مبيعات",
   purchase:        "دفعة مشتريات",
+  purchase_refund: "استرداد / تصحيح مشتريات",
   expense:         "مصروف",
   income:          "إيراد",
   transfer:        "تحويل",
@@ -357,6 +358,17 @@ export default function CashboxMovementsPage() {
                         )}
                         {(isOpening || isReversal) && (
                           <span className="text-xs text-[var(--text-muted)]">مقيّد</span>
+                        )}
+                        {/* Purchase / Sale entries must be reversed from the invoice page to keep paid_amount + supplier balance in sync */}
+                        {(m.reference_type === "purchase" || m.reference_type === "sale") && m.reference_id && (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1 text-xs font-medium text-[var(--primary)] transition-colors hover:bg-[var(--surface-hover)]"
+                            title={m.reference_type === "purchase" ? "اعكس الدفعة من صفحة فاتورة الشراء" : "اعكس الدفعة من صفحة فاتورة البيع"}
+                            onClick={() => nav(m.reference_type === "purchase" ? `/purchases/${m.reference_id}` : `/sales/${m.reference_id}`)}
+                          >
+                            ← افتح الفاتورة
+                          </button>
                         )}
                       </DataTableCell>
                     </DataTableRow>

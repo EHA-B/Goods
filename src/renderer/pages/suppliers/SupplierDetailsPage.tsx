@@ -783,27 +783,23 @@ export default function SupplierDetailsPage() {
 
                 <tbody>
                   {transactions.payments.map(
-                    (payment) => (
-                      <tr
-                        key={
-                          payment.id
-                        }
-                        className="border-t border-[var(--border)]"
-                      >
-                        <td className="px-4 py-3">
-                          {formatDate(
-                            payment.paymentDate,
-                          )}
-                        </td>
-
-                        <td className="px-4 py-3 font-bold">
-                          <span dir="ltr">
-                            {money(
-                              payment.amount,
-                              "SYP",
-                            )}
-                          </span>
-                        </td>
+                    (payment) => {
+                      const isRefund = payment.paymentType === "purchase_refund";
+                      return (
+                        <tr
+                          key={payment.id}
+                          className={`border-t border-[var(--border)] ${isRefund ? "bg-[var(--danger-subtle)]" : ""}`}
+                        >
+                          <td className="px-4 py-3">
+                            {formatDate(payment.paymentDate)}
+                          </td>
+  
+                          <td className={`px-4 py-3 font-bold ${isRefund ? "text-[var(--danger)]" : ""}`}>
+                            <span dir="ltr">
+                              {isRefund ? "− " : ""}
+                              {money(payment.amount, "SYP")}
+                            </span>
+                          </td>
 
                         <td className="px-4 py-3">
                           {payment.cashboxName ||
@@ -843,8 +839,8 @@ export default function SupplierDetailsPage() {
                           </div>
                         </td>
                       </tr>
-                    ),
-                  )}
+                    );
+                  })}
                 </tbody>
               </table>
             ) : (

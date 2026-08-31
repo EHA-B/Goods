@@ -22,6 +22,7 @@ export type SupplierPayment = {
   notes: string;
   status: string;
   cashboxName: string;
+  paymentType: string;
 };
 
 export type SupplierPurchase = {
@@ -161,6 +162,7 @@ export const suppliersService = {
         notes: String(row.notes ?? ""),
         status: String(row.status ?? "active"),
         cashboxName: String(row.cashbox_name ?? ""),
+        paymentType: String(row.payment_type ?? ""),
       })),
       purchases: (result.purchases ?? []).map((row) => ({
         id: Number(row.id ?? 0),

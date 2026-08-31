@@ -576,12 +576,14 @@ interface Window {
       recordPayment(input: RecordPurchasePaymentInput): Promise<{ payment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
       reversePayment(paymentId: number, reason: string): Promise<{ reversedPayment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
       deleteDraft(id: number): Promise<{ success: true }>;
+      recordPaymentRefund(input: unknown): Promise<{ payment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord; supplier: unknown }>;
       getSalesDetails(id: number): Promise<unknown>;
       getConsignmentSummary(id: number): Promise<unknown>;
       previewConsignmentClosing(id: number, input?: unknown): Promise<unknown>;
       closeCommission(id: number, input?: unknown): Promise<unknown>;
       getConsignmentSettlement(id: number): Promise<unknown>;
       reverseConsignmentSettlement(id: number, reason: string): Promise<unknown>;
+      
     };
     saleInvoices: {
       get(id: number): Promise<SaleInvoiceRecord>;

@@ -366,7 +366,7 @@ export default function PaymentsPage() {
 
       <Card padding={false}>
         <div className="border-b border-[var(--border)] bg-[var(--surface-subtle)] p-4">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <div className="md:col-span-2 xl:col-span-2">
               <Input
                 value={searchQuery}
@@ -739,14 +739,13 @@ export default function PaymentsPage() {
                           )}
                         </DataTableCell>
 
-                        <DataTableCell
-                          dir="ltr"
-                          className="font-bold tabular-nums"
-                        >
+                        <DataTableCell className="font-bold tabular-nums">
+                          <span dir="ltr" className="inline-block">
                           {formatMoney(
                             payment.balance_after,
                             payment.currency,
                           )}
+                          </span>
                         </DataTableCell>
 
                         <DataTableCell className="max-w-xs truncate text-sm text-[var(--text-muted)]">

@@ -539,6 +539,43 @@ export default function SaleFormPage() {
         </div>
       </Card>
 
+      <Card padding={false} header="ملخص المنتجات" description="يتحدث تلقائيًا أثناء إدخال أو تعديل أصناف الفاتورة للمراجعة قبل الحفظ.">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-sm" dir="rtl">
+            <thead className="bg-[var(--surface-subtle)] text-[var(--text-secondary)]">
+              <tr>
+                <th className="px-4 py-3 text-right">#</th>
+                <th className="px-4 py-3 text-right">المنتج</th>
+                <th className="px-4 py-3 text-right">الدفعة</th>
+                <th className="px-4 py-3 text-right">الكمية</th>
+                <th className="px-4 py-3 text-right">سعر البيع</th>
+                <th className="px-4 py-3 text-right">إجمالي السطر</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, index) => (
+                <tr key={`sale-summary-${index}`} className="border-t border-[var(--border)]">
+                  <td className="px-4 py-3">{index + 1}</td>
+                  <td className="px-4 py-3 font-medium">{item.productName || "لم يتم اختيار المنتج"}</td>
+                  <td className="px-4 py-3">{item.batchCode || "—"}</td>
+                  <td className="px-4 py-3" dir="ltr">{money(item.quantity)}</td>
+                  <td className="px-4 py-3" dir="ltr">{money(item.sale_price)} {currency}</td>
+                  <td className="px-4 py-3 font-bold" dir="ltr">{money(item.quantity * item.sale_price)} {currency}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="border-t-2 border-[var(--border-strong)] bg-[var(--surface-subtle)]">
+              <tr>
+                <td colSpan={3} className="px-4 py-3 font-bold">الإجمالي</td>
+                <td className="px-4 py-3 font-bold" dir="ltr">{money(items.reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</td>
+                <td className="px-4 py-3">—</td>
+                <td className="px-4 py-3 font-bold text-[var(--primary)]" dir="ltr">{money(subtotal)} {currency}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </Card>
+
       <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
         {!isEdit ? <FormSection title="الدفع الأولي" description="يمكن تسجيل دفعة مع إنشاء الفاتورة." icon={<Calculator size={18} />}>
           <div className="grid gap-4 md:grid-cols-2">

@@ -582,7 +582,7 @@ class PaymentController {
             const payment = await dbGet(db, 'SELECT * FROM payments WHERE id = ?', [paymentId]);
             if (!payment)                    throw { code: 'NOT_FOUND', message: 'الدفعة غير موجودة' };
             if (payment.status === 'reversed') throw { code: 'PAYMENT_ALREADY_REVERSED', message: 'هذه الدفعة محوّلة مسبقًا' };
-            if (payment.payment_type !== 'purchase') throw { code: 'PAYMENT_TYPE_MISMATCH', message: 'هذه الدفعة ليست دفعة شراء ولا يمكن عكسها من هنا' };
+            if (payment.payment_type !== 'purchase') throw { code: 'VALIDATION_ERROR', message: 'هذه الدفعة ليست دفعة شراء' };
 
             const amount = normalizeAmount(payment.amount);
             const paymentDate = payment.payment_date || new Date().toISOString().slice(0, 10);
@@ -625,11 +625,9 @@ class PaymentController {
                 }
             }
 
-            // Restore supplier payable balance (increase balance back).
-            // We use paymentAmountBase (already computed above as the correct base-currency amount)
-            // NOT payment.amount_base directly — which is stored in cashbox currency, not base currency.
+            // Restore supplier payable balance (increase balance back)
             if (payment.party_id) {
-                await this._updatePartyBalance(db, 'supplier', payment.party_id, paymentAmountBase);
+                await this._updatePartyBalance(db, 'supplier', payment.party_id, normalizeAmount(payment.amount_base ?? amount));
             }
 
             // Recalculate invoice

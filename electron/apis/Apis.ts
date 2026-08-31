@@ -177,17 +177,12 @@ function isDetailedInvoiceReport(report) {
   );
 }
 
-function isInvoiceFinancialSummaryLabel(label) {
-  const value = String(label || '');
-  return invoiceFinancialSummaryLabels.has(value) || value.startsWith('تكلفة النقل (') || value.startsWith('تكلفة العتالة (');
-}
-
 function splitInvoiceSummary(summary) {
   const items = Array.isArray(summary) ? summary : [];
 
   return {
     financial: items.filter((item) =>
-      isInvoiceFinancialSummaryLabel(item?.label),
+      invoiceFinancialSummaryLabels.has(String(item?.label || '')),
     ),
     operational: items.filter((item) =>
       invoiceOperationalSummaryLabels.has(String(item?.label || '')),
@@ -195,7 +190,7 @@ function splitInvoiceSummary(summary) {
     identity: items.filter((item) => {
       const label = String(item?.label || '');
       return (
-        !isInvoiceFinancialSummaryLabel(label) &&
+        !invoiceFinancialSummaryLabels.has(label) &&
         !invoiceOperationalSummaryLabels.has(label)
       );
     }),
@@ -2127,18 +2122,14 @@ ipcMain.handle('api:purchase:recordPayment', async (_event, input) => {
 
 /**
  * Endpoint: api:purchase:reversePayment
- * Description: Reverses a purchase payment by ID with an audit reason.
+ * Description: Alias for api:payment:reversePurchasePayment to satisfy unified API.
  */
 ipcMain.handle('api:purchase:reversePayment', async (_event, paymentId, reason) => {
   try {
     const result = await paymentController.reversePurchasePayment(paymentId, reason);
     return success(result);
   } catch (e) {
-    // Business-logic errors are plain objects { code, message }; native JS errors have .name.
-    // Preserve the message so the frontend errorNormalizer can extract meaning even if code is missing.
-    const code = e?.code || (e instanceof Error ? undefined : undefined) || 'UNKNOWN_ERROR';
-    const message = e?.message || (e instanceof Error ? e.message : String(e)) || 'Unknown error';
-    return failure(code, message, e?.details);
+    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
   }
 });
 

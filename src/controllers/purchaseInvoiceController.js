@@ -714,7 +714,7 @@ class PurchaseInvoiceController {
             `SELECT p.*, c.name as cashbox_name
              FROM payments p
              LEFT JOIN cashboxes c ON p.cashbox_id = c.id
-             WHERE p.invoice_id = ? AND p.payment_type IN ('purchase', 'purchase_refund')
+             WHERE p.invoice_id = ? AND p.payment_type = 'purchase'
              ORDER BY p.payment_date DESC, p.id DESC`,
             [id]
         );

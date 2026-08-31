@@ -75,7 +75,7 @@ export default function PrintableInvoice(props: Props) {
           </div>
         )}
         {props.extraAmounts
-          ?.filter((item) => Number(item.value) > 0)
+          ?.filter((item) => Math.abs(Number(item.value)) > 0)
           .map((item) => (
             <div key={item.label}>
               <span>{item.label}</span>

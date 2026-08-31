@@ -58,8 +58,10 @@ export type ConsignmentInvoiceSummary = {
     remaining_amount: number;
     /** تكلفة النقل — مصروف مضاف للإجمالي */
     transport_cost: number;
+    transport_cost_bearer?: 'company' | 'supplier';
     /** تكلفة العتالة — مصروف مضاف للإجمالي */
     emptying_cost: number;
+    emptying_cost_bearer?: 'company' | 'supplier';
   };
   sales: { total_sales_amount: number; sold_quantity: number; sales_count: number };
   stock: { received_quantity: number; sold_quantity: number; remaining_quantity: number; damaged_quantity: number; returned_quantity: number };

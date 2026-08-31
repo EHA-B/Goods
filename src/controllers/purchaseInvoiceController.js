@@ -100,6 +100,8 @@ class PurchaseInvoiceController {
             discount_amount = 0,
             transport_cost = 0,
             emptying_cost = 0,
+            transport_cost_bearer = 'company',
+            emptying_cost_bearer = 'company',
             notes,
             items,
             initial_payment,
@@ -158,7 +160,12 @@ class PurchaseInvoiceController {
             const normalizedEmptyingCost  = normalizeAmount(Number(emptying_cost)  || 0);
             if (normalizedTransportCost < 0) throw { code: 'VALIDATION_ERROR', message: 'تكلفة النقل لا يمكن أن تكون سالبة' };
             if (normalizedEmptyingCost  < 0) throw { code: 'VALIDATION_ERROR', message: 'تكلفة العتالة لا يمكن أن تكون سالبة' };
-            const totalAmount = normalizeAmount(itemsTotal + normalizedTransportCost + normalizedEmptyingCost);
+            const normalizedTransportBearer = transport_cost_bearer === 'supplier' ? 'supplier' : 'company';
+            const normalizedEmptyingBearer = emptying_cost_bearer === 'supplier' ? 'supplier' : 'company';
+            const transportEffect = normalizedTransportCost * (normalizedTransportBearer === 'company' ? 1 : -1);
+            const emptyingEffect = normalizedEmptyingCost * (normalizedEmptyingBearer === 'company' ? 1 : -1);
+            const totalAmount = normalizeAmount(itemsTotal + transportEffect + emptyingEffect);
+            if (totalAmount < 0) throw { code: 'VALIDATION_ERROR', message: 'تكاليف المورد لا يمكن أن تتجاوز قيمة الفاتورة' };
 
             // 5. Validate/generate invoice number
             let invNumber = invoice_number?.trim();
@@ -180,12 +187,12 @@ class PurchaseInvoiceController {
                 `INSERT INTO purchase_invoices
                    (invoice_number, supplier_id, invoice_type, invoice_date,
                     subtotal, discount, discount_amount, tax, total, paid_amount, remaining_amount, status, notes,
-                    currency, exchange_rate, transport_cost, emptying_cost,
+                    currency, exchange_rate, transport_cost, emptying_cost, transport_cost_bearer, emptying_cost_bearer,
                     created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
                 [invNumber, supplier_id, invoice_type, validatedDate,
                  subtotal, discountAmount, discountAmount, totalAmount, totalAmount, status, notes ?? null,
-                 invoiceCurrency, invoiceRate, normalizedTransportCost, normalizedEmptyingCost]
+                 invoiceCurrency, invoiceRate, normalizedTransportCost, normalizedEmptyingCost, normalizedTransportBearer, normalizedEmptyingBearer]
             );
 
             // NOTE: transport_cost & emptying_cost are part of totalAmount (already included above).
@@ -242,10 +249,8 @@ class PurchaseInvoiceController {
                 );
             }
 
-            // 9. Increase supplier payable balance by invoice items total only.
-            // Transport and emptying costs are our own expenses, NOT part of what
-            // we owe to the supplier, so only itemsTotal is added to supplier balance.
-            const supplierBaseAmount = toBaseAmount(itemsTotal, invoiceRate);
+            // Supplier balance follows the net invoice total after assigning responsibility.
+            const supplierBaseAmount = toBaseAmount(totalAmount, invoiceRate);
             await dbRun(db,
                 `UPDATE suppliers SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`,
                 [supplierBaseAmount, supplier_id]
@@ -324,7 +329,7 @@ class PurchaseInvoiceController {
             );
 
             // 12. Record transport cost as an expense transaction (if provided)
-            if (normalizedTransportCost > 0) {
+            if (normalizedTransportCost > 0 && normalizedTransportBearer === 'company') {
                 try {
                     const transportCat = await dbGet(db,
                         `SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 AND (name LIKE '%نقل%' OR name LIKE '%شحن%') LIMIT 1`
@@ -349,7 +354,7 @@ class PurchaseInvoiceController {
             }
 
             // 13. Record emptying (عتالة) cost as an expense transaction (if provided)
-            if (normalizedEmptyingCost > 0) {
+            if (normalizedEmptyingCost > 0 && normalizedEmptyingBearer === 'company') {
                 try {
                     const emptyingCat = await dbGet(db,
                         `SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 AND (name LIKE '%عتال%' OR name LIKE '%تفريغ%') LIMIT 1`
@@ -373,7 +378,7 @@ class PurchaseInvoiceController {
             }
 
             // 14. Activity log
-            await logActivity(db, 'purchase_created', 'purchase_invoices', invoiceId, { invoice_number: invNumber, supplier_id, total: totalAmount, transport_cost: normalizedTransportCost, emptying_cost: normalizedEmptyingCost });
+            await logActivity(db, 'purchase_created', 'purchase_invoices', invoiceId, { invoice_number: invNumber, supplier_id, total: totalAmount, transport_cost: normalizedTransportCost, transport_cost_bearer: normalizedTransportBearer, emptying_cost: normalizedEmptyingCost, emptying_cost_bearer: normalizedEmptyingBearer });
 
             await dbRun(db, 'COMMIT');
 
@@ -530,7 +535,7 @@ class PurchaseInvoiceController {
 
     async updatePurchaseInvoice(id, input, userId) {
         if (!id) throw { code: 'VALIDATION_ERROR', message: 'رقم الفاتورة مطلوب' };
-        const { supplier_id, invoice_number, invoice_date, invoice_type = 'standard', discount_amount = 0, transport_cost = 0, emptying_cost = 0, notes, items, currency, exchange_rate } = input ?? {};
+        const { supplier_id, invoice_number, invoice_date, invoice_type = 'standard', discount_amount = 0, transport_cost = 0, emptying_cost = 0, transport_cost_bearer = 'company', emptying_cost_bearer = 'company', notes, items, currency, exchange_rate } = input ?? {};
         if (!supplier_id) throw { code: 'SUPPLIER_NOT_FOUND', message: 'المورد مطلوب' };
         if (!Array.isArray(items) || items.length === 0) throw { code: 'PURCHASE_ITEM_INVALID', message: 'يجب إضافة صنف واحد على الأقل' };
 
@@ -583,7 +588,12 @@ class PurchaseInvoiceController {
             const normalizedEmptyingCost = normalizeAmount(Number(emptying_cost) || 0);
             if (normalizedTransportCost < 0) throw { code: 'VALIDATION_ERROR', message: 'تكلفة النقل لا يمكن أن تكون سالبة' };
             if (normalizedEmptyingCost < 0) throw { code: 'VALIDATION_ERROR', message: 'تكلفة العتالة لا يمكن أن تكون سالبة' };
-            const totalAmount = normalizeAmount(itemsTotal + normalizedTransportCost + normalizedEmptyingCost);
+            const normalizedTransportBearer = transport_cost_bearer === 'supplier' ? 'supplier' : 'company';
+            const normalizedEmptyingBearer = emptying_cost_bearer === 'supplier' ? 'supplier' : 'company';
+            const transportEffect = normalizedTransportCost * (normalizedTransportBearer === 'company' ? 1 : -1);
+            const emptyingEffect = normalizedEmptyingCost * (normalizedEmptyingBearer === 'company' ? 1 : -1);
+            const totalAmount = normalizeAmount(itemsTotal + transportEffect + emptyingEffect);
+            if (totalAmount < 0) throw { code: 'VALIDATION_ERROR', message: 'تكاليف المورد لا يمكن أن تتجاوز قيمة الفاتورة' };
             if (paidAmount > totalAmount + 0.001) throw { code: 'INVOICE_EDIT_BELOW_PAID', message: 'الإجمالي الجديد أقل من المبلغ المدفوع. اعكس جزءًا من الدفعات أولًا.' };
             const { remainingAmount, status } = calculatePaymentState(totalAmount, paidAmount);
 
@@ -610,7 +620,7 @@ class PurchaseInvoiceController {
                 await dbRun(db, `INSERT INTO stock_movements (product_id, stock_batch_id, movement_type, quantity, quantity_before, quantity_after, reference_type, reference_id, reference_number, supplier_id, notes, created_at) VALUES (?, ?, 'purchase_in', ?, 0, ?, 'purchase_invoice', ?, ?, ?, ?, datetime('now'))`, [item.product_id, batchId, item.quantity, item.quantity, id, invNumber, supplier_id, `فاتورة شراء معدلة ${invNumber}`]);
             }
 
-            await dbRun(db, `UPDATE purchase_invoices SET invoice_number = ?, supplier_id = ?, invoice_type = ?, invoice_date = ?, subtotal = ?, discount = ?, discount_amount = ?, transport_cost = ?, emptying_cost = ?, total = ?, remaining_amount = ?, status = ?, notes = ?, currency = ?, exchange_rate = ?, is_edited = 1, edit_count = COALESCE(edit_count, 0) + 1, last_edited_at = datetime('now'), last_edited_by = ?, updated_at = datetime('now') WHERE id = ?`, [invNumber, supplier_id, invoice_type, validatedDate, subtotal, discountAmount, discountAmount, normalizedTransportCost, normalizedEmptyingCost, totalAmount, remainingAmount, status, notes ?? null, nextCurrency, nextRate, userId ?? null, id]);
+            await dbRun(db, `UPDATE purchase_invoices SET invoice_number = ?, supplier_id = ?, invoice_type = ?, invoice_date = ?, subtotal = ?, discount = ?, discount_amount = ?, transport_cost = ?, emptying_cost = ?, transport_cost_bearer = ?, emptying_cost_bearer = ?, total = ?, remaining_amount = ?, status = ?, notes = ?, currency = ?, exchange_rate = ?, is_edited = 1, edit_count = COALESCE(edit_count, 0) + 1, last_edited_at = datetime('now'), last_edited_by = ?, updated_at = datetime('now') WHERE id = ?`, [invNumber, supplier_id, invoice_type, validatedDate, subtotal, discountAmount, discountAmount, normalizedTransportCost, normalizedEmptyingCost, normalizedTransportBearer, normalizedEmptyingBearer, totalAmount, remainingAmount, status, notes ?? null, nextCurrency, nextRate, userId ?? null, id]);
             // Keep invoice-linked non-cash extra-cost transactions synchronized with the edited invoice.
             await dbRun(db, `DELETE FROM transactions
                 WHERE cashbox_id IS NULL
@@ -642,10 +652,10 @@ class PurchaseInvoiceController {
                      `${detail} مرتبطة بفاتورة الشراء ${invNumber}`]
                 );
             };
-            await insertExtraCostTransaction('transport', normalizedTransportCost);
-            await insertExtraCostTransaction('emptying', normalizedEmptyingCost);
+            if (normalizedTransportBearer === 'company') await insertExtraCostTransaction('transport', normalizedTransportCost);
+            if (normalizedEmptyingBearer === 'company') await insertExtraCostTransaction('emptying', normalizedEmptyingCost);
 
-            await dbRun(db, `INSERT INTO activity_logs (user_id, action, table_name, record_id, old_data, new_data, created_at, updated_at) VALUES (?, 'purchase_edited', 'purchase_invoices', ?, ?, ?, datetime('now'), datetime('now'))`, [userId ?? null, id, JSON.stringify({ invoice: oldInvoice, items: oldItems, batches: oldBatches }), JSON.stringify({ invoice_number: invNumber, supplier_id, invoice_type, invoice_date: validatedDate, transport_cost: normalizedTransportCost, emptying_cost: normalizedEmptyingCost, total: totalAmount, remaining_amount: remainingAmount, currency: nextCurrency, exchange_rate: nextRate, items: normalizedItems.map(x => ({ product_id: x.product_id, quantity: x.quantity, purchase_price: x.purchase_price, batch_code: x.batch_code })) })]);
+            await dbRun(db, `INSERT INTO activity_logs (user_id, action, table_name, record_id, old_data, new_data, created_at, updated_at) VALUES (?, 'purchase_edited', 'purchase_invoices', ?, ?, ?, datetime('now'), datetime('now'))`, [userId ?? null, id, JSON.stringify({ invoice: oldInvoice, items: oldItems, batches: oldBatches }), JSON.stringify({ invoice_number: invNumber, supplier_id, invoice_type, invoice_date: validatedDate, transport_cost: normalizedTransportCost, transport_cost_bearer: normalizedTransportBearer, emptying_cost: normalizedEmptyingCost, emptying_cost_bearer: normalizedEmptyingBearer, total: totalAmount, remaining_amount: remainingAmount, currency: nextCurrency, exchange_rate: nextRate, items: normalizedItems.map(x => ({ product_id: x.product_id, quantity: x.quantity, purchase_price: x.purchase_price, batch_code: x.batch_code })) })]);
             await dbRun(db, 'COMMIT');
             return this.getPurchaseInvoiceDetails(id);
         } catch (err) {
@@ -719,7 +729,9 @@ class PurchaseInvoiceController {
             subtotal: normalizeAmount(invoice.subtotal),
             discount_amount: normalizeAmount(invoice.discount_amount ?? invoice.discount),
             transport_cost: normalizeAmount(invoice.transport_cost ?? 0),
+            transport_cost_bearer: invoice.transport_cost_bearer === 'supplier' ? 'supplier' : 'company',
             emptying_cost: normalizeAmount(invoice.emptying_cost ?? 0),
+            emptying_cost_bearer: invoice.emptying_cost_bearer === 'supplier' ? 'supplier' : 'company',
             total_amount: normalizeAmount(invoice.total),
             paid_amount: normalizeAmount(invoice.paid_amount),
             remaining_amount: normalizeAmount(invoice.remaining_amount),

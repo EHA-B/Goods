@@ -20,7 +20,7 @@ export const activityFieldLabels: Record<string, string> = {
   customer_id: "العميل", supplier_id: "المورد", product_id: "المنتج", stock_batch_id: "دفعة المخزون",
   sale_type_id: "نوع البيع", cashbox_id: "الصندوق", category_id: "الفئة", worker_id: "العامل / الجهة",
   subtotal: "المجموع الفرعي", discount: "الخصم", discount_amount: "قيمة الخصم", tax: "الضريبة",
-  transport_cost: "تكلفة النقل", emptying_cost: "تكلفة العتالة", total: "الإجمالي",
+  transport_cost: "تكلفة النقل", transport_cost_bearer: "حساب تكلفة النقل", emptying_cost: "تكلفة العتالة", emptying_cost_bearer: "حساب تكلفة العتالة", total: "الإجمالي",
   paid_amount: "المبلغ المدفوع", remaining_amount: "المبلغ المتبقي", amount: "المبلغ",
   balance: "الرصيد", balance_before: "الرصيد قبل", balance_after: "الرصيد بعد",
   quantity: "الكمية", remaining_quantity: "الكمية المتبقية", quantity_before: "الكمية قبل", quantity_after: "الكمية بعد",
@@ -43,7 +43,7 @@ const valueLabels: Record<string, string> = {
   active: "فعال", cancelled: "ملغاة", confirmed: "مؤكدة", paid: "مدفوعة", partially_paid: "مدفوعة جزئيًا",
   draft: "مسودة", settled: "تمت التسوية", pending: "بانتظار التسوية", reversed: "معكوسة",
   standard: "عادية", consignment: "أمانة", income: "إيراد", expense: "مصروف", in: "دخول", out: "خروج",
-  sale: "مبيعات", purchase: "مشتريات", customer: "عميل", supplier: "مورد", SYP: "ل.س", USD: "دولار",
+  sale: "مبيعات", purchase: "مشتريات", customer: "عميل", supplier: "مورد", company: "علينا", SYP: "ل.س", USD: "دولار",
 };
 export function stringifyValue(value:unknown){
   if(value===null||value===undefined||value==="") return "—";

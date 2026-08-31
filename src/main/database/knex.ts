@@ -30,6 +30,7 @@ import * as paymentInvoiceOptionalMigration from './migrations/20260823120000_ma
 import * as cashboxesSeed from './seeds/01_cashboxes';
 import * as usersSeed from './seeds/02_users';
 import * as addPurchaseExtraCostsMigration from './migrations/20260827000000_add_purchase_extra_costs';
+import * as addPurchaseExtraCostResponsibilityMigration from './migrations/20260831000000_add_purchase_extra_cost_responsibility';
 
 let knexInstance: Knex | null = null;
 
@@ -61,6 +62,7 @@ class MigrationSource {
       '20260814000001_make_transaction_cashbox_nullable.ts',
       '20260823120000_make_payment_invoice_optional.ts',
       '20260827000000_add_purchase_extra_costs.ts',
+      '20260831000000_add_purchase_extra_cost_responsibility.ts',
     ]);
   }
   getMigrationName(migration: string) {
@@ -141,6 +143,9 @@ class MigrationSource {
     }
     if (migration === '20260827000000_add_purchase_extra_costs.ts') {
       return addPurchaseExtraCostsMigration;
+    }
+    if (migration === '20260831000000_add_purchase_extra_cost_responsibility.ts') {
+      return addPurchaseExtraCostResponsibilityMigration;
     }
     throw new Error(`Migration ${migration} not found`);
   }

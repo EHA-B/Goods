@@ -783,7 +783,9 @@ class ReportController {
           pi.subtotal,
           COALESCE(pi.discount_amount, pi.discount, 0) AS discount_amount,
           COALESCE(pi.transport_cost, 0) AS transport_cost,
+          COALESCE(pi.transport_cost_bearer, 'company') AS transport_cost_bearer,
           COALESCE(pi.emptying_cost, 0) AS emptying_cost,
+          COALESCE(pi.emptying_cost_bearer, 'company') AS emptying_cost_bearer,
           COALESCE(pi.tax, 0) AS tax,
           pi.total,
           pi.paid_amount,
@@ -1071,16 +1073,16 @@ class ReportController {
               ),
             },
             {
-              label: "تكلفة النقل",
+              label: `تكلفة النقل (${invoice.transport_cost_bearer === "supplier" ? "على المورد" : "علينا"})`,
               value: formatMoney(
-                invoice.transport_cost,
+                number(invoice.transport_cost) * (invoice.transport_cost_bearer === "supplier" ? -1 : 1),
                 currency,
               ),
             },
             {
-              label: "تكلفة العتالة",
+              label: `تكلفة العتالة (${invoice.emptying_cost_bearer === "supplier" ? "على المورد" : "علينا"})`,
               value: formatMoney(
-                invoice.emptying_cost,
+                number(invoice.emptying_cost) * (invoice.emptying_cost_bearer === "supplier" ? -1 : 1),
                 currency,
               ),
             },
@@ -1227,9 +1229,8 @@ class ReportController {
             effectiveInvoices.reduce(
               (sum, invoice) =>
                 sum +
-                number(
-                  invoice.transport_cost,
-                ),
+                number(invoice.transport_cost) *
+                (invoice.transport_cost_bearer === "supplier" ? -1 : 1),
               0,
             );
 
@@ -1237,16 +1238,15 @@ class ReportController {
             effectiveInvoices.reduce(
               (sum, invoice) =>
                 sum +
-                number(
-                  invoice.emptying_cost,
-                ),
+                number(invoice.emptying_cost) *
+                (invoice.emptying_cost_bearer === "supplier" ? -1 : 1),
               0,
             );
 
           return [
             {
               label:
-                `إجمالي تكلفة النقل (${currency})`,
+                `صافي أثر تكلفة النقل (${currency})`,
               value: formatMoney(
                 transportTotal,
                 currency,
@@ -1254,7 +1254,7 @@ class ReportController {
             },
             {
               label:
-                `إجمالي تكلفة العتالة (${currency})`,
+                `صافي أثر تكلفة العتالة (${currency})`,
               value: formatMoney(
                 emptyingTotal,
                 currency,
@@ -1813,9 +1813,10 @@ class ReportController {
       { key: "invoice_number", label: "فاتورة الشراء", format: "text" },
       { key: "supplier_name", label: "المورد", format: "text" },
       { key: "cost_label", label: "نوع التكلفة", format: "text" },
+      { key: "responsibility", label: "على حساب", format: "text" },
       { key: "date", label: "التاريخ", format: "date" },
       { key: "original_amount", label: "المبلغ بعملة الفاتورة", format: "currency" },
-      { key: "amount_base", label: "القيمة الأساسية", format: "currency" },
+      { key: "invoice_effect_base", label: "الأثر على الفاتورة بالعملة الأساسية", format: "currency" },
     ];
 
     const purchaseExtraCostRows =
@@ -1823,9 +1824,10 @@ class ReportController {
         invoice_number: item.invoice_number || "—",
         supplier_name: item.supplier_name || "—",
         cost_label: item.cost_type === "transport" ? "تكلفة النقل" : "تكلفة العتالة",
+        responsibility: item.responsibility || "علينا",
         date: item.transaction_date || "—",
         original_amount: number(item.original_amount),
-        amount_base: number(item.amount),
+        invoice_effect_base: number(item.invoice_effect_base ?? item.amount),
         currency: item.original_currency || "SYP",
         base_currency: "SYP",
       }));
@@ -1846,7 +1848,7 @@ class ReportController {
       rows: purchaseExtraCostRows,
       summary: [
         {
-          label: "إجمالي تكاليف النقل والعتالة",
+          label: "إجمالي التكاليف التي علينا (كمصروف)",
           value: `${number(detailed.purchase_extra_costs?.total_base).toLocaleString("en-US", { maximumFractionDigits: 2 })} ل.س`,
         },
       ],
@@ -2056,7 +2058,9 @@ class ReportController {
               COALESCE(NULLIF(pi.exchange_rate, 0), 1) AS exchange_rate,
               s.name AS supplier_name,
               COALESCE(pi.transport_cost, 0) AS transport_cost,
-              COALESCE(pi.emptying_cost, 0) AS emptying_cost
+              COALESCE(pi.transport_cost_bearer, 'company') AS transport_cost_bearer,
+              COALESCE(pi.emptying_cost, 0) AS emptying_cost,
+              COALESCE(pi.emptying_cost_bearer, 'company') AS emptying_cost_bearer
           FROM purchase_invoices pi
           LEFT JOIN suppliers s ON s.id = pi.supplier_id
           WHERE pi.status != 'cancelled'
@@ -2070,9 +2074,9 @@ class ReportController {
       for (const row of purchaseExtraCostRows) {
           const rate = number(row.exchange_rate) || 1;
           const originalCurrency = normalizeCurrency(row.currency);
-          for (const [kind, label, rawAmount] of [
-              ['transport', 'تكلفة نقل', row.transport_cost],
-              ['emptying', 'تكلفة عتالة', row.emptying_cost],
+          for (const [kind, label, rawAmount, bearer] of [
+              ['transport', 'تكلفة نقل', row.transport_cost, row.transport_cost_bearer],
+              ['emptying', 'تكلفة عتالة', row.emptying_cost, row.emptying_cost_bearer],
           ]) {
               const nativeAmount = number(rawAmount);
               if (!(nativeAmount > 0)) continue;
@@ -2086,7 +2090,9 @@ class ReportController {
                   currency: 'SYP',
                   original_currency: originalCurrency,
                   original_amount: nativeAmount,
-                  amount: baseAmount,
+                  amount: bearer === 'supplier' ? 0 : baseAmount,
+                  invoice_effect_base: bearer === 'supplier' ? -baseAmount : baseAmount,
+                  responsibility: bearer === 'supplier' ? 'على المورد' : 'علينا',
                   purchase_invoice_id: number(row.purchase_invoice_id),
                   invoice_number: row.invoice_number,
                   supplier_name: row.supplier_name || '—',

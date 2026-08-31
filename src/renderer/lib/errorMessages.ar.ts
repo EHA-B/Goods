@@ -348,6 +348,9 @@ export const ERROR_MESSAGES_AR: Record<string, string> = {
   PAYMENT_ALREADY_REVERSED:
     "تم عكس هذه الدفعة مسبقًا.",
 
+  PAYMENT_TYPE_MISMATCH:
+    "هذه الدفعة ليست من نوع العملية المطلوبة ولا يمكن عكسها من هذه الصفحة.",
+
   REVERSAL_REASON_REQUIRED:
     "يرجى إدخال سبب العكس.",
 

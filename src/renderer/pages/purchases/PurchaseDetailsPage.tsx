@@ -25,6 +25,7 @@ export default function PurchaseDetailsPage() {
   const [details, setDetails] = useState<PurchaseInvoiceDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reverseError, setReverseError] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -160,6 +161,12 @@ export default function PurchaseDetailsPage() {
         )}
 
         <Card padding={false} header="سجل الدفعات" description="كل الدفعات المسجلة على فاتورة الشراء.">
+          {reverseError && (
+            <div className="mx-4 mt-4 flex items-start justify-between gap-3 rounded-lg border border-[var(--danger)] bg-[var(--danger-muted,#fee2e2)] px-4 py-3 text-sm text-[var(--danger)]">
+              <span>{reverseError}</span>
+              <button type="button" className="shrink-0 font-bold" onClick={() => setReverseError("")}>×</button>
+            </div>
+          )}
           {payments.length ? (
             <DataTable>
               <DataTableHead>
@@ -178,10 +185,11 @@ export default function PurchaseDetailsPage() {
                     <DataTableCell><div className="flex flex-wrap gap-2"><Button size="sm" variant="secondary" startIcon={<Printer size={15} />} onClick={() => navigate(`/print/payments/${payment.id}`)}>طباعة</Button>{payment.status === "active" ? <Button size="sm" variant="secondary" startIcon={<RotateCcw size={15} />} onClick={async () => {
                       const reason = window.prompt("سبب عكس الدفعة:", "تصحيح دفعة");
                       if (!reason?.trim()) return;
+                      setReverseError("");
                       try {
                         await purchasesService.reversePayment(payment.id, reason.trim());
                         setDetails(await purchasesService.getDetails(invoice.id));
-                      } catch (err: unknown) { setError(getArabicErrorMessage(err, "تعذر عكس الدفعة")); }
+                      } catch (err: unknown) { setReverseError(getArabicErrorMessage(err, "تعذر عكس الدفعة")); }
                     }}>عكس الدفعة</Button> : null}</div></DataTableCell>
                   </DataTableRow>
                 ))}

@@ -593,9 +593,9 @@ export function normalizeError(
       : undefined;
 
   const translatedMessage =
-    ERROR_MESSAGES_AR[
-      resolvedCode
-    ];
+    resolvedCode !== "UNKNOWN_ERROR"
+      ? ERROR_MESSAGES_AR[resolvedCode]
+      : undefined;
 
   const isArabicMessage =
     /[\u0600-\u06FF]/.test(
@@ -606,12 +606,9 @@ export function normalizeError(
    * أولوية الرسالة:
    *
    * 1. خطأ الحقل.
-   * 2. ترجمة error code المركزي.
-   * 3. رسالة عربية قادمة من الباك.
+   * 2. ترجمة error code المركزي (إذا كان الكود معروفًا وغير UNKNOWN_ERROR).
+   * 3. رسالة عربية قادمة من الباك أو IPC.
    * 4. UNKNOWN_ERROR.
-   *
-   * لا نظهر رسائل SQLite أو الإنجليزية
-   * للمستخدم النهائي.
    */
   const message =
     fieldMessage ??
@@ -639,8 +636,8 @@ export function getArabicErrorMessage(
     normalizeError(error);
 
   if (
-    normalized.code ===
-      "UNKNOWN_ERROR" &&
+    normalized.code === "UNKNOWN_ERROR" &&
+    normalized.message === ERROR_MESSAGES_AR.UNKNOWN_ERROR &&
     fallback
   ) {
     return fallback;

@@ -2122,14 +2122,18 @@ ipcMain.handle('api:purchase:recordPayment', async (_event, input) => {
 
 /**
  * Endpoint: api:purchase:reversePayment
- * Description: Alias for api:payment:reversePurchasePayment to satisfy unified API.
+ * Description: Reverses a purchase payment by ID with an audit reason.
  */
 ipcMain.handle('api:purchase:reversePayment', async (_event, paymentId, reason) => {
   try {
     const result = await paymentController.reversePurchasePayment(paymentId, reason);
     return success(result);
   } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+    // Business-logic errors are plain objects { code, message }; native JS errors have .name.
+    // Preserve the message so the frontend errorNormalizer can extract meaning even if code is missing.
+    const code = e?.code || (e instanceof Error ? undefined : undefined) || 'UNKNOWN_ERROR';
+    const message = e?.message || (e instanceof Error ? e.message : String(e)) || 'Unknown error';
+    return failure(code, message, e?.details);
   }
 });
 

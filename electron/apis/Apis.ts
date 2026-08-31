@@ -1170,7 +1170,6 @@ ipcMain.handle('api:auth:changePassword', async (_event, input) => {
 const internallyAuditedChannels = new Set([
   'api:saleInvoice:createSaleProcess','api:saleInvoice:updateSaleInvoice','api:saleInvoice:cancelSaleInvoice','api:payment:recordSalePayment','api:payment:reverseSalePayment',
   'api:purchase:createFull','api:purchase:update','api:purchase:addItems','api:purchase:cancel','api:payment:recordPurchasePayment','api:payment:reversePurchasePayment',
-  'api:purchase:recordPaymentRefund',
   'api:purchase:closeCommission','api:purchase:reverseCommissionSettlement',
 ]);
 function auditInfoForChannel(channel, args, data) {
@@ -2128,22 +2127,6 @@ ipcMain.handle('api:purchase:recordPayment', async (_event, input) => {
 ipcMain.handle('api:purchase:reversePayment', async (_event, paymentId, reason) => {
   try {
     const result = await paymentController.reversePurchasePayment(paymentId, reason);
-    return success(result);
-  } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
-  }
-});
-
-/**
- * Endpoint: api:purchase:recordPaymentRefund
- * Description: Correction that REDUCES the paid amount on a purchase invoice.
- * Money returns IN to the selected cashbox; supplier balance is increased by the delta.
- * Handles overpayment corrections, supplier partial refunds, and data-entry mistakes.
- */
-ipcMain.handle('api:purchase:recordPaymentRefund', async (_event, input) => {
-  try {
-    if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
-    const result = await paymentController.recordPurchasePaymentRefund(input);
     return success(result);
   } catch (e) {
     return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);

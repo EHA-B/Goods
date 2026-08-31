@@ -21,8 +21,6 @@ export const purchasesService = {
     window.stockliteApi.purchases.recordPayment(input),
   reversePayment: (paymentId: number, reason: string) =>
     window.stockliteApi.purchases.reversePayment(paymentId, reason),
-  recordPaymentRefund: (input: unknown) =>
-    window.stockliteApi.purchases.recordPaymentRefund(input),
   getSalesDetails: (id: number) => window.stockliteApi.purchases.getSalesDetails(id),
   closeCommission: (id: number, input?: unknown) =>
     window.stockliteApi.purchases.closeCommission(id, input),

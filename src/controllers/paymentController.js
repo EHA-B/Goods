@@ -658,115 +658,6 @@ class PaymentController {
         }
     }
 
-    // ─── recordPurchasePaymentRefund ──────────────────────────────────────
-    //
-    // Corrects an overstated paid_amount on a purchase invoice.
-    // This is the accounting inverse of recordPurchasePayment:
-    //   • Money comes BACK IN to the cashbox (direction = 'in').
-    //   • Supplier balance INCREASES (they are less paid = we owe more / they owe us less).
-    //   • Invoice paid_amount DECREASES by the refund amount.
-    //
-    // Use cases: overpayment corrections, supplier refunds, data entry mistakes.
-
-    async recordPurchasePaymentRefund(input) {
-        const { purchase_invoice_id, cashbox_id, amount, payment_date, notes } = input ?? {};
-
-        if (!purchase_invoice_id) throw { code: 'VALIDATION_ERROR', message: 'purchase_invoice_id مطلوب' };
-        if (!cashbox_id)          throw { code: 'VALIDATION_ERROR', message: 'cashbox_id مطلوب' };
-        const validatedAmount = validatePositiveAmount(amount, 'amount');
-        const validatedDate   = validateDate(payment_date, 'payment_date');
-
-        const db = await dbmanager.init();
-
-        try {
-            await dbRun(db, 'BEGIN TRANSACTION');
-
-            // 1. Load and validate invoice
-            const invoice = await this._loadPurchaseInvoice(db, purchase_invoice_id);
-            const supplierId = invoice.supplier_id;
-
-            // 2. Validate refund does not exceed current paid amount
-            const currentPaid = normalizeAmount(invoice.paid_amount);
-            if (validatedAmount > currentPaid + 0.001) {
-                throw {
-                    code: 'REFUND_EXCEEDS_PAID',
-                    message: `مبلغ الاسترداد (${validatedAmount}) أكبر من المبلغ المدفوع حالياً (${currentPaid})`,
-                };
-            }
-
-            // 3. Load and validate cashbox
-            const cashbox = await this._loadActiveCashbox(db, cashbox_id);
-            const invoiceCurrency = normalizeCurrency(invoice.currency);
-            const invoiceRate     = normalizeExchangeRate(invoiceCurrency, invoice.exchange_rate);
-
-            // Handle cross-currency scenario
-            let paymentExchangeRate = invoiceRate;
-            let cashboxAmount       = validatedAmount;
-
-            if (cashbox.currency !== invoiceCurrency) {
-                if (!input.exchange_rate) {
-                    throw { code: 'MISSING_EXCHANGE_RATE', message: 'سعر الصرف مطلوب عند اختلاف عملة الصندوق عن الفاتورة' };
-                }
-                paymentExchangeRate = normalizeExchangeRate(cashbox.currency, input.exchange_rate);
-                const amountBaseFromInvoice = toBaseAmount(validatedAmount, invoiceRate);
-                cashboxAmount = normalizeAmount(amountBaseFromInvoice / paymentExchangeRate);
-            } else {
-                paymentExchangeRate = invoiceRate;
-            }
-            const amountBase = toBaseAmount(cashboxAmount, paymentExchangeRate);
-
-            // 4. Create payment record (purchase_refund type, positive amount, direction implied by type)
-            const { lastID: paymentId } = await dbRun(db,
-                `INSERT INTO payments
-                   (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
-                    status, notes, created_at, updated_at)
-                 VALUES ('supplier', ?, 'purchase_refund', ?, ?, ?, ?, ?, ?, ?, 'active', ?, datetime('now'), datetime('now'))`,
-                [supplierId, purchase_invoice_id, cashbox_id, cashboxAmount, cashbox.currency,
-                 paymentExchangeRate, amountBase, validatedDate, notes ?? null]
-            );
-
-            // 5. Add cashbox balance back (IN — money returns to us)
-            const cbResult = await this._updateCashboxBalance(
-                db, cashbox_id, +cashboxAmount, 'purchase_refund', purchase_invoice_id,
-                validatedDate, `استرداد / تصحيح دفعة فاتورة شراء #${invoice.invoice_number}`
-            );
-
-            // 6. Update payment with cashbox_transaction_id
-            await dbRun(db,
-                `UPDATE payments SET cashbox_transaction_id = ? WHERE id = ?`,
-                [cbResult.lastID, paymentId]
-            );
-
-            // 7. Restore supplier payable balance (increase — less was paid)
-            const partyBalance = await this._updatePartyBalance(db, 'supplier', supplierId, +amountBase);
-            await dbRun(db,
-                `UPDATE payments SET balance_before = ?, balance_after = ? WHERE id = ?`,
-                [partyBalance.balanceBefore, partyBalance.balanceAfter, paymentId]
-            );
-
-            // 8. Decrease invoice paid_amount
-            await this._updateInvoicePaymentState(db, 'purchase_invoices', purchase_invoice_id, -validatedAmount);
-
-            // 9. Activity log
-            await logActivity(db, 'purchase_payment_refund_recorded', 'payments', paymentId, {
-                purchase_invoice_id, amount: validatedAmount, cashbox_id,
-            });
-
-            await dbRun(db, 'COMMIT');
-
-            const payment         = await dbGet(db, 'SELECT * FROM payments WHERE id = ?', [paymentId]);
-            const updatedInvoice  = await dbGet(db, 'SELECT * FROM purchase_invoices WHERE id = ?', [purchase_invoice_id]);
-            const updatedCashbox  = await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [cashbox_id]);
-            const supplier        = await dbGet(db, 'SELECT * FROM suppliers WHERE id = ?', [supplierId]);
-
-            return { payment, invoice: updatedInvoice, supplier, cashbox: updatedCashbox };
-
-        } catch (err) {
-            await new Promise((res) => db.run('ROLLBACK', () => res()));
-            throw err;
-        }
-    }
-
     // ─── Read-only queries ────────────────────────────────────────────────
 
     async getSalePayments(invoiceId) {
@@ -791,7 +682,7 @@ class PaymentController {
              FROM payments p
              LEFT JOIN cashboxes c ON p.cashbox_id = c.id
              LEFT JOIN suppliers su ON p.party_type = 'supplier' AND p.party_id = su.id
-             WHERE p.invoice_id = ? AND p.payment_type IN ('purchase', 'purchase_refund')
+             WHERE p.invoice_id = ? AND p.payment_type = 'purchase'
              ORDER BY p.payment_date DESC, p.id DESC`,
             [invoiceId]
         );

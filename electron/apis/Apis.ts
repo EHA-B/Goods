@@ -1772,12 +1772,16 @@ ipcMain.handle('api:payment:recordPurchasePayment', async (_event, input) => {
  * Endpoint: api:payment:reverseSalePayment
  * Description: Reverses a sale payment: creates opposite cashbox movement, restores balances.
  */
-ipcMain.handle('api:payment:reverseSalePayment', async (_event, paymentId, reason) => {
+ipcMain.handle('api:payment:reverseSalePayment', async (_event, paymentId, reason, password) => {
   try {
-    const result = await paymentController.reverseSalePayment(paymentId, reason);
+    const user = getCurrentUser();
+    if (!user) return failure('UNAUTHENTICATED', 'Authentication is required');
+    await authController.verifyPassword(user.id, password);
+    const result = await paymentController.reverseSalePayment(paymentId, reason, user.id);
     return success(result);
   } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+    console.error('[payment-reversal:sale-ipc]', { paymentId, code: e?.code, message: e?.message });
+    return failure(e.code || 'PAYMENT_REVERSAL_FAILED', e.message || 'Sale payment reversal failed', e.details);
   }
 });
 
@@ -1785,12 +1789,16 @@ ipcMain.handle('api:payment:reverseSalePayment', async (_event, paymentId, reaso
  * Endpoint: api:payment:reversePurchasePayment
  * Description: Reverses a purchase payment: creates opposite cashbox movement, restores balances.
  */
-ipcMain.handle('api:payment:reversePurchasePayment', async (_event, paymentId, reason) => {
+ipcMain.handle('api:payment:reversePurchasePayment', async (_event, paymentId, reason, password) => {
   try {
-    const result = await paymentController.reversePurchasePayment(paymentId, reason);
+    const user = getCurrentUser();
+    if (!user) return failure('UNAUTHENTICATED', 'Authentication is required');
+    await authController.verifyPassword(user.id, password);
+    const result = await paymentController.reversePurchasePayment(paymentId, reason, user.id);
     return success(result);
   } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+    console.error('[payment-reversal:purchase-ipc]', { paymentId, code: e?.code, message: e?.message });
+    return failure(e.code || 'PAYMENT_REVERSAL_FAILED', e.message || 'Purchase payment reversal failed', e.details);
   }
 });
 
@@ -2129,12 +2137,16 @@ ipcMain.handle('api:purchase:recordPayment', async (_event, input) => {
  * Endpoint: api:purchase:reversePayment
  * Description: Alias for api:payment:reversePurchasePayment to satisfy unified API.
  */
-ipcMain.handle('api:purchase:reversePayment', async (_event, paymentId, reason) => {
+ipcMain.handle('api:purchase:reversePayment', async (_event, paymentId, reason, password) => {
   try {
-    const result = await paymentController.reversePurchasePayment(paymentId, reason);
+    const user = getCurrentUser();
+    if (!user) return failure('UNAUTHENTICATED', 'Authentication is required');
+    await authController.verifyPassword(user.id, password);
+    const result = await paymentController.reversePurchasePayment(paymentId, reason, user.id);
     return success(result);
   } catch (e) {
-    return failure(e.code || 'UNKNOWN_ERROR', e.message || 'Unknown error', e.details);
+    console.error('[payment-reversal:purchase-alias-ipc]', { paymentId, code: e?.code, message: e?.message });
+    return failure(e.code || 'PAYMENT_REVERSAL_FAILED', e.message || 'Purchase payment reversal failed', e.details);
   }
 });
 

@@ -25,6 +25,7 @@ const {
     toBaseAmount,
     assertCashboxCurrency,
 } = require('./utils/currencyUtils');
+const { reversePaymentInTransaction } = require('./paymentReversalService');
 
 
 async function ensureInvoiceEditAuditColumns(db) {
@@ -821,44 +822,28 @@ class PurchaseInvoiceController {
                 };
             }
 
-            // 1. Reverse active purchase payments
+            // 1. Reverse active purchase payments through the same authoritative payment reversal service.
             const activePayments = await dbAll(db,
                 `SELECT * FROM payments WHERE invoice_id = ? AND payment_type = 'purchase' AND status = 'active'`,
                 [id]
             );
             for (const payment of activePayments) {
-                const amount = normalizeAmount(payment.amount);
-                // Mark reversed
-                await dbRun(db,
-                    `UPDATE payments SET status = 'reversed', reversal_reason = ?, updated_at = datetime('now') WHERE id = ?`,
-                    [reason, payment.id]
-                );
-                // Restore cashbox balance
-                const cashbox = await dbGet(db, 'SELECT balance FROM cashboxes WHERE id = ?', [payment.cashbox_id]);
-                const balBefore = normalizeAmount(cashbox.balance);
-                const balAfter  = Math.round((balBefore + amount) * 100) / 100;
-                await dbRun(db, `UPDATE cashboxes SET balance = ?, updated_at = datetime('now') WHERE id = ?`, [balAfter, payment.cashbox_id]);
-                await dbRun(db,
-                    `INSERT INTO cashbox_transactions
-                       (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
-                     VALUES (?, 'reversal', ?, ?, 'in', ?, ?, date('now'), ?, datetime('now'), datetime('now'))`,
-                    [payment.cashbox_id, payment.id, amount, balBefore, balAfter, `إلغاء فاتورة شراء #${invoice.invoice_number}`]
-                );
+                await reversePaymentInTransaction(db, {
+                    paymentId: payment.id,
+                    expectedType: 'purchase',
+                    reason: `إلغاء الفاتورة: ${reason}`,
+                });
             }
 
-            // 2. Restore supplier balance (reverse the entire payable effect)
-            const totalPaid  = normalizeAmount(invoice.paid_amount);
-            const totalAmount = normalizeAmount(invoice.total);
-            // Supplier balance was increased by total, decreased by each payment.
-            // Net supplier effect = total - paid = remaining_amount
-            const remainingBalance = toBaseAmount(
-                Math.max(0, totalAmount - totalPaid),
+            // 2. Remove the full original supplier payable after payments have been financially reversed.
+            const totalBase = toBaseAmount(
+                normalizeAmount(invoice.total),
                 normalizeExchangeRate(invoice.currency, invoice.exchange_rate)
             );
-            if (remainingBalance > 0) {
+            if (totalBase > 0) {
                 await dbRun(db,
                     `UPDATE suppliers SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`,
-                    [remainingBalance, invoice.supplier_id]
+                    [totalBase, invoice.supplier_id]
                 );
             }
 

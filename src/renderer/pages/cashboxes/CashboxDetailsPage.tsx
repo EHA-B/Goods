@@ -291,6 +291,8 @@ export default function CashboxDetailsPage() {
                   const isTransfer   = m.reference_type === "transfer";
                   const isOpening    = m.reference_type === "opening_balance";
                   const isReversal   = m.reference_type === "reversal";
+                  const isPaymentMovement = m.reference_type === "purchase" || m.reference_type === "sale";
+                  const isAlreadyReversed = Boolean(m.reversal_transaction_id);
 
                   return (
                     <DataTableRow key={m.id}>
@@ -339,7 +341,7 @@ export default function CashboxDetailsPage() {
                       <DataTableCell className="font-bold">{money(m.balance_after, currency)}</DataTableCell>
                       <DataTableCell className="max-w-xs truncate">{m.notes || m.reversal_reason || "—"}</DataTableCell>
                       <DataTableCell>
-                        {isReversible && (
+                        {isReversible && !isAlreadyReversed && (
                           <Button
                             size="sm"
                             variant="secondary"
@@ -358,6 +360,18 @@ export default function CashboxDetailsPage() {
                           >
                             عكس التحويل
                           </Button>
+                        )}
+                        {isPaymentMovement && m.reference_id && !isAlreadyReversed && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => nav(m.reference_type === "purchase" ? `/purchases/${m.reference_id}` : `/sales/${m.reference_id}`)}
+                          >
+                            إدارة الدفعة
+                          </Button>
+                        )}
+                        {isAlreadyReversed && !isReversal && (
+                          <span className="text-xs font-semibold text-[var(--text-muted)]">تم عكس الحركة</span>
                         )}
                         {(isOpening || isReversal) && (
                           <span className="text-xs text-[var(--text-muted)]">مقيّد</span>

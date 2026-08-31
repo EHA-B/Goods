@@ -28,6 +28,7 @@ const {
     toBaseAmount,
     assertCashboxCurrency,
 } = require('./utils/currencyUtils');
+const { reversePaymentInTransaction } = require('./paymentReversalService');
 
 class PaymentController {
 
@@ -476,185 +477,51 @@ class PaymentController {
 
     // ─── reverseSalePayment ───────────────────────────────────────────────
 
-    async reverseSalePayment(paymentId, reason) {
-        if (!paymentId) throw { code: 'VALIDATION_ERROR', message: 'paymentId مطلوب' };
-        if (!reason?.trim()) throw { code: 'VALIDATION_ERROR', message: 'سبب الإلغاء مطلوب' };
-
+    async reverseSalePayment(paymentId, reason, userId = null) {
         const db = await dbmanager.init();
-
         try {
-            await dbRun(db, 'BEGIN TRANSACTION');
-
-            const payment = await dbGet(db, 'SELECT * FROM payments WHERE id = ?', [paymentId]);
-            if (!payment)                    throw { code: 'NOT_FOUND', message: 'الدفعة غير موجودة' };
-            if (payment.status === 'reversed') throw { code: 'PAYMENT_ALREADY_REVERSED', message: 'هذه الدفعة محوّلة مسبقًا' };
-            if (payment.payment_type !== 'sale') throw { code: 'VALIDATION_ERROR', message: 'هذه الدفعة ليست دفعة بيع' };
-
-            const amount = normalizeAmount(payment.amount);
-            const paymentDate = payment.payment_date || new Date().toISOString().slice(0, 10);
-            const paymentCurrency = normalizeCurrency(payment.currency || 'SYP');
-            const paymentRate = payment.exchange_rate ? Number(payment.exchange_rate) : 1;
-            const paymentAmountBase = payment.amount_base ? normalizeAmount(payment.amount_base) : toBaseAmount(amount, paymentRate);
-
-            // Mark original as reversed
-            await dbRun(db,
-                `UPDATE payments SET status = 'reversed', reversal_reason = ?, updated_at = datetime('now') WHERE id = ?`,
-                [reason, paymentId]
-            );
-
-            // Create reversal payment record
-            const { lastID: reversalId } = await dbRun(db,
-                `INSERT INTO payments
-                   (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
-                    status, reversed_payment_id, reversal_reason, notes, created_at, updated_at)
-                 VALUES (?, ?, 'sale', ?, ?, ?, ?, ?, ?, ?, 'reversed', ?, ?, ?, datetime('now'), datetime('now'))`,
-                [payment.party_type || 'customer', payment.party_id, payment.invoice_id, payment.cashbox_id,
-                 amount, paymentCurrency, paymentRate,
-                 paymentAmountBase, paymentDate, paymentId, reason, `إلغاء دفعة #${paymentId}`]
-            );
-
-            // Link original to reversal
-            await dbRun(db,
-                `UPDATE payments SET reversed_payment_id = ? WHERE id = ?`,
-                [reversalId, paymentId]
-            );
-
-            // Deduct from cashbox (reversal of 'in' movement)
-            if (payment.cashbox_id) {
-                const cashbox = await dbGet(db, 'SELECT balance FROM cashboxes WHERE id = ?', [payment.cashbox_id]);
-                if (cashbox) {
-                    const balanceBefore = normalizeAmount(cashbox.balance);
-                    const balanceAfter  = Math.round((balanceBefore - amount) * 100) / 100;
-                    await dbRun(db, `UPDATE cashboxes SET balance = ?, updated_at = datetime('now') WHERE id = ?`, [balanceAfter, payment.cashbox_id]);
-                    await dbRun(db,
-                        `INSERT INTO cashbox_transactions
-                           (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
-                         VALUES (?, 'reversal', ?, ?, 'out', ?, ?, date('now'), ?, datetime('now'), datetime('now'))`,
-                        [payment.cashbox_id, paymentId, amount, balanceBefore, balanceAfter, `إلغاء دفعة بيع #${paymentId}`]
-                    );
-                }
-            }
-
-            // Restore customer receivable balance (increase balance back)
-            if (payment.party_id) {
-                await this._updatePartyBalance(db, 'customer', payment.party_id, normalizeAmount(payment.amount_base ?? amount));
-            }
-
-            // Recalculate invoice
-            if (payment.invoice_id) {
-                const invoice = await dbGet(db, 'SELECT * FROM sale_invoices WHERE id = ?', [payment.invoice_id]);
-                if (invoice) {
-                    const invoiceRate = normalizeExchangeRate(invoice.currency, invoice.exchange_rate);
-                    const invoicePaidAmount = normalizeCurrency(payment.currency) === normalizeCurrency(invoice.currency)
-                        ? amount
-                        : normalizeAmount((payment.amount_base || toBaseAmount(amount, payment.exchange_rate)) / invoiceRate);
-                    await this._updateInvoicePaymentState(db, 'sale_invoices', payment.invoice_id, -invoicePaidAmount);
-                }
-            }
-
-            await logActivity(db, 'sale_payment_reversed', 'payments', paymentId, { reason, amount });
-
+            await dbRun(db, 'BEGIN IMMEDIATE TRANSACTION');
+            const result = await reversePaymentInTransaction(db, {
+                paymentId,
+                expectedType: 'sale',
+                reason,
+                userId,
+            });
             await dbRun(db, 'COMMIT');
-
-            const updatedInvoice = payment.invoice_id ? await dbGet(db, 'SELECT * FROM sale_invoices WHERE id = ?', [payment.invoice_id]) : null;
-            const updatedCashbox = payment.cashbox_id ? await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [payment.cashbox_id]) : null;
-            const reversedPayment = await dbGet(db, 'SELECT * FROM payments WHERE id = ?', [paymentId]);
-
-            return { reversedPayment, invoice: updatedInvoice, cashbox: updatedCashbox };
-
+            return result;
         } catch (err) {
             await new Promise((res) => db.run('ROLLBACK', () => res()));
-            throw err;
+            console.error('[payment-reversal:sale]', {
+                paymentId,
+                code: err?.code,
+                message: err?.message,
+            });
+            throw err?.code ? err : { code: 'PAYMENT_REVERSAL_FAILED', message: 'تعذر عكس دفعة البيع', details: err?.message };
         }
     }
 
     // ─── reversePurchasePayment ───────────────────────────────────────────
 
-    async reversePurchasePayment(paymentId, reason) {
-        if (!paymentId) throw { code: 'VALIDATION_ERROR', message: 'paymentId مطلوب' };
-        if (!reason?.trim()) throw { code: 'VALIDATION_ERROR', message: 'سبب الإلغاء مطلوب' };
-
+    async reversePurchasePayment(paymentId, reason, userId = null) {
         const db = await dbmanager.init();
-
         try {
-            await dbRun(db, 'BEGIN TRANSACTION');
-
-            const payment = await dbGet(db, 'SELECT * FROM payments WHERE id = ?', [paymentId]);
-            if (!payment)                    throw { code: 'NOT_FOUND', message: 'الدفعة غير موجودة' };
-            if (payment.status === 'reversed') throw { code: 'PAYMENT_ALREADY_REVERSED', message: 'هذه الدفعة محوّلة مسبقًا' };
-            if (payment.payment_type !== 'purchase') throw { code: 'VALIDATION_ERROR', message: 'هذه الدفعة ليست دفعة شراء' };
-
-            const amount = normalizeAmount(payment.amount);
-            const paymentDate = payment.payment_date || new Date().toISOString().slice(0, 10);
-            const paymentCurrency = normalizeCurrency(payment.currency || 'SYP');
-            const paymentRate = payment.exchange_rate ? Number(payment.exchange_rate) : 1;
-            const paymentAmountBase = payment.amount_base ? normalizeAmount(payment.amount_base) : toBaseAmount(amount, paymentRate);
-
-            // Mark original reversed
-            await dbRun(db,
-                `UPDATE payments SET status = 'reversed', reversal_reason = ?, updated_at = datetime('now') WHERE id = ?`,
-                [reason, paymentId]
-            );
-
-            // Create reversal record
-            const { lastID: reversalId } = await dbRun(db,
-                `INSERT INTO payments
-                   (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
-                    status, reversed_payment_id, reversal_reason, notes, created_at, updated_at)
-                 VALUES (?, ?, 'purchase', ?, ?, ?, ?, ?, ?, ?, 'reversed', ?, ?, ?, datetime('now'), datetime('now'))`,
-                [payment.party_type || 'supplier', payment.party_id, payment.invoice_id, payment.cashbox_id,
-                 amount, paymentCurrency, paymentRate,
-                 paymentAmountBase, paymentDate, paymentId, reason, `إلغاء دفعة #${paymentId}`]
-            );
-
-            await dbRun(db, `UPDATE payments SET reversed_payment_id = ? WHERE id = ?`, [reversalId, paymentId]);
-
-            // Restore cashbox balance (add money back)
-            if (payment.cashbox_id) {
-                const cashbox = await dbGet(db, 'SELECT balance FROM cashboxes WHERE id = ?', [payment.cashbox_id]);
-                if (cashbox) {
-                    const balanceBefore = normalizeAmount(cashbox.balance);
-                    const balanceAfter  = Math.round((balanceBefore + amount) * 100) / 100;
-                    await dbRun(db, `UPDATE cashboxes SET balance = ?, updated_at = datetime('now') WHERE id = ?`, [balanceAfter, payment.cashbox_id]);
-                    await dbRun(db,
-                        `INSERT INTO cashbox_transactions
-                           (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
-                         VALUES (?, 'reversal', ?, ?, 'in', ?, ?, date('now'), ?, datetime('now'), datetime('now'))`,
-                        [payment.cashbox_id, paymentId, amount, balanceBefore, balanceAfter, `إلغاء دفعة شراء #${paymentId}`]
-                    );
-                }
-            }
-
-            // Restore supplier payable balance (increase balance back)
-            if (payment.party_id) {
-                await this._updatePartyBalance(db, 'supplier', payment.party_id, normalizeAmount(payment.amount_base ?? amount));
-            }
-
-            // Recalculate invoice
-            if (payment.invoice_id) {
-                const invoice = await dbGet(db, 'SELECT * FROM purchase_invoices WHERE id = ?', [payment.invoice_id]);
-                if (invoice) {
-                    const invoiceRate = normalizeExchangeRate(invoice.currency, invoice.exchange_rate);
-                    const invoicePaidAmount = normalizeCurrency(payment.currency) === normalizeCurrency(invoice.currency)
-                        ? amount
-                        : normalizeAmount((payment.amount_base || toBaseAmount(amount, payment.exchange_rate)) / invoiceRate);
-                    await this._updateInvoicePaymentState(db, 'purchase_invoices', payment.invoice_id, -invoicePaidAmount);
-                }
-            }
-
-            await logActivity(db, 'purchase_payment_reversed', 'payments', paymentId, { reason, amount });
-
+            await dbRun(db, 'BEGIN IMMEDIATE TRANSACTION');
+            const result = await reversePaymentInTransaction(db, {
+                paymentId,
+                expectedType: 'purchase',
+                reason,
+                userId,
+            });
             await dbRun(db, 'COMMIT');
-
-            const updatedInvoice = payment.invoice_id ? await dbGet(db, 'SELECT * FROM purchase_invoices WHERE id = ?', [payment.invoice_id]) : null;
-            const updatedCashbox = payment.cashbox_id ? await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [payment.cashbox_id]) : null;
-            const reversedPayment = await dbGet(db, 'SELECT * FROM payments WHERE id = ?', [paymentId]);
-
-            return { reversedPayment, invoice: updatedInvoice, cashbox: updatedCashbox };
-
+            return result;
         } catch (err) {
             await new Promise((res) => db.run('ROLLBACK', () => res()));
-            throw err;
+            console.error('[payment-reversal:purchase]', {
+                paymentId,
+                code: err?.code,
+                message: err?.message,
+            });
+            throw err?.code ? err : { code: 'PAYMENT_REVERSAL_FAILED', message: 'تعذر عكس دفعة الشراء', details: err?.message };
         }
     }
 

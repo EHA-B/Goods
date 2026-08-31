@@ -592,7 +592,8 @@ class CashboxController {
                         WHEN ct.reference_type = 'sale' THEN si.invoice_number
                         WHEN ct.reference_type = 'purchase' THEN pi.invoice_number
                         ELSE NULL
-                    END as reference_display_id
+                    END as reference_display_id,
+                    (SELECT r.id FROM cashbox_transactions r WHERE r.reversed_transaction_id = ct.id LIMIT 1) as reversal_transaction_id
              FROM cashbox_transactions ct
              LEFT JOIN sale_invoices si ON ct.reference_type = 'sale' AND ct.reference_id = si.id
              LEFT JOIN purchase_invoices pi ON ct.reference_type = 'purchase' AND ct.reference_id = pi.id
@@ -636,7 +637,8 @@ class CashboxController {
                         WHEN ct.reference_type = 'sale' THEN si.invoice_number
                         WHEN ct.reference_type = 'purchase' THEN pi.invoice_number
                         ELSE NULL
-                    END as reference_display_id
+                    END as reference_display_id,
+                    (SELECT r.id FROM cashbox_transactions r WHERE r.reversed_transaction_id = ct.id LIMIT 1) as reversal_transaction_id
              FROM cashbox_transactions ct
              LEFT JOIN sale_invoices si ON ct.reference_type = 'sale' AND ct.reference_id = si.id
              LEFT JOIN purchase_invoices pi ON ct.reference_type = 'purchase' AND ct.reference_id = pi.id

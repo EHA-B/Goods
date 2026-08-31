@@ -26,6 +26,7 @@ const {
     toBaseAmount,
     assertCashboxCurrency,
 } = require('./utils/currencyUtils');
+const { reversePaymentInTransaction } = require('./paymentReversalService');
 
 
 async function ensureInvoiceEditAuditColumns(db) {
@@ -527,44 +528,29 @@ class SaleInvoiceController {
             if (!invoice) throw { code: 'NOT_FOUND', message: 'فاتورة البيع غير موجودة' };
             if (invoice.status === 'cancelled') throw { code: 'SALE_ALREADY_CANCELLED', message: 'الفاتورة ملغاة مسبقًا' };
 
-            // 1. Reverse active sale payments
+            // 1. Reverse active sale payments through the same authoritative payment reversal service.
             const activePayments = await dbAll(db,
                 `SELECT * FROM payments WHERE invoice_id = ? AND payment_type = 'sale' AND status = 'active'`,
                 [id]
             );
             for (const payment of activePayments) {
-                const amount = normalizeAmount(payment.amount);
-                await dbRun(db,
-                    `UPDATE payments SET status = 'reversed', reversal_reason = ?, updated_at = datetime('now') WHERE id = ?`,
-                    [reason, payment.id]
-                );
-                // Deduct from cashbox (reverse of 'in')
-                const cashbox = await dbGet(db, 'SELECT balance, isActive FROM cashboxes WHERE id = ?', [payment.cashbox_id]);
-                if (!cashbox) throw { code: 'CASHBOX_NOT_FOUND', message: 'صندوق الدفعة غير موجود' };
-                if (!cashbox.isActive) throw { code: 'INACTIVE_CASHBOX', message: 'صندوق الدفعة غير نشط' };
-                const balBefore = normalizeAmount(cashbox.balance);
-                if (balBefore < amount - 0.001) {
-                    throw { code: 'SALE_CANNOT_BE_CANCELLED_CASHBOX_BALANCE', message: 'لا يمكن إلغاء الفاتورة لأن رصيد الصندوق لا يكفي لعكس الدفعات' };
-                }
-                const balAfter  = Math.round((balBefore - amount) * 100) / 100;
-                await dbRun(db, `UPDATE cashboxes SET balance = ?, updated_at = datetime('now') WHERE id = ?`, [balAfter, payment.cashbox_id]);
-                await dbRun(db,
-                    `INSERT INTO cashbox_transactions
-                       (cashbox_id, reference_type, reference_id, amount, direction, balance_before, balance_after, transaction_date, notes, created_at, updated_at)
-                     VALUES (?, 'reversal', ?, ?, 'out', ?, ?, date('now'), ?, datetime('now'), datetime('now'))`,
-                    [payment.cashbox_id, payment.id, amount, balBefore, balAfter, `إلغاء فاتورة بيع #${invoice.invoice_number}`]
-                );
+                await reversePaymentInTransaction(db, {
+                    paymentId: payment.id,
+                    expectedType: 'sale',
+                    reason: `إلغاء الفاتورة: ${reason}`,
+                });
             }
 
-            // 2. Restore customer balance (net effect = remaining receivable)
+            // 2. Remove the full original customer receivable after payments have been financially reversed.
             if (invoice.customer_id) {
-                const totalAmount = normalizeAmount(invoice.total);
-                const totalPaid   = normalizeAmount(invoice.paid_amount);
-                const remainingBalance = toBaseAmount(Math.max(0, totalAmount - totalPaid), normalizeExchangeRate(invoice.currency, invoice.exchange_rate));
-                if (remainingBalance > 0) {
+                const totalBase = toBaseAmount(
+                    normalizeAmount(invoice.total),
+                    normalizeExchangeRate(invoice.currency, invoice.exchange_rate)
+                );
+                if (totalBase > 0) {
                     await dbRun(db,
                         `UPDATE customers SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`,
-                        [remainingBalance, invoice.customer_id]
+                        [totalBase, invoice.customer_id]
                     );
                 }
             }

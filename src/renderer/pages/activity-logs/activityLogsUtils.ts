@@ -33,6 +33,11 @@ export const activityFieldLabels: Record<string, string> = {
   created_at: "تاريخ الإنشاء", updated_at: "آخر تحديث", received_date: "تاريخ الاستلام", expiry_date: "تاريخ الانتهاء",
   isActive: "نشط", is_edited: "معدّلة", edit_count: "عدد التعديلات", last_edited_at: "آخر تعديل", last_edited_by: "آخر مستخدم عدّل",
   added_items: "عدد الأصناف المضافة", added_total: "إجمالي الإضافة", settlement_id: "رقم التسوية",
+  payment_id: "رقم الدفعة", invoice_id: "رقم الفاتورة", amount_base: "المبلغ بالعملة الأساسية",
+  cashbox_transaction_id: "حركة الصندوق الأصلية", reversal_cashbox_transaction_id: "حركة الصندوق العكسية",
+  old_paid_amount: "المدفوع قبل العكس", new_paid_amount: "المدفوع بعد العكس",
+  old_remaining_amount: "المتبقي قبل العكس", new_remaining_amount: "المتبقي بعد العكس",
+  old_status: "الحالة قبل العكس", new_status: "الحالة بعد العكس", user_id: "المستخدم",
 };
 
 export function activityFieldLabel(key: string) {
@@ -43,7 +48,7 @@ const valueLabels: Record<string, string> = {
   active: "فعال", cancelled: "ملغاة", confirmed: "مؤكدة", paid: "مدفوعة", partially_paid: "مدفوعة جزئيًا",
   draft: "مسودة", settled: "تمت التسوية", pending: "بانتظار التسوية", reversed: "معكوسة",
   standard: "عادية", consignment: "أمانة", income: "إيراد", expense: "مصروف", in: "دخول", out: "خروج",
-  sale: "مبيعات", purchase: "مشتريات", customer: "عميل", supplier: "مورد", company: "علينا", SYP: "ل.س", USD: "دولار",
+  sale: "مبيعات", purchase: "مشتريات", sale_reversal: "عكس دفعة مبيعات", purchase_reversal: "عكس دفعة مشتريات", customer: "عميل", supplier: "مورد", company: "علينا", SYP: "ل.س", USD: "دولار",
 };
 export function stringifyValue(value:unknown){
   if(value===null||value===undefined||value==="") return "—";

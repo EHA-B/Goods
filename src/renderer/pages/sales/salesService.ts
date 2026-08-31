@@ -66,6 +66,6 @@ export const salesService = {
 
   getProducts: async () => (await window.stockliteApi.products.list()).filter((item) => Boolean(item.isActive)),
 
-  reversePayment: (paymentId: number, reason: string) =>
-    window.stockliteApi.payments.reverseSale(paymentId, reason),
+  reversePayment: (paymentId: number, reason: string, password: string) =>
+    window.stockliteApi.payments.reverseSale(paymentId, reason, password),
 };

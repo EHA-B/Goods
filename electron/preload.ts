@@ -294,10 +294,10 @@ const stockliteApi = {
       invokeApi("api:payment:recordGeneralReceipt", input),
     recordGeneralPayment: (input: unknown) =>
       invokeApi("api:payment:recordGeneralPayment", input),
-    reverseSale: (paymentId: number, reason: string) =>
-      invokeApi("api:payment:reverseSalePayment", paymentId, reason),
-    reversePurchase: (paymentId: number, reason: string) =>
-      invokeApi("api:payment:reversePurchasePayment", paymentId, reason),
+    reverseSale: (paymentId: number, reason: string, password: string) =>
+      invokeApi("api:payment:reverseSalePayment", paymentId, reason, password),
+    reversePurchase: (paymentId: number, reason: string, password: string) =>
+      invokeApi("api:payment:reversePurchasePayment", paymentId, reason, password),
   },
 
   purchases: {
@@ -315,8 +315,8 @@ const stockliteApi = {
       invokeApi("api:purchase:cancel", id, reason),
     recordPayment: (input: unknown) =>
       invokeApi("api:purchase:recordPayment", input),
-    reversePayment: (paymentId: number, reason: string) =>
-      invokeApi("api:purchase:reversePayment", paymentId, reason),
+    reversePayment: (paymentId: number, reason: string, password: string) =>
+      invokeApi("api:purchase:reversePayment", paymentId, reason, password),
     deleteDraft: (id: number) =>
       invokeApi("api:purchase:deleteDraft", id),
     getSalesDetails: (id: number) =>

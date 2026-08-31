@@ -66,6 +66,8 @@ const PAYMENT_TYPE_LABELS: Record<
 > = {
   sale: "دفعة مبيعات",
   purchase: "دفعة مشتريات",
+  sale_reversal: "عكس دفعة مبيعات",
+  purchase_reversal: "عكس دفعة مشتريات",
   general_receipt: "سند قبض عام",
   general_payment: "سند دفع عام",
 };
@@ -175,10 +177,9 @@ export default function PaymentsPage() {
             );
 
           const isReceipt =
-            paymentType ===
-              "sale" ||
-            paymentType ===
-              "general_receipt";
+            paymentType === "sale" ||
+            paymentType === "general_receipt" ||
+            paymentType === "purchase_reversal";
 
           const itemCurrency =
             String(
@@ -413,6 +414,14 @@ export default function PaymentsPage() {
                     "purchase",
                   label:
                     "دفعات المشتريات",
+                },
+                {
+                  value: "sale_reversal",
+                  label: "عكس دفعات المبيعات",
+                },
+                {
+                  value: "purchase_reversal",
+                  label: "عكس دفعات المشتريات",
                 },
                 {
                   value:
@@ -651,10 +660,9 @@ export default function PaymentsPage() {
                 {paginatedItems.map(
                   (payment) => {
                     const isReceipt =
-                      payment.payment_type ===
-                        "sale" ||
-                      payment.payment_type ===
-                        "general_receipt";
+                      payment.payment_type === "sale" ||
+                      payment.payment_type === "general_receipt" ||
+                      payment.payment_type === "purchase_reversal";
 
                     const account =
                       payment.customer_name ||
@@ -696,6 +704,7 @@ export default function PaymentsPage() {
                                 .payment_type
                             ] ??
                               payment.payment_type}
+                            {payment.status === "reversed" ? " — معكوسة" : ""}
                           </span>
                         </DataTableCell>
 

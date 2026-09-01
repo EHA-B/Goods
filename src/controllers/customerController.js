@@ -10,6 +10,24 @@ class CustomerController {
     }
 
     const db = await dbmanager.init();
+
+    // Prevent duplicate customer names (case-insensitive)
+    const existingCustomer = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT id FROM customers WHERE LOWER(TRIM(name)) = LOWER(?)`,
+        [input.name.trim()],
+        (err, row) => {
+          if (err) return reject(err);
+          resolve(row);
+        }
+      );
+    });
+    if (existingCustomer) {
+      const err = new Error('يوجد عميل بنفس الاسم بالفعل');
+      err.code = 'DUPLICATE_NAME';
+      throw err;
+    }
+
     const sql = `
       INSERT INTO customers (
         name, phone, email, address, balance, notes, isActive, created_at, updated_at
@@ -100,6 +118,29 @@ class CustomerController {
       const err = new Error('No fields provided to update');
       err.code = 'VALIDATION_ERROR';
       throw err;
+    }
+
+    // Prevent duplicate customer names on rename (case-insensitive)
+    if (input && Object.prototype.hasOwnProperty.call(input, 'name')) {
+      const trimmedName = String(input.name).trim();
+      if (trimmedName) {
+        const db2 = await dbmanager.init();
+        const duplicate = await new Promise((resolve, reject) => {
+          db2.get(
+            `SELECT id FROM customers WHERE LOWER(TRIM(name)) = LOWER(?) AND id <> ?`,
+            [trimmedName, id],
+            (err, row) => {
+              if (err) return reject(err);
+              resolve(row);
+            }
+          );
+        });
+        if (duplicate) {
+          const err = new Error('يوجد عميل بنفس الاسم بالفعل');
+          err.code = 'DUPLICATE_NAME';
+          throw err;
+        }
+      }
     }
 
     sets.push(`updated_at = datetime('now')`);

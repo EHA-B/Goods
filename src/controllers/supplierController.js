@@ -10,6 +10,25 @@ class SupplierController {
             throw err;
         }
         const db = await dbmanager.init();
+
+        // Prevent duplicate supplier names (case-insensitive)
+        const trimmedName = String(input.name).trim();
+        const existingSupplier = await new Promise((resolve, reject) => {
+            db.get(
+                `SELECT id FROM suppliers WHERE LOWER(TRIM(name)) = LOWER(?)`,
+                [trimmedName],
+                (err, row) => {
+                    if (err) return reject(err);
+                    resolve(row);
+                }
+            );
+        });
+        if (existingSupplier) {
+            const err = new Error('يوجد مورد بنفس الاسم بالفعل');
+            err.code = 'DUPLICATE_NAME';
+            throw err;
+        }
+
         const sql = `
             INSERT INTO suppliers (name, phone, email, address, balance, notes, isActive, created_at, updated_at)
             VALUES (?,?,?,?,?,?,?, datetime('now'), datetime('now'))
@@ -88,6 +107,30 @@ class SupplierController {
             err.code = 'VALIDATION_ERROR';
             throw err;
         }
+
+        // Prevent duplicate supplier names on rename (case-insensitive)
+        if (input && Object.prototype.hasOwnProperty.call(input, 'name')) {
+            const trimmedName = String(input.name).trim();
+            if (trimmedName) {
+                const db2 = await dbmanager.init();
+                const duplicate = await new Promise((resolve, reject) => {
+                    db2.get(
+                        `SELECT id FROM suppliers WHERE LOWER(TRIM(name)) = LOWER(?) AND id <> ?`,
+                        [trimmedName, id],
+                        (err, row) => {
+                            if (err) return reject(err);
+                            resolve(row);
+                        }
+                    );
+                });
+                if (duplicate) {
+                    const err = new Error('يوجد مورد بنفس الاسم بالفعل');
+                    err.code = 'DUPLICATE_NAME';
+                    throw err;
+                }
+            }
+        }
+
         sets.push(`updated_at = datetime('now')`);
         const sql = `UPDATE suppliers SET ${sets.join(', ')} WHERE id = ?`;
         params.push(id);

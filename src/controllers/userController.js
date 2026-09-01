@@ -10,6 +10,25 @@ class UserController {
             throw err;
         }
         const db = await dbmanager.init();
+
+        // Prevent duplicate usernames (case-insensitive)
+        const trimmedUsername = String(input.username).trim();
+        const existingUser = await new Promise((resolve, reject) => {
+            db.get(
+                `SELECT id FROM users WHERE LOWER(TRIM(username)) = LOWER(?)`,
+                [trimmedUsername],
+                (err, row) => {
+                    if (err) return reject(err);
+                    resolve(row);
+                }
+            );
+        });
+        if (existingUser) {
+            const err = new Error('اسم المستخدم موجود بالفعل');
+            err.code = 'DUPLICATE_USERNAME';
+            throw err;
+        }
+
         const sql = `
             INSERT INTO users (username, password_hash, full_name, email, phone, role, isActive, last_login, created_at, updated_at)
             VALUES (?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))
@@ -90,6 +109,30 @@ class UserController {
             err.code = 'VALIDATION_ERROR';
             throw err;
         }
+
+        // Prevent duplicate usernames on rename (case-insensitive)
+        if (input && Object.prototype.hasOwnProperty.call(input, 'username')) {
+            const trimmedUsername = String(input.username).trim();
+            if (trimmedUsername) {
+                const db2 = await dbmanager.init();
+                const duplicate = await new Promise((resolve, reject) => {
+                    db2.get(
+                        `SELECT id FROM users WHERE LOWER(TRIM(username)) = LOWER(?) AND id <> ?`,
+                        [trimmedUsername, id],
+                        (err, row) => {
+                            if (err) return reject(err);
+                            resolve(row);
+                        }
+                    );
+                });
+                if (duplicate) {
+                    const err = new Error('اسم المستخدم موجود بالفعل');
+                    err.code = 'DUPLICATE_USERNAME';
+                    throw err;
+                }
+            }
+        }
+
         sets.push(`updated_at = datetime('now')`);
         const sql = `UPDATE users SET ${sets.join(', ')} WHERE id = ?`;
         params.push(id);

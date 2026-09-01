@@ -109,6 +109,7 @@ type CashboxMovementRecord = {
   balance_after: number | null;
   transfer_group_id: string | null;
   reversed_transaction_id: number | null;
+  reversal_transaction_id?: number | null;
   reversal_reason: string | null;
   transaction_date: string;
   notes: string | null;
@@ -199,7 +200,7 @@ type PaymentRecord = {
   id: number;
   party_type: 'customer' | 'supplier' | null;
   party_id: number | null;
-  payment_type: 'sale' | 'purchase';
+  payment_type: 'sale' | 'purchase' | 'sale_reversal' | 'purchase_reversal' | 'general_receipt' | 'general_payment';
   invoice_id: number;
   cashbox_id: number;
   cashbox_name?: string | null;
@@ -567,8 +568,8 @@ interface Window {
       recordPurchase(input: RecordPurchasePaymentInput): Promise<{ payment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
       recordGeneralReceipt(input: { party_type: string; party_id: number; cashbox_id: number; amount: number; payment_date: string; notes?: string }): Promise<any>;
       recordGeneralPayment(input: { party_type: string; party_id: number; cashbox_id: number; amount: number; payment_date: string; notes?: string }): Promise<any>;
-      reverseSale(paymentId: number, reason: string): Promise<{ reversedPayment: PaymentRecord; invoice: SaleInvoiceRecord; cashbox: CashboxApiRecord }>;
-      reversePurchase(paymentId: number, reason: string): Promise<{ reversedPayment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
+      reverseSale(paymentId: number, reason: string, password: string): Promise<{ reversedPayment: PaymentRecord; invoice: SaleInvoiceRecord; cashbox: CashboxApiRecord }>;
+      reversePurchase(paymentId: number, reason: string, password: string): Promise<{ reversedPayment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
     };
     purchases: {
       get(id: number): Promise<PurchaseInvoiceRecord>;
@@ -580,7 +581,7 @@ interface Window {
       addItems(invoiceId: number, items: unknown): Promise<PurchaseInvoiceDetails>;
       cancel(id: number, reason: string): Promise<PurchaseInvoiceDetails>;
       recordPayment(input: RecordPurchasePaymentInput): Promise<{ payment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
-      reversePayment(paymentId: number, reason: string): Promise<{ reversedPayment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
+      reversePayment(paymentId: number, reason: string, password: string): Promise<{ reversedPayment: PaymentRecord; invoice: PurchaseInvoiceRecord; cashbox: CashboxApiRecord }>;
       deleteDraft(id: number): Promise<{ success: true }>;
       getSalesDetails(id: number): Promise<unknown>;
       getConsignmentSummary(id: number): Promise<unknown>;

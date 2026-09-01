@@ -95,6 +95,7 @@ type StatementInvoice = {
 
 type StatementPayment = {
   id: number;
+  payment_type?: string | null;
   payment_date?: string | null;
   cashbox_name?: string | null;
   amount?: number | string | null;
@@ -707,10 +708,15 @@ function Payment({
 
           [
             "نوع السند",
-            d.payment_type ===
-            "sale"
+            d.payment_type === "sale"
               ? "سند قبض"
-              : "سند دفع",
+              : d.payment_type === "purchase"
+                ? "سند دفع"
+                : d.payment_type === "sale_reversal"
+                  ? "إيصال عكس دفعة بيع"
+                  : d.payment_type === "purchase_reversal"
+                    ? "إيصال عكس دفعة شراء"
+                    : "سند مالي",
           ],
 
           [
@@ -1111,6 +1117,7 @@ function Statement({
           <tr>
             <th>الرقم</th>
             <th>التاريخ</th>
+            <th>النوع</th>
             <th>الصندوق</th>
             <th>المبلغ</th>
             <th>الحالة</th>
@@ -1129,6 +1136,18 @@ function Statement({
                   {date(
                     payment.payment_date,
                   )}
+                </td>
+
+                <td>
+                  {payment.payment_type === "sale"
+                    ? "دفعة بيع"
+                    : payment.payment_type === "purchase"
+                      ? "دفعة شراء"
+                      : payment.payment_type === "sale_reversal"
+                        ? "عكس دفعة بيع"
+                        : payment.payment_type === "purchase_reversal"
+                          ? "عكس دفعة شراء"
+                          : payment.payment_type || "—"}
                 </td>
 
                 <td>

@@ -8,6 +8,7 @@ import DataTableCell from "../../components/common/DataTableCell";
 import DataTableHead from "../../components/common/DataTableHead";
 import DataTableHeaderCell from "../../components/common/DataTableHeaderCell";
 import DataTableRow from "../../components/common/DataTableRow";
+import PaymentReversalDialog from "../../components/payments/PaymentReversalDialog";
 import PurchaseStatusBadge from "../../components/purchases/PurchaseStatusBadge";
 import { BackButton, Button, Card, ConfirmDialog, EmptyState, PageHeader } from "../../components/ui";
 import { PATHS } from "../../routes/path";
@@ -27,6 +28,9 @@ export default function PurchaseDetailsPage() {
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reversalPayment, setReversalPayment] = useState<PaymentRecord | null>(null);
+  const [reversalLoading, setReversalLoading] = useState(false);
+  const [reversalError, setReversalError] = useState("");
 
   useEffect(() => {
     const id = Number(purchaseId);
@@ -173,16 +177,9 @@ export default function PurchaseDetailsPage() {
                     <DataTableCell>{payment.payment_date}</DataTableCell>
                     <DataTableCell>{payment.cashbox_name ?? "-"}</DataTableCell>
                     <DataTableCell className="font-bold">{money(payment.amount, payment.currency || invoice.currency)}</DataTableCell>
-                    <DataTableCell>{payment.status === "reversed" ? "ملغي" : "نشط"}</DataTableCell>
-                    <DataTableCell>{payment.notes ?? "-"}</DataTableCell>
-                    <DataTableCell><div className="flex flex-wrap gap-2"><Button size="sm" variant="secondary" startIcon={<Printer size={15} />} onClick={() => navigate(`/print/payments/${payment.id}`)}>طباعة</Button>{payment.status === "active" ? <Button size="sm" variant="secondary" startIcon={<RotateCcw size={15} />} onClick={async () => {
-                      const reason = window.prompt("سبب عكس الدفعة:", "تصحيح دفعة");
-                      if (!reason?.trim()) return;
-                      try {
-                        await purchasesService.reversePayment(payment.id, reason.trim());
-                        setDetails(await purchasesService.getDetails(invoice.id));
-                      } catch (err: unknown) { setError(getArabicErrorMessage(err, "تعذر عكس الدفعة")); }
-                    }}>عكس الدفعة</Button> : null}</div></DataTableCell>
+                    <DataTableCell>{payment.status === "reversed" ? "معكوس" : "نشط"}</DataTableCell>
+                    <DataTableCell>{payment.status === "reversed" ? (payment.reversal_reason ?? payment.notes ?? "-") : (payment.notes ?? "-")}</DataTableCell>
+                    <DataTableCell><div className="flex flex-wrap gap-2"><Button size="sm" variant="secondary" startIcon={<Printer size={15} />} onClick={() => navigate(`/print/payments/${payment.id}`)}>طباعة</Button>{payment.status === "active" ? <Button size="sm" variant="secondary" startIcon={<RotateCcw size={15} />} onClick={() => { setReversalError(""); setReversalPayment(payment); }}>عكس الدفعة</Button> : null}</div></DataTableCell>
                   </DataTableRow>
                 ))}
               </DataTableBody>
@@ -228,6 +225,30 @@ export default function PurchaseDetailsPage() {
       </Card>
 
     </div>
+
+    <PaymentReversalDialog
+      open={Boolean(reversalPayment)}
+      payment={reversalPayment}
+      invoiceLabel={invoice.invoice_number}
+      partyLabel="المورد"
+      loading={reversalLoading}
+      error={reversalError}
+      onClose={() => { if (!reversalLoading) { setReversalPayment(null); setReversalError(""); } }}
+      onConfirm={async ({ reason, password }) => {
+        if (!reversalPayment) return;
+        setReversalLoading(true);
+        setReversalError("");
+        try {
+          await purchasesService.reversePayment(reversalPayment.id, reason, password);
+          setDetails(await purchasesService.getDetails(invoice.id));
+          setReversalPayment(null);
+        } catch (err: unknown) {
+          setReversalError(getArabicErrorMessage(err, "تعذر عكس الدفعة"));
+        } finally {
+          setReversalLoading(false);
+        }
+      }}
+    />
 
     <ConfirmDialog
       open={cancelOpen}

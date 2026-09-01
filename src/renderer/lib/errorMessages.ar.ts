@@ -144,6 +144,32 @@ export const ERROR_MESSAGES_AR: Record<string, string> = {
   INSUFFICIENT_BALANCE_FOR_REVERSAL:
     "رصيد الصندوق غير كافٍ لتنفيذ عملية العكس.",
 
+  // عكس الدفعات
+  PAYMENT_INVALID_REFERENCE_TYPE:
+    "نوع الدفعة لا يطابق عملية العكس المطلوبة.",
+  PAYMENT_INVOICE_NOT_FOUND:
+    "تعذر العثور على الفاتورة المرتبطة بهذه الدفعة.",
+  PAYMENT_INVOICE_CANCELLED:
+    "لا يمكن عكس دفعة منفردة بعد إلغاء الفاتورة.",
+  PAYMENT_INVOICE_NOT_PAYABLE:
+    "حالة الفاتورة لا تسمح بعكس هذه الدفعة.",
+  PAYMENT_LINKED_CONSIGNMENT_SETTLEMENT:
+    "هذه الدفعة مرتبطة بتسوية أمانة مكتملة. اعكس تسوية الأمانة من شاشتها بدل عكس الدفعة مباشرة.",
+  PAYMENT_CASHBOX_TRANSACTION_NOT_FOUND:
+    "تعذر العثور على حركة الصندوق الأصلية المرتبطة بهذه الدفعة.",
+  PAYMENT_CASHBOX_NOT_FOUND:
+    "تعذر العثور على صندوق الدفعة.",
+  PAYMENT_PARTY_NOT_FOUND:
+    "تعذر العثور على العميل أو المورد المرتبط بهذه الدفعة.",
+  PAYMENT_REVERSAL_ALREADY_EXISTS:
+    "توجد حركة عكس مسجلة مسبقًا لهذه الدفعة.",
+  PAYMENT_REVERSAL_AMOUNT_INVALID:
+    "بيانات مبلغ الدفعة أو حركة الصندوق غير صالحة للعكس.",
+  PAYMENT_REVERSAL_BALANCE_INVALID:
+    "رصيد الصندوق لا يكفي لعكس هذه الدفعة.",
+  PAYMENT_REVERSAL_FAILED:
+    "تعذر عكس الدفعة. لم يتم إجراء أي تغيير مالي.",
+
   // قاعدة البيانات
   DATABASE_BUSY:
     "قاعدة البيانات مشغولة حاليًا. أعد المحاولة بعد لحظات.",

@@ -15,6 +15,24 @@ class ProductController {
             throw err;
         }
         const db = await dbmanager.init();
+
+        // Prevent duplicate product names (case-insensitive)
+        const existingProduct = await new Promise((resolve, reject) => {
+            db.get(
+                `SELECT id FROM products WHERE LOWER(TRIM(name)) = LOWER(?)`,
+                [String(input.name).trim()],
+                (err, row) => {
+                    if (err) return reject(err);
+                    resolve(row);
+                }
+            );
+        });
+        if (existingProduct) {
+            const err = new Error('يوجد منتج بنفس الاسم بالفعل');
+            err.code = 'DUPLICATE_NAME';
+            throw err;
+        }
+
         const sql = `
             INSERT INTO products (name, code, unit, category, description, isActive, created_at, updated_at)
             VALUES (?,?,?,?,?,?, datetime('now'), datetime('now'))
@@ -99,6 +117,30 @@ class ProductController {
             err.code = 'VALIDATION_ERROR';
             throw err;
         }
+
+        // Prevent duplicate product names on rename (case-insensitive)
+        if (input && Object.prototype.hasOwnProperty.call(input, 'name')) {
+            const trimmedName = String(input.name).trim();
+            if (trimmedName) {
+                const db2 = await dbmanager.init();
+                const duplicate = await new Promise((resolve, reject) => {
+                    db2.get(
+                        `SELECT id FROM products WHERE LOWER(TRIM(name)) = LOWER(?) AND id <> ?`,
+                        [trimmedName, id],
+                        (err, row) => {
+                            if (err) return reject(err);
+                            resolve(row);
+                        }
+                    );
+                });
+                if (duplicate) {
+                    const err = new Error('يوجد منتج بنفس الاسم بالفعل');
+                    err.code = 'DUPLICATE_NAME';
+                    throw err;
+                }
+            }
+        }
+
         sets.push(`updated_at = datetime('now')`);
         const sql = `UPDATE products SET ${sets.join(', ')} WHERE id = ?`;
         params.push(id);

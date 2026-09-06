@@ -254,6 +254,7 @@ type StockBatchRecord = {
   supplier_id: number | null;
   supplier_name?: string | null;
   purchase_invoice_id: number | null;
+  purchase_invoice_number?: string | null;
   batch_code: string | null;
   quantity: number;
   remaining_quantity: number;

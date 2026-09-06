@@ -628,10 +628,12 @@ class SaleInvoiceController {
         if (!productId) throw { code: 'VALIDATION_ERROR', message: 'productId مطلوب' };
         const db = await dbmanager.init();
         return dbAll(db,
-            `SELECT sb.*, p.name as product_name, p.unit, s.name as supplier_name
+            `SELECT sb.*, p.name as product_name, p.unit, s.name as supplier_name,
+                    pi.invoice_number as purchase_invoice_number
              FROM stock_batches sb
              LEFT JOIN products p ON sb.product_id = p.id
              LEFT JOIN suppliers s ON sb.supplier_id = s.id
+             LEFT JOIN purchase_invoices pi ON sb.purchase_invoice_id = pi.id
              WHERE sb.product_id = ? AND sb.isActive = 1 AND sb.remaining_quantity > 0
              ORDER BY sb.received_date ASC, sb.id ASC`,
             [productId]

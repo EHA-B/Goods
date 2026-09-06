@@ -1,9 +1,9 @@
 {
   "data": {
-    "deviceId": "C0EDEAE7BF27B5CD",
-    "generatedAt": "2026-08-07T17:59:52.394Z",
+    "deviceId": "2C0DD5B401CD21D5",
+    "generatedAt": "2026-09-03T09:10:39.684Z",
     "appName": "Goods App",
     "version": "1.0.0"
   },
-  "signature": "0e7d441da792c6f4235e61cc8e3f653494ccce1c025cbc88abb9dfa1f0d86dffa954abce0349e7613aff491973c403f230cf5080646c5f68d4f539a412675c01"
+  "signature": "01257ed5d6cacee4a5b9aada7a0942da55a22ad8c0c69877a12070b2ac5812e16f6158652b7f65abd13a2dd69e3ccae8f0f509f071adfef3fbbb32df1bde8503"
 }

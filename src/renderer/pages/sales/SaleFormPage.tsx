@@ -496,10 +496,18 @@ export default function SaleFormPage() {
                     value={String(item.stock_batch_id)}
                     options={[
                       { value: "0", label: item.availableBatches.length === 0 ? "اختر المنتج أولًا" : "اختر الدفعة" },
-                      ...item.availableBatches.map((b) => ({
-                        value: String(b.id),
-                        label: `${b.batch_code ?? "—"} — كمية متاحة: ${Number(b.remaining_quantity || 0).toLocaleString("en-US")}`
-                      })),
+                      ...item.availableBatches.map((b) => {
+                        const parts: string[] = [b.batch_code ?? "—"];
+                        if (b.purchase_invoice_number || b.supplier_name) {
+                          const invoiceAndSupplier = [b.purchase_invoice_number, b.supplier_name].filter(Boolean).join(" / ");
+                          parts.push(invoiceAndSupplier);
+                        }
+                        parts.push(`كمية متاحة: ${Number(b.remaining_quantity || 0).toLocaleString("en-US")}`);
+                        return {
+                          value: String(b.id),
+                          label: parts.join(" — "),
+                        };
+                      }),
                     ]}
                     disabled={item.availableBatches.length === 0}
                     onChange={(e) => selectBatch(index, Number(e.target.value))}

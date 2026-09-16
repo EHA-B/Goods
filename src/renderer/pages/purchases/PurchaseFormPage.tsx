@@ -4,6 +4,7 @@ import { getInvoiceEditErrorMessage } from "../../lib/invoiceEditErrors";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Calculator, Keyboard, PackagePlus, Plus, Save, Trash2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
+import useArrowFieldNavigation from "../../lib/useArrowFieldNavigation";
 import {
   BackButton,
   Button,
@@ -83,6 +84,7 @@ const money = (value: number) =>
   Number(value || 0).toLocaleString("en-US");
 
 export default function PurchaseFormPage() {
+  useArrowFieldNavigation();
   const navigate = useNavigate();
   const { purchaseId } = useParams();
   const editingId = Number(purchaseId || 0);

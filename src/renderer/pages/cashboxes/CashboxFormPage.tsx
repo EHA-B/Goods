@@ -1,5 +1,6 @@
 import { notifyValidation } from "../../lib/notifications";
 import { getArabicErrorMessage } from "../../lib/errorNormalizer";
+import useArrowFieldNavigation from "../../lib/useArrowFieldNavigation";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BackButton, Button, Card, FormField, Input, PageHeader, Select, Switch, Textarea } from "../../components/ui";
@@ -9,6 +10,7 @@ import { RefreshCw } from "lucide-react";
 import { CASHBOX_CURRENCIES } from "./currency";
 
 export default function CashboxFormPage() {
+  useArrowFieldNavigation();
   const nav = useNavigate();
   const { id } = useParams();
   const isEditMode = Boolean(id);

@@ -3,6 +3,7 @@ import {
   Save,
   UserRound,
 } from "lucide-react";
+import useArrowFieldNavigation from "../../lib/useArrowFieldNavigation";
 import {
   useEffect,
   useState,
@@ -61,6 +62,7 @@ const emptyForm: FormState = {
 };
 
 export default function WorkerFormPage() {
+  useArrowFieldNavigation();
   const navigate = useNavigate();
   const { workerId } = useParams();
   const id = workerId ? Number(workerId) : undefined;

@@ -1,4 +1,5 @@
 import { notifyError, notifySuccess, notifyValidation } from "../../lib/notifications";
+import useArrowFieldNavigation from "../../lib/useArrowFieldNavigation";
 import { Save } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -8,6 +9,7 @@ import { getInventoryErrorMessage, inventoryService, type InventoryItem } from "
 import { purchasesService } from "../purchases/purchasesService";
 
 export default function StockBatchFormPage() {
+  useArrowFieldNavigation();
   const { productId } = useParams(); const navigate = useNavigate(); const id = Number(productId);
   const [product, setProduct] = useState<InventoryItem>(); const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [batchCode, setBatchCode] = useState(""); const [supplierId, setSupplierId] = useState(""); const [quantity, setQuantity] = useState<number>(0); const [purchasePrice, setPurchasePrice] = useState<number>(0); const [receivedDate, setReceivedDate] = useState(new Date().toISOString().split("T")[0]); const [expiryDate, setExpiryDate] = useState(""); const [notes, setNotes] = useState("");

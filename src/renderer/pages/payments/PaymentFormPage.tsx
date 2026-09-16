@@ -1,11 +1,13 @@
 import { notifyValidation } from "../../lib/notifications";
 import { getArabicErrorMessage } from "../../lib/errorNormalizer";
+import useArrowFieldNavigation from "../../lib/useArrowFieldNavigation";
 import { useEffect, useState } from "react";
 import { Banknote, Save } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { BackButton, Button, FormField, FormSection, Input, PageHeader, SearchableSelect, Select, Textarea } from "../../components/ui";
 
 export default function PaymentFormPage() {
+  useArrowFieldNavigation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialPartyType = searchParams.get("partyType") || "customer";

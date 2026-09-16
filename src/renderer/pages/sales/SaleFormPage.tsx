@@ -1,5 +1,6 @@
 import { notifyValidation } from "../../lib/notifications";
 import { getArabicErrorMessage } from "../../lib/errorNormalizer";
+import useArrowFieldNavigation from "../../lib/useArrowFieldNavigation";
 import { getInvoiceEditErrorMessage } from "../../lib/invoiceEditErrors";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Calculator, Keyboard, Plus, Save, ShoppingCart, Trash2 } from "lucide-react";
@@ -42,6 +43,7 @@ const emptyItem = (): SaleItemForm => ({
 const money = (value: number) => value.toLocaleString("en-US");
 
 export default function SaleFormPage() {
+  useArrowFieldNavigation();
   const navigate = useNavigate();
   const { saleId } = useParams();
   const editingId = Number(saleId || 0);

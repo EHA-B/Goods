@@ -4,6 +4,7 @@ import {
   notifyValidation,
 } from "../../lib/notifications";
 import { getArabicErrorMessage } from "../../lib/errorNormalizer";
+import useArrowFieldNavigation from "../../lib/useArrowFieldNavigation";
 import {
   useEffect,
   useMemo,
@@ -84,6 +85,7 @@ const isPayrollCategoryName = (value: string) => {
 };
 
 export default function TransactionFormPage() {
+  useArrowFieldNavigation();
   const navigate = useNavigate();
   const [params] = useSearchParams();
 

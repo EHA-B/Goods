@@ -1,4 +1,5 @@
 import { notifyError, notifySuccess } from "../../lib/notifications";
+import useArrowFieldNavigation from "../../lib/useArrowFieldNavigation";
 import { Save } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -10,6 +11,7 @@ type FormState = { name: string; phone: string; email: string; address: string; 
 const emptyForm: FormState = { name: "", phone: "", email: "", address: "", balance: "0", notes: "", isActive: true };
 
 export default function CustomerFormPage() {
+  useArrowFieldNavigation();
   const navigate = useNavigate();
   const { customerId } = useParams();
   const id = customerId ? Number(customerId) : undefined;

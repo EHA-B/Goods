@@ -1,4 +1,5 @@
 import { notifyError, notifySuccess, notifyValidation } from "../../lib/notifications";
+import useArrowFieldNavigation from "../../lib/useArrowFieldNavigation";
 import { Save } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -43,6 +44,7 @@ const emptyForm: FormState = {
 };
 
 export default function SupplierFormPage() {
+  useArrowFieldNavigation();
   const navigate = useNavigate();
   const { supplierId } = useParams();
   const id = supplierId ? Number(supplierId) : undefined;

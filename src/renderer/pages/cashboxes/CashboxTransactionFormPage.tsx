@@ -1,5 +1,6 @@
 import { notifyValidation } from "../../lib/notifications";
 import { getArabicErrorMessage } from "../../lib/errorNormalizer";
+import useArrowFieldNavigation from "../../lib/useArrowFieldNavigation";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -29,6 +30,7 @@ function mapKindToApi(kind: MovementKind): { direction: "in" | "out"; reference_
 }
 
 export default function CashboxTransactionFormPage() {
+  useArrowFieldNavigation();
   const nav = useNavigate();
   const { cashboxId } = useParams();
 

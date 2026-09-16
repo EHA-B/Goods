@@ -1,8 +1,8 @@
 import { notifyValidation } from "../../lib/notifications";
 import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { getInvoiceEditErrorMessage } from "../../lib/invoiceEditErrors";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Calculator, PackagePlus, Plus, Save, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Calculator, Keyboard, PackagePlus, Plus, Save, Trash2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   BackButton,
@@ -289,6 +289,42 @@ export default function PurchaseFormPage() {
     currency,
     exchangeRate,
   ]);
+
+  /* ─── Keyboard shortcuts ─── */
+  const addNewItem = useCallback(() => {
+    setItems((curr) => [emptyItem(), ...curr]);
+  }, []);
+
+  // Use a ref so the keydown handler always calls the latest submit()
+  // without needing submit in the dependency array (it's defined later
+  // in the component body and closes over many state variables).
+  const submitRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing inside inputs / textareas / selects
+      const tag = (e.target as HTMLElement)?.tagName;
+      const isInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+      if (e.key === "F5") {
+        e.preventDefault();
+        addNewItem();
+      }
+
+      if (e.key === "F3") {
+        e.preventDefault();
+        submitRef.current();
+      }
+
+      if (e.key === "Escape" && !isInput) {
+        e.preventDefault();
+        navigate(PATHS.PURCHASES);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [addNewItem, navigate]);
 
   /**
    * المجموع الحقيقي للمشتريات العادية.
@@ -820,6 +856,9 @@ export default function PurchaseFormPage() {
     }
   };
 
+  // Keep the ref in sync so the keyboard shortcut always calls the latest version
+  submitRef.current = submit;
+
   return (
     <>
       <PageHeader
@@ -1038,6 +1077,25 @@ export default function PurchaseFormPage() {
               : "أضف المنتجات وحدد الكمية وسعر الشراء وبيانات دفعة المخزون."
           }
         >
+          {/* ─── Sticky "add item" bar ─── */}
+          <div className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--surface)]/95 p-4 backdrop-blur">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="secondary"
+                startIcon={<Plus size={17} />}
+                onClick={addNewItem}
+              >
+                إضافة صنف
+              </Button>
+              <span className="text-xs text-[var(--text-muted)]">
+                أو اضغط <kbd className="rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-1.5 py-0.5 font-mono text-[10px]">F5</kbd>
+              </span>
+              <span className="mr-auto text-sm font-bold text-[var(--text-secondary)]">
+                {items.length} {items.length === 1 ? "صنف" : "أصناف"}
+              </span>
+            </div>
+          </div>
+
           <div className="space-y-4 p-4">
             {items.map((item, index) => {
               const itemPrice = isConsignment
@@ -1265,21 +1323,6 @@ export default function PurchaseFormPage() {
                 </div>
               );
             })}
-          </div>
-
-          <div className="border-t border-[var(--border)] p-4">
-            <Button
-              variant="secondary"
-              startIcon={<Plus size={17} />}
-              onClick={() =>
-                setItems((curr) => [
-                  ...curr,
-                  emptyItem(),
-                ])
-              }
-            >
-              إضافة صنف
-            </Button>
           </div>
         </Card>
 
@@ -1738,7 +1781,22 @@ export default function PurchaseFormPage() {
       </Dialog>
 
       <div className="fixed bottom-0 left-0 right-[260px] z-20 border-t border-[var(--border)] bg-[var(--surface)]/95 px-6 py-3 backdrop-blur">
-        <div className="flex justify-end gap-3">
+        <div className="flex items-center justify-end gap-3">
+          <div className="mr-auto flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+            <Keyboard size={14} />
+            <span>
+              <kbd className="rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-1.5 py-0.5 font-mono text-[10px]">F5</kbd> إضافة صنف
+            </span>
+            <span className="mx-1">·</span>
+            <span>
+              <kbd className="rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-1.5 py-0.5 font-mono text-[10px]">F3</kbd> حفظ
+            </span>
+            <span className="mx-1">·</span>
+            <span>
+              <kbd className="rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-1.5 py-0.5 font-mono text-[10px]">Esc</kbd> إلغاء
+            </span>
+          </div>
+
           <Button
             variant="secondary"
             onClick={() =>

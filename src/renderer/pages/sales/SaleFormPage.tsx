@@ -1,8 +1,8 @@
 import { notifyValidation } from "../../lib/notifications";
 import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import { getInvoiceEditErrorMessage } from "../../lib/invoiceEditErrors";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Calculator, Plus, Save, ShoppingCart, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Calculator, Keyboard, Plus, Save, ShoppingCart, Trash2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BackButton, Button, Card, Dialog, FormField, FormSection, Input, PageHeader, SearchableSelect, Select, Textarea } from "../../components/ui";
 import { PATHS } from "../../routes/path";
@@ -176,6 +176,40 @@ export default function SaleFormPage() {
     currency,
     exchangeRate,
   ]);
+
+  /* ─── Keyboard shortcuts ─── */
+  const addNewItem = useCallback(() => {
+    setItems((curr) => [emptyItem(), ...curr]);
+  }, []);
+
+  // Use a ref so the keydown handler always calls the latest submit()
+  // without needing submit in the dependency array.
+  const submitRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const isInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+      if (e.key === "F5") {
+        e.preventDefault();
+        addNewItem();
+      }
+
+      if (e.key === "F3") {
+        e.preventDefault();
+        submitRef.current();
+      }
+
+      if (e.key === "Escape" && !isInput) {
+        e.preventDefault();
+        navigate(PATHS.SALES);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [addNewItem, navigate]);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.quantity * item.sale_price, 0), [items]);
   const total = Math.max(0, subtotal - discount);
@@ -389,6 +423,9 @@ export default function SaleFormPage() {
     }
   };
 
+  // Keep the ref in sync so the keyboard shortcut always calls the latest version
+  submitRef.current = submit;
+
   return <>
     <PageHeader
       title={isEdit ? "تعديل فاتورة بيع" : "فاتورة بيع جديدة"}
@@ -459,6 +496,25 @@ export default function SaleFormPage() {
       </FormSection>
 
       <Card padding={false} header="أصناف الفاتورة" description="أضف المنتجات وحدد الدفعة والكمية وسعر البيع.">
+        {/* ─── Sticky "add item" bar ─── */}
+        <div className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--surface)]/95 p-4 backdrop-blur">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              startIcon={<Plus size={17} />}
+              onClick={addNewItem}
+            >
+              إضافة صنف
+            </Button>
+            <span className="text-xs text-[var(--text-muted)]">
+              أو اضغط <kbd className="rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-1.5 py-0.5 font-mono text-[10px]">F5</kbd>
+            </span>
+            <span className="mr-auto text-sm font-bold text-[var(--text-secondary)]">
+              {items.length} {items.length === 1 ? "صنف" : "أصناف"}
+            </span>
+          </div>
+        </div>
+
         <div className="space-y-4 p-4">
           {items.map((item, index) => (
             <div key={index} className="relative rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4 pt-14">
@@ -541,9 +597,6 @@ export default function SaleFormPage() {
               </div>
             </div>
           ))}
-        </div>
-        <div className="border-t border-[var(--border)] p-4">
-          <Button variant="secondary" startIcon={<Plus size={17} />} onClick={() => setItems((curr) => [...curr, emptyItem()])}>إضافة صنف</Button>
         </div>
       </Card>
 
@@ -701,7 +754,22 @@ export default function SaleFormPage() {
     </Dialog>
 
     <div className="fixed bottom-0 left-0 right-[260px] z-20 border-t border-[var(--border)] bg-[var(--surface)]/95 px-6 py-3 backdrop-blur">
-      <div className="flex justify-end gap-3">
+      <div className="flex items-center justify-end gap-3">
+        <div className="mr-auto flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+          <Keyboard size={14} />
+          <span>
+            <kbd className="rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-1.5 py-0.5 font-mono text-[10px]">F5</kbd> إضافة صنف
+          </span>
+          <span className="mx-1">·</span>
+          <span>
+            <kbd className="rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-1.5 py-0.5 font-mono text-[10px]">F3</kbd> حفظ
+          </span>
+          <span className="mx-1">·</span>
+          <span>
+            <kbd className="rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-1.5 py-0.5 font-mono text-[10px]">Esc</kbd> إلغاء
+          </span>
+        </div>
+
         <Button variant="secondary" onClick={() => navigate(PATHS.SALES)}>إلغاء</Button>
         <Button startIcon={<Save size={17} />} disabled={loading} onClick={submit}>
           {loading ? "جاري الحفظ..." : "حفظ الفاتورة"}

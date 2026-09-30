@@ -14,6 +14,17 @@ const emptyTotals = { total: 0, paid: 0, remaining: 0, profit: 0, count: 0 };
 
 export default function SalesPage() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "F2") {
+        e.preventDefault();
+        navigate(PATHS.SALE_NEW);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [navigate]);
   const [sales, setSales] = useState<SaleInvoiceRecord[]>([]);
   const [pagination, setPagination] = useState({ page: 1, limit: RECORDS_PAGE_SIZE, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);

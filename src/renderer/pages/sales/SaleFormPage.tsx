@@ -3,7 +3,7 @@ import { getArabicErrorMessage } from "../../lib/errorNormalizer";
 import useArrowFieldNavigation from "../../lib/useArrowFieldNavigation";
 import { getInvoiceEditErrorMessage } from "../../lib/invoiceEditErrors";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Calculator, Keyboard, Plus, Save, ShoppingCart, Trash2 } from "lucide-react";
+import { AlertTriangle, Calculator, Keyboard, Plus, Save, ShoppingCart, Trash2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BackButton, Button, Card, Dialog, FormField, FormSection, Input, PageHeader, SearchableSelect, Select, Textarea } from "../../components/ui";
 import { PATHS } from "../../routes/path";
@@ -190,9 +190,6 @@ export default function SaleFormPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      const isInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
-
       if (e.key === "F5") {
         e.preventDefault();
         addNewItem();
@@ -202,21 +199,29 @@ export default function SaleFormPage() {
         e.preventDefault();
         submitRef.current();
       }
-
-      if (e.key === "Escape" && !isInput) {
-        e.preventDefault();
-        navigate(PATHS.SALES);
-      }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [addNewItem, navigate]);
+  }, [addNewItem]);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.quantity * item.sale_price, 0), [items]);
   const total = Math.max(0, subtotal - discount);
   const effectivePaidAmount = isEdit ? existingPaidAmount : paymentAmount;
   const remaining = Math.max(0, total - effectivePaidAmount);
+
+  // Per-item quantity error map: index → error message (when qty exceeds batch remaining)
+  const itemQuantityErrors = useMemo(() => {
+    const errors = new Map<number, string>();
+    items.forEach((item, index) => {
+      if (!item.stock_batch_id || item.quantity <= 0) return;
+      const batch = item.availableBatches.find((b) => b.id === item.stock_batch_id);
+      if (batch && item.quantity > Number(batch.remaining_quantity) + 0.001) {
+        errors.set(index, `الكمية المطلوبة (${money(item.quantity)}) أكبر من المتاح في الدفعة (${money(Number(batch.remaining_quantity))})`);
+      }
+    });
+    return errors;
+  }, [items]);
   const activeCashboxes = useMemo(
     () => (lookups?.cashboxes ?? []).filter((cashbox) => Boolean(cashbox.isActive)),
     [lookups],
@@ -315,7 +320,13 @@ export default function SaleFormPage() {
     if (items.some((item) => !item.product_id || !item.stock_batch_id || item.quantity <= 0 || item.sale_price < 0)) {
       setError("راجع الأصناف — المنتج والدفعة والكمية وسعر البيع الصحيح مطلوبة"); notifyValidation("راجع الأصناف — المنتج والدفعة والكمية وسعر البيع الصحيح مطلوبة"); return;
     }
-    if (items.some((item) => { const batch = item.availableBatches.find((b) => b.id === item.stock_batch_id); return batch && item.quantity > Number(batch.remaining_quantity) + 0.001; })) { setError("إحدى الكميات أكبر من المتوفر في الدفعة"); notifyValidation("إحدى الكميات أكبر من المتوفر في الدفعة"); return; }
+    if (itemQuantityErrors.size > 0) {
+      const errorLines = Array.from(itemQuantityErrors.entries()).map(([idx, msg]) => `صنف ${idx + 1} (${items[idx].productName || "بدون اسم"}): ${msg}`);
+      const fullMessage = `الكميات التالية أكبر من المتوفر في الدفعة:\n${errorLines.join("\n")}`;
+      setError(fullMessage);
+      notifyValidation(fullMessage);
+      return;
+    }
     if (discount < 0 || discount > subtotal) { setError("قيمة الخصم غير صحيحة"); notifyValidation("قيمة الخصم غير صحيحة"); return; }
     if (
       !isEdit &&
@@ -519,7 +530,13 @@ export default function SaleFormPage() {
 
         <div className="space-y-4 p-4">
           {items.map((item, index) => (
-            <div key={index} className="relative rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4 pt-14">
+            <div key={index} className={`relative rounded-[var(--radius-md)] border p-4 pt-14 ${itemQuantityErrors.has(index) ? "border-[var(--danger)] bg-[var(--danger-subtle)]" : "border-[var(--border)] bg-[var(--surface-subtle)]"}`}>
+              {itemQuantityErrors.has(index) && (
+                <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-md bg-[var(--danger)] px-2.5 py-1 text-xs font-medium text-white">
+                  <AlertTriangle size={13} />
+                  {itemQuantityErrors.get(index)}
+                </div>
+              )}
               <Button size="sm" variant="ghost" className="absolute left-3 top-3 h-8 border border-[var(--danger)]/30 px-2.5 text-[var(--danger)] hover:bg-[var(--danger-subtle)] hover:text-[var(--danger)]" startIcon={<Trash2 size={15} />} disabled={items.length === 1} onClick={() => setItems((curr) => curr.filter((_, i) => i !== index))}>حذف الصنف</Button>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <FormField label="المنتج" required>
@@ -617,11 +634,21 @@ export default function SaleFormPage() {
             </thead>
             <tbody>
               {items.map((item, index) => (
-                <tr key={`sale-summary-${index}`} className="border-t border-[var(--border)]">
-                  <td className="px-4 py-3">{index + 1}</td>
+                <tr key={`sale-summary-${index}`} className={`border-t ${itemQuantityErrors.has(index) ? "border-[var(--danger)] bg-[var(--danger-subtle)]" : "border-[var(--border)]"}`}>
+                  <td className="px-4 py-3">
+                    {itemQuantityErrors.has(index) && <AlertTriangle size={14} className="mb-0.5 inline text-[var(--danger)]" />}{" "}
+                    {index + 1}
+                  </td>
                   <td className="px-4 py-3 font-medium">{item.productName || "لم يتم اختيار المنتج"}</td>
                   <td className="px-4 py-3">{item.batchCode || "—"}</td>
-                  <td className="px-4 py-3" dir="ltr">{money(item.quantity)}</td>
+                  <td className={`px-4 py-3 ${itemQuantityErrors.has(index) ? "font-bold text-[var(--danger)]" : ""}`} dir="ltr">
+                    {money(item.quantity)}
+                    {itemQuantityErrors.has(index) && (
+                      <div className="mt-1 text-[11px] font-normal text-[var(--danger)]" dir="rtl">
+                        {itemQuantityErrors.get(index)}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3" dir="ltr">{money(item.sale_price)} {currency}</td>
                   <td className="px-4 py-3 font-bold" dir="ltr">{money(item.quantity * item.sale_price)} {currency}</td>
                 </tr>

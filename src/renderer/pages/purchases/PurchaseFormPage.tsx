@@ -304,10 +304,6 @@ export default function PurchaseFormPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts when typing inside inputs / textareas / selects
-      const tag = (e.target as HTMLElement)?.tagName;
-      const isInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
-
       if (e.key === "F5") {
         e.preventDefault();
         addNewItem();
@@ -317,16 +313,11 @@ export default function PurchaseFormPage() {
         e.preventDefault();
         submitRef.current();
       }
-
-      if (e.key === "Escape" && !isInput) {
-        e.preventDefault();
-        navigate(PATHS.PURCHASES);
-      }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [addNewItem, navigate]);
+  }, [addNewItem]);
 
   /**
    * المجموع الحقيقي للمشتريات العادية.

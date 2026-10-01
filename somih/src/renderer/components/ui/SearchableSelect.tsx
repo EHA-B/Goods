@@ -120,9 +120,12 @@ export default function SearchableSelect({
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const optionRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const isComposingRef = useRef(false);
+  const searchTermRef = useRef("");
+  const autocompleteSelectionRef = useRef<{ start: number; end: number } | null>(null);
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
   const [dropdownPosition, setDropdownPosition] =
     useState<DropdownPosition | null>(null);
@@ -136,7 +139,7 @@ export default function SearchableSelect({
   );
 
   const filteredOptions = useMemo(() => {
-    const normalizedQuery = normalizeSearchText(query);
+    const normalizedQuery = normalizeSearchText(searchTerm);
 
     if (!normalizedQuery) {
       return options;
@@ -151,7 +154,7 @@ export default function SearchableSelect({
       .filter(({ score }) => Number.isFinite(score))
       .sort((a, b) => a.score - b.score || a.originalIndex - b.originalIndex)
       .map(({ option }) => option);
-  }, [options, query]);
+  }, [options, searchTerm]);
 
   const activeOption =
     activeIndex >= 0 ? filteredOptions[activeIndex] : undefined;
@@ -271,6 +274,9 @@ export default function SearchableSelect({
   const closeDropdown = useCallback((restoreFocus = false) => {
     setOpen(false);
     setQuery("");
+    setSearchTerm("");
+    searchTermRef.current = "";
+    autocompleteSelectionRef.current = null;
     setActiveIndex(-1);
 
     if (restoreFocus) {
@@ -287,6 +293,8 @@ export default function SearchableSelect({
       }
 
       setQuery(initialQuery);
+      setSearchTerm(initialQuery);
+      searchTermRef.current = initialQuery;
       setOpen(true);
     },
     [disabled],
@@ -302,6 +310,54 @@ export default function SearchableSelect({
       closeDropdown(true);
     },
     [closeDropdown, onValueChange],
+  );
+
+
+  const applyInlineAutocomplete = useCallback(
+    (typedValue: string) => {
+      const normalizedTyped = normalizeSearchText(typedValue);
+
+      setSearchTerm(typedValue);
+      searchTermRef.current = typedValue;
+
+      if (!normalizedTyped) {
+        autocompleteSelectionRef.current = null;
+        setQuery(typedValue);
+        return;
+      }
+
+      const suggestion = options.find((option) => {
+        if (option.disabled) {
+          return false;
+        }
+
+        return normalizeSearchText(option.label).startsWith(normalizedTyped);
+      });
+
+      if (!suggestion || suggestion.label.length <= typedValue.length) {
+        autocompleteSelectionRef.current = null;
+        setQuery(typedValue);
+        return;
+      }
+
+      setQuery(suggestion.label);
+      autocompleteSelectionRef.current = {
+        start: typedValue.length,
+        end: suggestion.label.length,
+      };
+
+      window.requestAnimationFrame(() => {
+        const input = searchInputRef.current;
+        const selection = autocompleteSelectionRef.current;
+
+        if (!input || !selection) {
+          return;
+        }
+
+        input.setSelectionRange(selection.start, selection.end);
+      });
+    },
+    [options],
   );
 
   const moveActive = useCallback(
@@ -379,7 +435,7 @@ export default function SearchableSelect({
       (option) => option.value === value && !option.disabled,
     );
 
-    if (!query && selectedIndex >= 0) {
+    if (!searchTerm && selectedIndex >= 0) {
       setActiveIndex(selectedIndex);
       return;
     }
@@ -389,7 +445,7 @@ export default function SearchableSelect({
     filteredOptions,
     findFirstEnabledIndex,
     open,
-    query,
+    searchTerm,
     value,
   ]);
 
@@ -442,31 +498,113 @@ export default function SearchableSelect({
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      openDropdown();
+
+      if (!open) {
+        openDropdown();
+        window.requestAnimationFrame(() => moveActive(1));
+      } else {
+        moveActive(1);
+      }
       return;
     }
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      openDropdown();
+
+      if (!open) {
+        openDropdown();
+        window.requestAnimationFrame(() => moveActive(-1));
+      } else {
+        moveActive(-1);
+      }
       return;
     }
 
-    if (event.key === "Enter" || event.key === " ") {
+    if (event.key === "Home" && open) {
       event.preventDefault();
-      openDropdown();
+      setActiveIndex(findFirstEnabledIndex(filteredOptions));
+      return;
+    }
+
+    if (event.key === "End" && open) {
+      event.preventDefault();
+      setActiveIndex(findLastEnabledIndex(filteredOptions));
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+
+      if (open) {
+        const option =
+          activeIndex >= 0 ? filteredOptions[activeIndex] : undefined;
+
+        if (option && !option.disabled) {
+          selectValue(option);
+        }
+      } else {
+        openDropdown();
+      }
+      return;
+    }
+
+    if (event.key === " ") {
+      if (!open) {
+        event.preventDefault();
+        openDropdown();
+      }
+      return;
+    }
+
+    if (event.key === "Escape" && open) {
+      event.preventDefault();
+      closeDropdown(true);
       return;
     }
 
     if (isPrintableKey(event)) {
       event.preventDefault();
-      openDropdown(event.key);
+
+      const nextSearchTerm = `${searchTermRef.current}${event.key}`;
+
+      if (!open) {
+        openDropdown(nextSearchTerm);
+      }
+
+      applyInlineAutocomplete(nextSearchTerm);
+
+      window.requestAnimationFrame(() => {
+        searchInputRef.current?.focus();
+      });
     }
   }
 
   function handleSearchKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
     if (isComposingRef.current || event.nativeEvent.isComposing) {
       return;
+    }
+
+    if (event.key === "Backspace" || event.key === "Delete") {
+      const input = event.currentTarget;
+      const selectionStart = input.selectionStart ?? 0;
+      const selectionEnd = input.selectionEnd ?? 0;
+
+      if (selectionEnd > selectionStart) {
+        event.preventDefault();
+        const nextValue = query.slice(0, selectionStart);
+        autocompleteSelectionRef.current = null;
+        setQuery(nextValue);
+        setSearchTerm(nextValue);
+        searchTermRef.current = nextValue;
+
+        window.requestAnimationFrame(() => {
+          searchInputRef.current?.setSelectionRange(
+            nextValue.length,
+            nextValue.length,
+          );
+        });
+        return;
+      }
     }
 
     if (event.key === "ArrowDown") {
@@ -546,7 +684,7 @@ export default function SearchableSelect({
                   type="text"
                   value={query}
                   role="combobox"
-                  aria-autocomplete="list"
+                  aria-autocomplete="both"
                   aria-controls={listboxId}
                   aria-expanded={open}
                   aria-activedescendant={
@@ -554,12 +692,25 @@ export default function SearchableSelect({
                   }
                   autoComplete="off"
                   spellCheck={false}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+
+                    if (isComposingRef.current || (event.nativeEvent as InputEvent).isComposing) {
+                      autocompleteSelectionRef.current = null;
+                      setQuery(nextValue);
+                      setSearchTerm(nextValue);
+                      searchTermRef.current = nextValue;
+                      return;
+                    }
+
+                    applyInlineAutocomplete(nextValue);
+                  }}
                   onCompositionStart={() => {
                     isComposingRef.current = true;
                   }}
-                  onCompositionEnd={() => {
+                  onCompositionEnd={(event) => {
                     isComposingRef.current = false;
+                    applyInlineAutocomplete(event.currentTarget.value);
                   }}
                   onKeyDown={handleSearchKeyDown}
                   placeholder={searchPlaceholder}

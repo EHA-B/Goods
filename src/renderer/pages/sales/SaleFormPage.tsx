@@ -17,7 +17,7 @@ import {
   loadInvoiceDraft,
   saveInvoiceDraft,
 } from "../../lib/invoiceDrafts";
-import { getReservedBatchQuantities, isInvoiceTabOpen } from "../../lib/invoiceTabs";
+import { formatInvoiceTabTitle, getReservedBatchQuantities, isInvoiceTabOpen } from "../../lib/invoiceTabs";
 import { useInvoiceTabs } from "../../invoiceTabs/InvoiceTabsContext";
 import { customersService } from "../customers/customersService";
 
@@ -497,9 +497,9 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
     try {
       const result = await salesService.createProcess(input);
       finishedRef.current = true;
-      navigate(`/sales/${result.invoice.id}`);
-      // Saved: close its tab (also removes the tab draft).
+      // Saved: close its tab immediately and navigate to invoice details.
       if (isTab && tabId) removeTab(tabId); else clearInvoiceDraft(draftKey);
+      navigate(`/sales/${result.invoice.id}`, { replace: true });
     } catch (err: unknown) {
       const e = err as Error;
       setError(getArabicErrorMessage(e, "حدث خطأ أثناء الحفظ"));
@@ -513,7 +513,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
 
   return <>
     <PageHeader
-      title={isEdit ? "تعديل فاتورة بيع" : currentTab ? `فاتورة بيع جديدة #${currentTab.number}` : "فاتورة بيع جديدة"}
+      title={isEdit ? "تعديل فاتورة بيع" : currentTab ? `فاتورة ${formatInvoiceTabTitle(currentTab)}` : "فاتورة بيع جديدة"}
       description={isEdit ? "تعديل محمي بكلمة مرور مع حفظ سجل كامل للتغييرات." : "أدخل بيانات العميل والأصناف ودفعات المخزون والمبالغ."}
       actions={<BackButton to={PATHS.SALES} />}
     />

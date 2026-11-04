@@ -14,6 +14,7 @@ import { notifyValidation } from "../lib/notifications";
 import { PATHS } from "../routes/path";
 import {
   createInvoiceTabId,
+  formatInvoiceTabTitle,
   type InvoiceTab,
   type InvoiceTabKind,
   type InvoiceTabMeta,
@@ -265,7 +266,7 @@ export function InvoiceTabsProvider({ children }: { children: ReactNode }) {
         title="إغلاق الفاتورة المفتوحة"
         message={
           pendingTab
-            ? `هل تريد إغلاق ${pendingTab.kind === "sale" ? "فاتورة البيع" : "فاتورة الشراء"} رقم ${pendingTab.number}${pendingTab.partyName ? ` (${pendingTab.partyName})` : ""}؟ سيتم تجاهل بياناتها غير المحفوظة نهائيًا.`
+            ? `هل تريد إغلاق "${formatInvoiceTabTitle(pendingTab)}"؟ سيتم تجاهل بياناتها غير المحفوظة نهائيًا.`
             : ""
         }
         confirmText="إغلاق وتجاهل"
@@ -288,4 +289,3 @@ export function useInvoiceTabs() {
   }
   return context;
 }
-

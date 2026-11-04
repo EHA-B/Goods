@@ -21,12 +21,24 @@ export default function NewInvoiceTabRoute({ kind }: { kind: InvoiceTabKind }) {
   const { tabs, openNewTab } = useInvoiceTabs();
   const exists = Boolean(tabId) && tabs.some((tab) => tab.id === tabId && tab.kind === kind);
   const handledRef = useRef<string | null>(null);
+  const lastOpenTabIdRef = useRef<string | null>(null);
+
+  if (exists && tabId) {
+    lastOpenTabIdRef.current = tabId;
+  }
 
   useEffect(() => {
     if (exists) {
       handledRef.current = null;
       return;
     }
+
+    // If this exact tab was just open and got closed/saved, the caller is
+    // already navigating to the invoice details page or the neighbor tab.
+    if (tabId && lastOpenTabIdRef.current === tabId) {
+      return;
+    }
+
     // Guard against React StrictMode running the effect twice.
     const marker = tabId ?? "__new__";
     if (handledRef.current === marker) return;
@@ -44,4 +56,3 @@ export default function NewInvoiceTabRoute({ kind }: { kind: InvoiceTabKind }) {
     <PurchaseFormPage key={tabId} tabId={tabId} />
   );
 }
-

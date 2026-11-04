@@ -1,24 +1,9 @@
 import { Boxes, Plus, ShoppingCart, X } from "lucide-react";
 import { useInvoiceTabs } from "./InvoiceTabsContext";
-import type { InvoiceTab } from "../lib/invoiceTabs";
-
-const money = (value: number) => Number(value || 0).toLocaleString("en-US");
+import { formatInvoiceTabSubtitle, formatInvoiceTabTitle } from "../lib/invoiceTabs";
 
 const kbdClass =
   "rounded border border-[var(--border)] bg-[var(--surface-subtle)] px-1 py-0.5 font-mono text-[10px] text-[var(--text-muted)]";
-
-function tabTitle(tab: InvoiceTab) {
-  return `${tab.kind === "sale" ? "بيع" : "شراء"} #${tab.number}`;
-}
-
-function tabSubtitle(tab: InvoiceTab) {
-  const party =
-    tab.partyName || (tab.kind === "sale" ? "بيع نقدي" : "بدون مورد");
-  const count = tab.itemCount ?? 0;
-  const parts = [party, `${count} ${count === 1 ? "صنف" : "أصناف"}`];
-  if ((tab.total ?? 0) > 0) parts.push(`${money(tab.total ?? 0)} ${tab.currency ?? "SYP"}`);
-  return parts.join(" · ");
-}
 
 /**
  * Global POS-style bar listing every open (unsaved) new invoice.
@@ -43,6 +28,8 @@ export default function InvoiceTabsBar() {
           const isActive = tab.id === activeTabId;
           const Icon = tab.kind === "sale" ? ShoppingCart : Boxes;
           const shortcut = index < 9 ? `Alt+${index + 1}` : "";
+          const title = formatInvoiceTabTitle(tab);
+          const subtitle = formatInvoiceTabSubtitle(tab);
 
           return (
             <div
@@ -50,7 +37,7 @@ export default function InvoiceTabsBar() {
               role="tab"
               tabIndex={0}
               aria-selected={isActive}
-              title={`${tabTitle(tab)} — ${tabSubtitle(tab)}${shortcut ? `\nاختصار: ${shortcut}` : ""}`}
+              title={`${title} — ${subtitle}${shortcut ? `\nاختصار: ${shortcut}` : ""}`}
               onClick={() => switchToTab(tab.id)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -66,7 +53,7 @@ export default function InvoiceTabsBar() {
                 }
               }}
               className={[
-                "group relative flex h-12 min-w-[170px] max-w-[240px] shrink-0 cursor-pointer items-center gap-2",
+                "group relative flex h-12 min-w-[170px] max-w-[260px] shrink-0 cursor-pointer items-center gap-2",
                 "rounded-md border pr-2.5 pl-1.5 text-right transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]",
                 isActive
@@ -88,21 +75,21 @@ export default function InvoiceTabsBar() {
 
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5 text-xs font-bold">
-                  <span className="truncate">{tabTitle(tab)}</span>
+                  <span className="truncate">{title}</span>
                   {shortcut && (
-                    <span className="hidden font-mono text-[10px] font-normal text-[var(--text-muted)] group-hover:inline">
+                    <span className="hidden shrink-0 font-mono text-[10px] font-normal text-[var(--text-muted)] group-hover:inline">
                       {shortcut}
                     </span>
                   )}
                 </span>
                 <span className="block truncate text-[11px] text-[var(--text-muted)]">
-                  {tabSubtitle(tab)}
+                  {subtitle}
                 </span>
               </span>
 
               <button
                 type="button"
-                aria-label={`إغلاق ${tabTitle(tab)}`}
+                aria-label={`إغلاق ${title}`}
                 title="إغلاق (Ctrl+F4)"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -142,4 +129,3 @@ export default function InvoiceTabsBar() {
     </div>
   );
 }
-

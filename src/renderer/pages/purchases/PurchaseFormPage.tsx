@@ -29,7 +29,7 @@ import {
   loadInvoiceDraft,
   saveInvoiceDraft,
 } from "../../lib/invoiceDrafts";
-import { isInvoiceTabOpen } from "../../lib/invoiceTabs";
+import { formatInvoiceTabTitle, isInvoiceTabOpen } from "../../lib/invoiceTabs";
 import { useInvoiceTabs } from "../../invoiceTabs/InvoiceTabsContext";
 import {
   getProductErrorMessage,
@@ -187,7 +187,7 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
         });
 
         if (data.suppliers.length === 1) {
-          setSupplierId(data.suppliers[0].id);
+          setSupplierId((curr) => curr || data.suppliers[0].id);
         }
       })
       .catch((err: Error) =>
@@ -426,8 +426,9 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
       itemCount: items.filter((item) => item.product_id).length,
       total,
       currency,
+      invoiceType,
     });
-  }, [isTab, tabId, draftInitialized, lookups, supplierName, items, total, currency, updateTabMeta]);
+  }, [isTab, tabId, draftInitialized, lookups, supplierName, items, total, currency, invoiceType, updateTabMeta]);
 
   const updateItem = (
     index: number,
@@ -879,9 +880,9 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
       }
 
       finishedRef.current = true;
-      navigate(`/purchases/${result.invoice.id}`);
-      // Saved: close its tab (also removes the tab draft).
+      // Saved: close its tab immediately and navigate to invoice details.
       if (isTab && tabId) removeTab(tabId); else clearInvoiceDraft(draftKey);
+      navigate(`/purchases/${result.invoice.id}`, { replace: true });
     } catch (err: unknown) {
       const e = err as Error;
 
@@ -902,7 +903,7 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
   return (
     <>
       <PageHeader
-        title={isEdit ? "تعديل فاتورة شراء" : currentTab ? `فاتورة شراء جديدة #${currentTab.number}` : "فاتورة شراء جديدة"}
+        title={isEdit ? "تعديل فاتورة شراء" : currentTab ? `فاتورة ${formatInvoiceTabTitle(currentTab)}` : "فاتورة شراء جديدة"}
         description={isEdit ? "تعديل محمي بكلمة مرور. لن يسمح النظام بالتعديل إذا تحرك مخزون الفاتورة لاحقًا." : isConsignment ? "استلام بضاعة أمانة من المورد. سعر الشراء المتوقع تقديري فقط ولا يمثل مبلغًا مستحقًا." : "أدخل بيانات المورد والأصناف ودفعات المخزون والمبالغ المالية."}
         actions={
           <BackButton to={PATHS.PURCHASES} />

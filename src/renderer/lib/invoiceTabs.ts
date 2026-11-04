@@ -23,6 +23,7 @@ export type InvoiceTabMeta = {
   itemCount?: number;
   total?: number;
   currency?: string;
+  invoiceType?: "standard" | "consignment";
 };
 
 export type InvoiceTab = InvoiceTabMeta & {
@@ -43,6 +44,43 @@ const STORAGE_KEY = "stocklite.invoice-tabs.v1";
 export const MAX_INVOICE_TABS = 20;
 
 const emptyRegistry = (): InvoiceTabsRegistry => ({ tabs: [], seq: 0 });
+
+const money = (value: number) => Number(value || 0).toLocaleString("en-US");
+
+/**
+ * Dynamic tab title reflecting the party inside the invoice:
+ * - Purchase: `شراء (اسم المورد)` once a supplier is chosen, or `شراء #N` before.
+ * - Sale: `بيع (اسم العميل)` when a customer is chosen, or `بيع (نقدي)` for cash sales.
+ */
+export function formatInvoiceTabTitle(tab: InvoiceTab): string {
+  const party = tab.partyName?.trim();
+  if (tab.kind === "purchase") {
+    const prefix = tab.invoiceType === "consignment" ? "شراء أمانة" : "شراء";
+    return party ? `${prefix} (${party})` : `${prefix} #${tab.number}`;
+  }
+  return party ? `بيع (${party})` : "بيع (نقدي)";
+}
+
+export function formatInvoiceTabSubtitle(tab: InvoiceTab): string {
+  const party = tab.partyName?.trim();
+  const count = tab.itemCount ?? 0;
+  const countLabel = `${count} ${count === 1 ? "صنف" : "أصناف"}`;
+  const parts: string[] = [];
+
+  if (tab.kind === "purchase" && !party) {
+    parts.push("بدون مورد");
+  } else {
+    parts.push(`#${tab.number}`);
+  }
+
+  parts.push(countLabel);
+
+  if ((tab.total ?? 0) > 0) {
+    parts.push(`${money(tab.total ?? 0)} ${tab.currency ?? "SYP"}`);
+  }
+
+  return parts.join(" · ");
+}
 
 export function readInvoiceTabsRegistry(): InvoiceTabsRegistry {
   try {
@@ -145,4 +183,3 @@ export function migrateLegacyInvoiceDrafts(registry: InvoiceTabsRegistry): Invoi
   if (next !== registry) writeInvoiceTabsRegistry(next);
   return next;
 }
-

@@ -50,10 +50,6 @@ type PurchaseItemForm = {
 
   // السعر المتوقع لفواتير الأمانة فقط
   estimated_purchase_price: number;
-
-  batch_code: string;
-  received_date: string;
-  expiry_date: string;
 };
 
 /**
@@ -78,9 +74,6 @@ const emptyItem = (): PurchaseItemForm => ({
   quantity: 1,
   purchase_price: 0,
   estimated_purchase_price: 0,
-  batch_code: "",
-  received_date: new Date().toISOString().slice(0, 10),
-  expiry_date: "",
 });
 
 const money = (value: number) =>
@@ -205,7 +198,7 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
     if (!isEdit || !lookups) return;
     purchasesService.getDetails(editingId).then((data) => {
       const draft = consumeInvoiceDraft<any>(draftKey);
-      const source = draft ?? { supplierId: Number(data.invoice.supplier_id), invoiceNumber: data.invoice.invoice_number, invoiceDate: data.invoice.invoice_date, invoiceType: data.invoice.invoice_type, discount: Number(data.invoice.discount_amount ?? data.invoice.discount ?? 0), transportCost: Number((data.invoice as any).transport_cost ?? 0), transportCostBearer: ((data.invoice as any).transport_cost_bearer === "supplier" ? "supplier" : "company"), emptyingCost: Number((data.invoice as any).emptying_cost ?? 0), emptyingCostBearer: ((data.invoice as any).emptying_cost_bearer === "supplier" ? "supplier" : "company"), notes: data.invoice.notes ?? "", currency: data.invoice.currency ?? "SYP", exchangeRate: Number(data.invoice.exchange_rate ?? 1), items: data.items.map((row: any) => ({ product_id: Number(row.product_id), productName: String(row.product_name ?? ""), quantity: Number(row.quantity ?? 1), purchase_price: Number(row.unit_price ?? 0), estimated_purchase_price: Number(row.estimated_purchase_price ?? row.unit_price ?? 0), batch_code: String(row.batch_code ?? ""), received_date: String(row.batch_received_date ?? row.received_date ?? data.invoice.invoice_date), expiry_date: String(row.batch_expiry_date ?? row.expiry_date ?? "") })) };
+      const source = draft ?? { supplierId: Number(data.invoice.supplier_id), invoiceNumber: data.invoice.invoice_number, invoiceDate: data.invoice.invoice_date, invoiceType: data.invoice.invoice_type, discount: Number(data.invoice.discount_amount ?? data.invoice.discount ?? 0), transportCost: Number((data.invoice as any).transport_cost ?? 0), transportCostBearer: ((data.invoice as any).transport_cost_bearer === "supplier" ? "supplier" : "company"), emptyingCost: Number((data.invoice as any).emptying_cost ?? 0), emptyingCostBearer: ((data.invoice as any).emptying_cost_bearer === "supplier" ? "supplier" : "company"), notes: data.invoice.notes ?? "", currency: data.invoice.currency ?? "SYP", exchangeRate: Number(data.invoice.exchange_rate ?? 1), items: data.items.map((row: any) => ({ product_id: Number(row.product_id), productName: String(row.product_name ?? ""), quantity: Number(row.quantity ?? 1), purchase_price: Number(row.unit_price ?? 0), estimated_purchase_price: Number(row.estimated_purchase_price ?? row.unit_price ?? 0) })) };
       setSupplierId(source.supplierId); setInvoiceNumber(source.invoiceNumber); setInvoiceDate(source.invoiceDate); setInvoiceType(source.invoiceType); setDiscount(source.discount); setTransportCost(source.transportCost ?? 0); setTransportCostBearer(source.transportCostBearer ?? "company"); setEmptyingCost(source.emptyingCost ?? 0); setEmptyingCostBearer(source.emptyingCostBearer ?? "company"); setNotes(source.notes); setCurrency(source.currency); setExchangeRate(source.exchangeRate); setItems(source.items); setPaymentAmount(0); setExistingPaidAmount(Number(data.invoice.paid_amount ?? 0)); setRestoredDraft(Boolean(draft)); setDraftInitialized(true);
     }).catch((err: Error) => setError(getArabicErrorMessage(err, "تعذر تحميل الفاتورة للتعديل")));
   }, [isEdit, editingId, lookups, draftKey]);
@@ -761,17 +754,6 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
         return true;
       }
 
-      if (!item.received_date) {
-        return true;
-      }
-
-      if (
-        item.expiry_date &&
-        item.expiry_date < item.received_date
-      ) {
-        return true;
-      }
-
       return false;
     });
 
@@ -830,15 +812,6 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
             isConsignment
               ? item.estimated_purchase_price
               : undefined,
-
-          batch_code:
-            item.batch_code || undefined,
-
-          received_date:
-            item.received_date || undefined,
-
-          expiry_date:
-            item.expiry_date || undefined,
         })),
 
         /**
@@ -904,7 +877,7 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
     <>
       <PageHeader
         title={isEdit ? "تعديل فاتورة شراء" : currentTab ? `فاتورة ${formatInvoiceTabTitle(currentTab)}` : "فاتورة شراء جديدة"}
-        description={isEdit ? "تعديل محمي بكلمة مرور. لن يسمح النظام بالتعديل إذا تحرك مخزون الفاتورة لاحقًا." : isConsignment ? "استلام بضاعة أمانة من المورد. سعر الشراء المتوقع تقديري فقط ولا يمثل مبلغًا مستحقًا." : "أدخل بيانات المورد والأصناف ودفعات المخزون والمبالغ المالية."}
+        description={isEdit ? "تعديل محمي بكلمة مرور مع تحديث الرصيد الموحد للمخزون تلقائيًا." : isConsignment ? "استلام بضاعة أمانة من المورد وإضافتها للمخزون الموحد. التسوية لاحقًا تتم يدويًا." : "أدخل بيانات المورد والأصناف والمبالغ المالية لإضافة الكميات إلى المخزون الموحد."}
         actions={
           <BackButton to={PATHS.PURCHASES} />
         }
@@ -912,7 +885,7 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
 
       <div className="space-y-5 pb-24">
         {restoredDraft && <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"><span>تم تحميل آخر مسودة غير مكتملة.</span><Button size="sm" variant="secondary" onClick={() => { clearInvoiceDraft(draftKey); window.location.reload(); }}>تجاهل المسودة</Button></div>}
-        {isEdit && <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3 text-sm text-[var(--text-secondary)]">التعديل يتطلب كلمة المرور عند الحفظ. إذا كانت دفعة مخزون من هذه الفاتورة قد بيعت أو عُدلت، سيرفض الباك التعديل حفاظًا على السجل.</div>}
+        {isEdit && <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3 text-sm text-[var(--text-secondary)]">التعديل يتطلب كلمة المرور عند الحفظ، ويحدّث رصيد المخزون الموحد للمنتجات وفق فرق الكميات.</div>}
         {error && (
           <div className="rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
             {error}
@@ -1114,8 +1087,8 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
           header="أصناف الفاتورة"
           description={
             isConsignment
-              ? "أضف المنتجات وحدد الكمية وسعر تسويق المنتج وبيانات دفعة المخزون. سعر التسويق يحدد إجمالي الفاتورة ويمكن دفع دفعات منه للمورد."
-              : "أضف المنتجات وحدد الكمية وسعر الشراء وبيانات دفعة المخزون."
+              ? "أضف المنتجات وحدد الكمية وسعر تسويق المنتج. تُضاف الكميات مباشرة إلى المخزون الموحد."
+              : "أضف المنتجات وحدد الكمية وسعر الشراء لإضافتها مباشرة إلى المخزون الموحد."
           }
         >
           {/* ─── Sticky "add item" bar ─── */}
@@ -1302,62 +1275,10 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                       </FormField>
                     )}
 
-                    <FormField
-                      label={
-                        isConsignment
-                          ? "إجمالي السطر"
-                          : "إجمالي السطر"
-                      }
-                    >
+                    <FormField label="إجمالي السطر">
                       <Input
                         readOnly
                         value={money(lineTotal)}
-                      />
-                    </FormField>
-
-                    <FormField label="كود الدفعة">
-                      <Input
-                        placeholder="اختياري — يُنشأ تلقائيًا"
-                        value={item.batch_code}
-                        onChange={(e) =>
-                          updateItem(index, {
-                            batch_code:
-                              e.target.value,
-                          })
-                        }
-                      />
-                    </FormField>
-
-                    <FormField
-                      label="تاريخ الاستلام"
-                      required
-                    >
-                      <Input
-                        type="date"
-                        value={
-                          item.received_date
-                        }
-                        onChange={(e) =>
-                          updateItem(index, {
-                            received_date:
-                              e.target.value,
-                          })
-                        }
-                      />
-                    </FormField>
-
-                    <FormField label="تاريخ الانتهاء">
-                      <Input
-                        type="date"
-                        value={
-                          item.expiry_date
-                        }
-                        onChange={(e) =>
-                          updateItem(index, {
-                            expiry_date:
-                              e.target.value,
-                          })
-                        }
                       />
                     </FormField>
                   </div>
@@ -1468,9 +1389,6 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                   <th className="px-4 py-3 text-center">الكمية</th>
                   <th className="px-4 py-3 text-center">{isConsignment ? "سعر التسويق" : "سعر الشراء"}</th>
                   <th className="px-4 py-3 text-center">إجمالي السطر</th>
-                  <th className="px-4 py-3 text-center">كود الدفعة</th>
-                  <th className="px-4 py-3 text-center">تاريخ الاستلام</th>
-                  <th className="px-4 py-3 text-center">تاريخ الانتهاء</th>
                 </tr>
               </thead>
               <tbody>
@@ -1483,9 +1401,6 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                       <td className="px-4 py-3 text-center align-middle" dir="ltr">{money(item.quantity)}</td>
                       <td className="px-4 py-3 text-center align-middle" dir="ltr">{money(price)} {currency}</td>
                       <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{money(item.quantity * price)} {currency}</td>
-                      <td className="px-4 py-3 text-center align-middle">{item.batch_code || "تلقائي"}</td>
-                      <td className="px-4 py-3 text-center align-middle" dir="ltr">{item.received_date || "—"}</td>
-                      <td className="px-4 py-3 text-center align-middle" dir="ltr">{item.expiry_date || "—"}</td>
                     </tr>
                   );
                 })}
@@ -1496,20 +1411,17 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                   <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{money(items.reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</td>
                   <td className="px-4 py-3 text-center align-middle">—</td>
                   <td className="px-4 py-3 text-center align-middle font-bold text-[var(--primary)]" dir="ltr">{money(isConsignment ? estimatedSubtotal : standardSubtotal)} {currency}</td>
-                  <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                 </tr>
                 {transportCost > 0 && (
                   <tr className="border-t border-[var(--border)]">
                     <td colSpan={4} className="px-4 py-3 text-center align-middle font-medium">تكلفة النقل — {transportCostBearer === "company" ? "علينا" : "على المورد"}</td>
                     <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{transportCostBearer === "supplier" ? "− " : "+ "}{money(transportCost)} {currency}</td>
-                    <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                   </tr>
                 )}
                 {emptyingCost > 0 && (
                   <tr className="border-t border-[var(--border)]">
                     <td colSpan={4} className="px-4 py-3 text-center align-middle font-medium">تكلفة العتالة — {emptyingCostBearer === "company" ? "علينا" : "على المورد"}</td>
                     <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{emptyingCostBearer === "supplier" ? "− " : "+ "}{money(emptyingCost)} {currency}</td>
-                    <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                   </tr>
                 )}
                 {(transportCost > 0 || emptyingCost > 0) && (
@@ -1518,7 +1430,6 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                     <td className="px-4 py-3 text-center align-middle text-base font-bold text-[var(--primary)]" dir="ltr">
                       {money((isConsignment ? estimatedSubtotal : standardSubtotal) + transportCost * (transportCostBearer === "company" ? 1 : -1) + emptyingCost * (emptyingCostBearer === "company" ? 1 : -1))} {currency}
                     </td>
-                    <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                   </tr>
                 )}
               </tfoot>

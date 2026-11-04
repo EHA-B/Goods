@@ -112,18 +112,17 @@ export default function SaleDetailsPage() {
           <div className="space-y-2">{editHistory.map((entry, index) => <div key={String(entry.id ?? index)} className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2 text-sm"><span className="font-bold text-[var(--text-primary)]">تعديل #{editHistory.length - index}</span><span className="text-[var(--text-muted)]">{String(entry.created_at ?? "—")}</span></div>)}</div>
         </Card>}
 
-        <Card padding={false} header="أصناف الفاتورة" description="المنتجات والدفعات والكميات والأسعار والأرباح.">
+        <Card padding={false} header="أصناف الفاتورة" description="المنتجات والكميات والأسعار والأرباح.">
           <DataTable>
             <DataTableHead>
               <DataTableRow>
-                {["المنتج", "الدفعة", "الكمية", "سعر البيع", "التكلفة", "الإجمالي", "الربح"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
+                {["المنتج", "الكمية", "سعر البيع", "التكلفة", "الإجمالي", "الربح"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
               </DataTableRow>
             </DataTableHead>
             <DataTableBody>
               {items.map((item: Record<string, unknown>, idx) => (
                 <DataTableRow key={idx}>
                   <DataTableCell className="font-bold text-[var(--text-primary)]">{String(item.product_name ?? "-")}</DataTableCell>
-                  <DataTableCell>{String(item.batch_code ?? "-")}</DataTableCell>
                   <DataTableCell>{String(item.quantity ?? "-")}</DataTableCell>
                   <DataTableCell>{money(Number(item.unit_price ?? 0), invoice.currency)}</DataTableCell>
                   <DataTableCell>{money(Number(item.cost_price ?? 0), "SYP")}</DataTableCell>

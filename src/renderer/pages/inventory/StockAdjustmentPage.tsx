@@ -2,7 +2,6 @@ import { notifyError, notifySuccess, notifyValidation } from "../../lib/notifica
 import { ArrowDownToLine, ArrowUpFromLine, PackageCheck, Scale } from "lucide-react";
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -23,16 +22,14 @@ import {
   getInventoryErrorMessage,
   inventoryService,
   type InventoryItem,
-  type StockBatch,
 } from "./inventoryService";
 
 const OPERATION_OPTIONS = [
-  { value: "add", label: "إضافة إلى الدفعة" },
-  { value: "subtract", label: "خصم من الدفعة" },
+  { value: "add", label: "إضافة إلى المخزون" },
+  { value: "subtract", label: "خصم من المخزون" },
 ];
 
 type FieldErrors = {
-  batchId?: string;
   quantity?: string;
   reason?: string;
 };
@@ -43,8 +40,6 @@ export default function StockAdjustmentPage() {
   const id = Number(productId);
 
   const [product, setProduct] = useState<InventoryItem>();
-  const [batches, setBatches] = useState<StockBatch[]>([]);
-  const [batchId, setBatchId] = useState("");
   const [operation, setOperation] = useState<"add" | "subtract">("subtract");
   const [quantity, setQuantity] = useState<number>(1);
   const [reason, setReason] = useState("");
@@ -54,7 +49,6 @@ export default function StockAdjustmentPage() {
   const [loadError, setLoadError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  const batchRef = useRef<HTMLSelectElement>(null);
   const quantityRef = useRef<HTMLInputElement>(null);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
 
@@ -67,11 +61,8 @@ export default function StockAdjustmentPage() {
 
         if (!cancelled) {
           setProduct(details.item);
-          const active = details.batches.filter((batch) => batch.isActive);
-          setBatches(active);
-
-          if (active.length) {
-            setBatchId(String(active[0].id));
+          if (details.item.totalQuantity <= 0) {
+            setOperation("add");
           }
         }
       } catch (error) {
@@ -90,13 +81,8 @@ export default function StockAdjustmentPage() {
     };
   }, [id]);
 
-  const selectedBatch = useMemo(
-    () => batches.find((batch) => batch.id === Number(batchId)),
-    [batches, batchId],
-  );
-
   const amount = Number(quantity) || 0;
-  const beforeQuantity = selectedBatch?.remainingQuantity ?? 0;
+  const beforeQuantity = product?.totalQuantity ?? 0;
   const signedChange = operation === "add" ? amount : -amount;
   const expectedQuantity = beforeQuantity + signedChange;
   const isExpectedNegative = expectedQuantity < 0;
@@ -107,12 +93,6 @@ export default function StockAdjustmentPage() {
 
   function focusFirstError(errors: FieldErrors) {
     window.requestAnimationFrame(() => {
-      if (errors.batchId) {
-        batchRef.current?.focus();
-        batchRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-        return;
-      }
-
       if (errors.quantity) {
         quantityRef.current?.focus();
         quantityRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -129,18 +109,14 @@ export default function StockAdjustmentPage() {
   function validate(): FieldErrors {
     const errors: FieldErrors = {};
 
-    if (!selectedBatch) {
-      errors.batchId = "اختر دفعة موجودة لإجراء التسوية عليها.";
-    }
-
     if (!Number.isFinite(amount) || amount <= 0) {
       errors.quantity = "أدخل كمية أكبر من صفر.";
     } else if (
       operation === "subtract" &&
-      selectedBatch &&
-      amount > selectedBatch.remainingQuantity
+      product &&
+      amount > product.totalQuantity
     ) {
-      errors.quantity = "لا يمكن خصم كمية أكبر من الرصيد المتوفر في الدفعة.";
+      errors.quantity = "لا يمكن خصم كمية أكبر من الرصيد المتوفر في المخزون.";
     }
 
     if (!reason.trim()) {
@@ -162,22 +138,17 @@ export default function StockAdjustmentPage() {
       return;
     }
 
-    if (!selectedBatch) {
-      return;
-    }
-
     try {
       setIsSaving(true);
 
       await inventoryService.adjust(id, {
-        stock_batch_id: selectedBatch.id,
         type: operation,
         quantity: amount,
         reason: reason.trim(),
         notes: notes.trim() || null,
       });
 
-      notifySuccess("تم تسجيل التسوية وتحديث رصيد الدفعة بنجاح.");
+      notifySuccess("تم تسجيل التسوية وتحديث رصيد المخزون بنجاح.");
       navigate(`/inventory/${id}`);
     } catch (error) {
       notifyError(error, {
@@ -216,7 +187,7 @@ export default function StockAdjustmentPage() {
     <form onSubmit={submit} className="space-y-6">
       <PageHeader
         title="تسوية المخزون"
-        description="تعديل رصيد دفعة محددة مع توثيق سبب التسوية والرصيد قبل وبعد العملية."
+        description="تعديل رصيد المادة في المخزون مع توثيق سبب التسوية والرصيد قبل وبعد العملية."
         actions={<BackButton />}
       />
 
@@ -225,7 +196,7 @@ export default function StockAdjustmentPage() {
           <HeaderInfo label="المادة" value={product.productName} />
           <HeaderInfo label="الكود" value={product.productCode || "—"} />
           <HeaderInfo
-            label="الرصيد الإجمالي"
+            label="الرصيد الحالي"
             value={`${product.totalQuantity.toLocaleString("en-US")} ${product.unit}`}
           />
         </div>
@@ -235,32 +206,9 @@ export default function StockAdjustmentPage() {
         <div className="space-y-6">
           <Card
             header="بيانات التسوية"
-            description="حدد الدفعة ونوع الحركة والكمية المراد تعديلها."
+            description="حدد نوع الحركة والكمية المراد تعديلها."
           >
             <div className="grid gap-x-5 gap-y-1 md:grid-cols-2">
-              <FormField
-                label="الدفعة"
-                htmlFor="stock-adjustment-batch"
-                required
-                error={fieldErrors.batchId}
-              >
-                <Select
-                  ref={batchRef}
-                  id="stock-adjustment-batch"
-                  value={batchId}
-                  error={Boolean(fieldErrors.batchId)}
-                  placeholder={batches.length ? "اختر الدفعة" : "لا توجد دفعات نشطة"}
-                  options={batches.map((batch) => ({
-                    value: String(batch.id),
-                    label: `${batch.batchCode} — المتبقي ${batch.remainingQuantity.toLocaleString("en-US")} ${product.unit}`,
-                  }))}
-                  onChange={(event) => {
-                    setBatchId(event.target.value);
-                    clearFieldError("batchId");
-                  }}
-                />
-              </FormField>
-
               <FormField
                 label="نوع التسوية"
                 htmlFor="stock-adjustment-operation"
@@ -307,13 +255,14 @@ export default function StockAdjustmentPage() {
                 label="سبب التسوية"
                 htmlFor="stock-adjustment-reason"
                 required
+                className="md:col-span-2"
                 error={fieldErrors.reason}
               >
                 <Textarea
                   ref={reasonRef}
                   id="stock-adjustment-reason"
                   rows={3}
-                  className="min-h-28"
+                  className="min-h-24"
                   value={reason}
                   error={Boolean(fieldErrors.reason)}
                   placeholder="مثال: تلف، فرق جرد، تصحيح إدخال"
@@ -353,7 +302,6 @@ export default function StockAdjustmentPage() {
             </Button>
             <Button
               type="submit"
-              disabled={!batches.length}
               isLoading={isSaving}
               startIcon={<PackageCheck size={17} />}
             >
@@ -369,8 +317,8 @@ export default function StockAdjustmentPage() {
           >
             <div className="space-y-4">
               <SummaryRow
-                label="الدفعة المختارة"
-                value={selectedBatch?.batchCode || "لم تُحدد"}
+                label="المادة"
+                value={product.productName}
               />
               <SummaryRow
                 label="الرصيد قبل"
@@ -434,7 +382,7 @@ export default function StockAdjustmentPage() {
                 </p>
                 {isExpectedNegative && (
                   <p className="mt-2 text-xs font-medium text-[var(--danger)]">
-                    لا يمكن أن يصبح رصيد الدفعة سالبًا.
+                    لا يمكن أن يصبح رصيد المخزون سالبًا.
                   </p>
                 )}
               </div>

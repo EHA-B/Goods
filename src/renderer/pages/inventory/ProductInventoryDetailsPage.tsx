@@ -1,32 +1,325 @@
-import { AlertCircle, ArrowRight, Boxes, History, LayoutDashboard, Plus, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { AlertCircle, ArrowLeftRight, ArrowRight, History, LayoutDashboard, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { InventoryStatusBadge, StockBatchesTable } from "../../components/inventory";
+import { InventoryStatusBadge } from "../../components/inventory";
 import { Button, Card, EmptyState, LoadingSpinner } from "../../components/ui";
-import { getInventoryErrorMessage, inventoryService, type InventoryItem, type StockAdjustment, type StockBatch } from "./inventoryService";
+import {
+  getInventoryErrorMessage,
+  inventoryService,
+  type InventoryItem,
+  type ProductStockMovement,
+  type StockAdjustment,
+} from "./inventoryService";
 
-type Tab = "overview" | "batches" | "adjustments";
-export default function ProductInventoryDetailsPage() {
-  const { productId } = useParams(); const navigate = useNavigate(); const id = Number(productId);
-  const [product, setProduct] = useState<InventoryItem>(); const [batches, setBatches] = useState<StockBatch[]>([]); const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
-  const [activeTab, setActiveTab] = useState<Tab>("overview"); const [isLoading, setIsLoading] = useState(true); const [error, setError] = useState("");
-  const load = useCallback(async () => { try { setIsLoading(true); setError(""); const details = await inventoryService.productDetails(id); setProduct(details.item); setBatches(details.batches); setAdjustments(details.adjustments); } catch (e) { setError(getInventoryErrorMessage(e)); } finally { setIsLoading(false); } }, [id]);
-  useEffect(() => { void load(); }, [load]);
-  if (isLoading) return <div className="flex min-h-[60vh] items-center justify-center"><LoadingSpinner size="lg" /></div>;
-  if (!product) return <EmptyState icon={<AlertCircle size={28} />} title="تعذر تحميل تفاصيل المخزون" description={error || "المادة غير موجودة."} action={<Button variant="secondary" startIcon={<RefreshCw size={16} />} onClick={() => void load()}>إعادة المحاولة</Button>} />;
-  return <>
-    <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><Button variant="secondary" startIcon={<ArrowRight size={17} />} onClick={() => navigate("/inventory")}>العودة إلى المخزون</Button><div className="flex flex-wrap gap-2"><Button variant="secondary" startIcon={<Plus size={17} />} onClick={() => navigate(`/inventory/${id}/batches/new`)}>إضافة دفعة</Button><Button startIcon={<SlidersHorizontal size={17} />} onClick={() => navigate(`/inventory/${id}/adjust`)}>تسوية المخزون</Button></div></div>
-    <Card padding={false}>
-      <div className="flex flex-col gap-5 border-b border-[var(--border)] p-5 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex flex-wrap items-center gap-3"><h1 className="text-2xl font-bold">{product.productName}</h1><InventoryStatusBadge status={product.status} /></div><div className="mt-2 flex flex-wrap gap-2 text-sm text-[var(--text-muted)]"><span dir="ltr">{product.productCode}</span><span>•</span><span>{product.categoryName}</span><span>•</span><span>{product.unit}</span></div></div><div className="grid min-w-full grid-cols-2 gap-3 sm:min-w-[420px] lg:min-w-[520px] lg:grid-cols-3"><Summary label="الرصيد الحالي" value={`${product.totalQuantity.toLocaleString("en-US")} ${product.unit}`} /><Summary label="قيمة المخزون" value={`${product.stockValue.toLocaleString("en-US")} ل.س`} /><Summary label="عدد الدفعات" value={batches.length.toLocaleString("en-US")} /></div></div>
-      <div className="flex gap-1 overflow-x-auto border-b border-[var(--border)] px-5 pt-3"><TabButton active={activeTab === "overview"} icon={<LayoutDashboard size={16} />} onClick={() => setActiveTab("overview")}>نظرة عامة</TabButton><TabButton active={activeTab === "batches"} icon={<Boxes size={16} />} onClick={() => setActiveTab("batches")}>الدفعات ({batches.length})</TabButton><TabButton active={activeTab === "adjustments"} icon={<History size={16} />} onClick={() => setActiveTab("adjustments")}>التسويات ({adjustments.length})</TabButton></div>
-      <div className="p-5">
-        {activeTab === "overview" && <div className="grid gap-5 xl:grid-cols-2"><Card header="بيانات المخزون"><dl className="divide-y divide-[var(--border)]"><Line label="الرصيد الحالي" value={`${product.totalQuantity.toLocaleString("en-US")} ${product.unit}`} /><Line label="حد التنبيه المؤقت" value={`${product.minimumStock.toLocaleString("en-US")} ${product.unit}`} /><Line label="متوسط سعر الشراء" value={`${product.averagePurchasePrice.toLocaleString("en-US")} ل.س`} /><Line label="قيمة المخزون" value={`${product.stockValue.toLocaleString("en-US")} ل.س`} /><Line label="أقرب انتهاء" value={product.nearestExpiryDate ?? "لا يوجد"} /></dl></Card><Card header="التوريد والدفعات"><dl className="divide-y divide-[var(--border)]"><Line label="عدد الدفعات" value={batches.length.toLocaleString("en-US")} /><Line label="عدد الموردين" value={product.suppliersCount.toLocaleString("en-US")} /><div className="py-3"><dt className="text-xs text-[var(--text-muted)]">الموردون</dt><dd className="mt-2 flex flex-wrap gap-2">{product.supplierNames.length ? product.supplierNames.map((name) => <span key={name} className="rounded-full border border-[var(--border)] px-3 py-1 text-xs">{name}</span>) : <span className="text-sm text-[var(--text-muted)]">لا يوجد موردون</span>}</dd></div></dl></Card></div>}
-        {activeTab === "batches" && (batches.length ? <div className="overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border)]"><StockBatchesTable batches={batches} unit={product.unit} /></div> : <EmptyState title="لا توجد دفعات" description="أضف أول دفعة لهذه المادة." />)}
-        {activeTab === "adjustments" && (adjustments.length ? <div className="overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border)]"><table className="w-full text-sm"><thead className="bg-[var(--surface-subtle)]"><tr>{["التاريخ","الدفعة","العملية","الكمية","قبل","بعد","السبب"].map((x) => <th key={x} className="px-4 py-3 text-right">{x}</th>)}</tr></thead><tbody>{adjustments.map((a) => <tr key={a.id} className="border-t border-[var(--border)]"><td className="px-4 py-3" dir="ltr">{a.createdAt}</td><td className="px-4 py-3">#{a.stockBatchId}</td><td className="px-4 py-3">{a.quantity >= 0 ? "إضافة" : "خصم"}</td><td className="px-4 py-3" dir="ltr">{Math.abs(a.quantity).toLocaleString("en-US")} {product.unit}</td><td className="px-4 py-3">{a.quantityBefore.toLocaleString("en-US")}</td><td className="px-4 py-3">{a.quantityAfter.toLocaleString("en-US")}</td><td className="px-4 py-3">{a.reason}</td></tr>)}</tbody></table></div> : <EmptyState title="لا توجد تسويات" description="ستظهر هنا التسويات المنفذة على دفعات هذه المادة." />)}
-      </div>
-    </Card>
-  </>;
+type Tab = "overview" | "movements" | "adjustments";
+
+function getMovementTypeLabel(type: string) {
+  switch (type) {
+    case "in":
+      return "إدخال";
+    case "out":
+      return "إخراج";
+    case "adjustment":
+      return "تسوية";
+    default:
+      return type || "حركة";
+  }
 }
-function Summary({ label, value }: { label: string; value: string }) { return <div className="rounded-[var(--radius-sm)] bg-[var(--surface-subtle)] px-4 py-3"><p className="text-xs text-[var(--text-muted)]">{label}</p><p dir="ltr" className="mt-1 text-right font-bold">{value}</p></div>; }
-function Line({ label, value }: { label: string; value: string }) { return <div className="grid grid-cols-[140px_1fr] gap-4 py-3"><dt className="text-sm text-[var(--text-muted)]">{label}</dt><dd className="text-sm font-bold">{value}</dd></div>; }
-function TabButton({ active, icon, children, onClick }: { active: boolean; icon: ReactNode; children: ReactNode; onClick: () => void }) { return <button type="button" onClick={onClick} className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-bold ${active ? "border-[var(--primary)] text-[var(--primary)]" : "border-transparent text-[var(--text-muted)]"}`}>{icon}{children}</button>; }
+
+function getSourceTypeLabel(sourceType: string, sourceId: number | null) {
+  const suffix = sourceId ? ` #${sourceId}` : "";
+  switch (sourceType) {
+    case "purchase":
+      return `فاتورة شراء${suffix}`;
+    case "purchase_edit":
+      return `تعديل فاتورة شراء${suffix}`;
+    case "purchase_cancel":
+      return `إلغاء فاتورة شراء${suffix}`;
+    case "sale":
+      return `فاتورة بيع${suffix}`;
+    case "sale_edit":
+      return `تعديل فاتورة بيع${suffix}`;
+    case "sale_cancel":
+      return `إلغاء فاتورة بيع${suffix}`;
+    case "adjustment":
+      return `تسوية مخزون${suffix}`;
+    default:
+      return sourceType ? `${sourceType}${suffix}` : "—";
+  }
+}
+
+export default function ProductInventoryDetailsPage() {
+  const { productId } = useParams();
+  const navigate = useNavigate();
+  const id = Number(productId);
+
+  const [product, setProduct] = useState<InventoryItem>();
+  const [movements, setMovements] = useState<ProductStockMovement[]>([]);
+  const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError("");
+      const details = await inventoryService.productDetails(id);
+      setProduct(details.item);
+      setMovements(details.movements);
+      setAdjustments(details.adjustments);
+    } catch (e) {
+      setError(getInventoryErrorMessage(e));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <EmptyState
+        icon={<AlertCircle size={28} />}
+        title="تعذر تحميل تفاصيل المخزون"
+        description={error || "المادة غير موجودة."}
+        action={
+          <Button variant="secondary" startIcon={<RefreshCw size={16} />} onClick={() => void load()}>
+            إعادة المحاولة
+          </Button>
+        }
+      />
+    );
+  }
+
+  return (
+    <>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <Button variant="secondary" startIcon={<ArrowRight size={17} />} onClick={() => navigate("/inventory")}>
+          العودة إلى المخزون
+        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button startIcon={<SlidersHorizontal size={17} />} onClick={() => navigate(`/inventory/${id}/adjust`)}>
+            تسوية المخزون
+          </Button>
+        </div>
+      </div>
+
+      <Card padding={false}>
+        <div className="flex flex-col gap-5 border-b border-[var(--border)] p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-bold">{product.productName}</h1>
+              <InventoryStatusBadge status={product.status} />
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2 text-sm text-[var(--text-muted)]">
+              <span dir="ltr">{product.productCode}</span>
+              <span>•</span>
+              <span>{product.categoryName}</span>
+              <span>•</span>
+              <span>{product.unit}</span>
+            </div>
+          </div>
+
+          <div className="grid min-w-full grid-cols-2 gap-3 sm:min-w-[420px] lg:min-w-[520px] lg:grid-cols-3">
+            <Summary label="الرصيد الحالي" value={`${product.totalQuantity.toLocaleString("en-US")} ${product.unit}`} />
+            <Summary label="متوسط التكلفة" value={`${product.averagePurchasePrice.toLocaleString("en-US")} ل.س`} />
+            <Summary label="قيمة المخزون" value={`${product.stockValue.toLocaleString("en-US")} ل.س`} />
+          </div>
+        </div>
+
+        <div className="flex gap-1 overflow-x-auto border-b border-[var(--border)] px-5 pt-3">
+          <TabButton active={activeTab === "overview"} icon={<LayoutDashboard size={16} />} onClick={() => setActiveTab("overview")}>
+            نظرة عامة
+          </TabButton>
+          <TabButton active={activeTab === "movements"} icon={<ArrowLeftRight size={16} />} onClick={() => setActiveTab("movements")}>
+            حركات المخزون ({movements.length})
+          </TabButton>
+          <TabButton active={activeTab === "adjustments"} icon={<History size={16} />} onClick={() => setActiveTab("adjustments")}>
+            التسويات ({adjustments.length})
+          </TabButton>
+        </div>
+
+        <div className="p-5">
+          {activeTab === "overview" && (
+            <div className="grid gap-5 xl:grid-cols-2">
+              <Card header="بيانات المخزون">
+                <dl className="divide-y divide-[var(--border)]">
+                  <Line label="الرصيد الحالي" value={`${product.totalQuantity.toLocaleString("en-US")} ${product.unit}`} />
+                  <Line label="حد التنبيه المؤقت" value={`${product.minimumStock.toLocaleString("en-US")} ${product.unit}`} />
+                  <Line label="متوسط التكلفة" value={`${product.averagePurchasePrice.toLocaleString("en-US")} ل.س`} />
+                  <Line label="قيمة المخزون" value={`${product.stockValue.toLocaleString("en-US")} ل.س`} />
+                </dl>
+              </Card>
+
+              <Card header="التوريد والحركة">
+                <dl className="divide-y divide-[var(--border)]">
+                  <Line label="عدد حركات المخزون" value={movements.length.toLocaleString("en-US")} />
+                  <Line label="عدد الموردين" value={product.suppliersCount.toLocaleString("en-US")} />
+                  <div className="py-3">
+                    <dt className="text-xs text-[var(--text-muted)]">الموردون</dt>
+                    <dd className="mt-2 flex flex-wrap gap-2">
+                      {product.supplierNames.length ? (
+                        product.supplierNames.map((name) => (
+                          <span key={name} className="rounded-full border border-[var(--border)] px-3 py-1 text-xs">
+                            {name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-sm text-[var(--text-muted)]">لا يوجد موردون</span>
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === "movements" &&
+            (movements.length ? (
+              <div className="overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border)]">
+                <table className="w-full text-sm">
+                  <thead className="bg-[var(--surface-subtle)]">
+                    <tr>
+                      {["التاريخ", "نوع الحركة", "المصدر", "التغيير", "قبل", "بعد", "التكلفة", "ملاحظات"].map((x) => (
+                        <th key={x} className="px-4 py-3 text-right">
+                          {x}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {movements.map((m) => (
+                      <tr key={m.id} className="border-t border-[var(--border)]">
+                        <td className="px-4 py-3" dir="ltr">
+                          {m.createdAt}
+                        </td>
+                        <td className="px-4 py-3">{getMovementTypeLabel(m.movementType)}</td>
+                        <td className="px-4 py-3">{getSourceTypeLabel(m.sourceType, m.sourceId)}</td>
+                        <td
+                          className={`px-4 py-3 font-bold ${
+                            m.quantityChange >= 0 ? "text-emerald-600" : "text-amber-600"
+                          }`}
+                          dir="ltr"
+                        >
+                          {m.quantityChange >= 0 ? "+" : ""}
+                          {m.quantityChange.toLocaleString("en-US")} {product.unit}
+                        </td>
+                        <td className="px-4 py-3" dir="ltr">
+                          {m.quantityBefore.toLocaleString("en-US")}
+                        </td>
+                        <td className="px-4 py-3 font-bold" dir="ltr">
+                          {m.quantityAfter.toLocaleString("en-US")}
+                        </td>
+                        <td className="px-4 py-3" dir="ltr">
+                          {m.unitCost.toLocaleString("en-US")} ل.س
+                        </td>
+                        <td className="px-4 py-3 text-[var(--text-secondary)]">{m.notes || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState title="لا توجد حركات مخزون" description="ستظهر هنا حركات الإدخال والإخراج والتسويات لهذه المادة." />
+            ))}
+
+          {activeTab === "adjustments" &&
+            (adjustments.length ? (
+              <div className="overflow-x-auto rounded-[var(--radius-md)] border border-[var(--border)]">
+                <table className="w-full text-sm">
+                  <thead className="bg-[var(--surface-subtle)]">
+                    <tr>
+                      {["التاريخ", "العملية", "الكمية", "قبل", "بعد", "السبب", "ملاحظات"].map((x) => (
+                        <th key={x} className="px-4 py-3 text-right">
+                          {x}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adjustments.map((a) => (
+                      <tr key={a.id} className="border-t border-[var(--border)]">
+                        <td className="px-4 py-3" dir="ltr">
+                          {a.createdAt}
+                        </td>
+                        <td className="px-4 py-3">{a.quantity >= 0 ? "إضافة" : "خصم"}</td>
+                        <td className="px-4 py-3" dir="ltr">
+                          {Math.abs(a.quantity).toLocaleString("en-US")} {product.unit}
+                        </td>
+                        <td className="px-4 py-3" dir="ltr">
+                          {a.quantityBefore.toLocaleString("en-US")}
+                        </td>
+                        <td className="px-4 py-3" dir="ltr">
+                          {a.quantityAfter.toLocaleString("en-US")}
+                        </td>
+                        <td className="px-4 py-3">{a.reason}</td>
+                        <td className="px-4 py-3 text-[var(--text-secondary)]">{a.notes || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState title="لا توجد تسويات" description="ستظهر هنا التسويات المنفذة على مخزون هذه المادة." />
+            ))}
+        </div>
+      </Card>
+    </>
+  );
+}
+
+function Summary({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[var(--radius-sm)] bg-[var(--surface-subtle)] px-4 py-3">
+      <p className="text-xs text-[var(--text-muted)]">{label}</p>
+      <p dir="ltr" className="mt-1 text-right font-bold">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function Line({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[140px_1fr] gap-4 py-3">
+      <dt className="text-sm text-[var(--text-muted)]">{label}</dt>
+      <dd className="text-sm font-bold">{value}</dd>
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  icon,
+  children,
+  onClick,
+}: {
+  active: boolean;
+  icon: ReactNode;
+  children: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-bold ${
+        active ? "border-[var(--primary)] text-[var(--primary)]" : "border-transparent text-[var(--text-muted)]"
+      }`}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+}

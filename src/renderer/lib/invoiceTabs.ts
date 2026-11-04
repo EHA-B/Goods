@@ -131,24 +131,24 @@ export function removeInvoiceTabDraft(tab: Pick<InvoiceTab, "id" | "kind">) {
 }
 
 /**
- * Quantities of each stock batch that are already used by OTHER open sale
+ * Quantities of each product that are already used by OTHER open sale
  * tabs (not saved yet). Used to show a soft warning so two parallel invoices
- * don't try to sell the same remaining stock.
+ * don't try to sell the same remaining unified stock.
  */
-export function getReservedBatchQuantities(excludeTabId?: string) {
+export function getReservedProductQuantities(excludeTabId?: string) {
   const reserved = new Map<number, number>();
   const { tabs } = readInvoiceTabsRegistry();
 
   for (const tab of tabs) {
     if (tab.kind !== "sale" || tab.id === excludeTabId) continue;
-    const draft = loadInvoiceDraft<{ items?: Array<{ stock_batch_id?: number; quantity?: number }> }>(
+    const draft = loadInvoiceDraft<{ items?: Array<{ product_id?: number; quantity?: number }> }>(
       invoiceTabDraftKey("sale", tab.id),
     );
     for (const item of draft?.items ?? []) {
-      const batchId = Number(item?.stock_batch_id ?? 0);
+      const productId = Number(item?.product_id ?? 0);
       const quantity = Number(item?.quantity ?? 0);
-      if (!batchId || !Number.isFinite(quantity) || quantity <= 0) continue;
-      reserved.set(batchId, (reserved.get(batchId) ?? 0) + quantity);
+      if (!productId || !Number.isFinite(quantity) || quantity <= 0) continue;
+      reserved.set(productId, (reserved.get(productId) ?? 0) + quantity);
     }
   }
 

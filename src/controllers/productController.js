@@ -1,6 +1,10 @@
 const path = require('path');
 const dbmanager = require(path.join(__dirname, '../database/databaseManager'));
 
+function round3(value) {
+    return Math.round((Number(value) || 0) * 1000) / 1000;
+}
+
 class ProductController {
 
     async createProduct(input) {
@@ -16,7 +20,6 @@ class ProductController {
         }
         const db = await dbmanager.init();
 
-        // Prevent duplicate product names (case-insensitive)
         const existingProduct = await new Promise((resolve, reject) => {
             db.get(
                 `SELECT id FROM products WHERE LOWER(TRIM(name)) = LOWER(?)`,
@@ -33,9 +36,12 @@ class ProductController {
             throw err;
         }
 
+        const initialStock = round3(Math.max(0, Number(input.stock_quantity ?? 0)));
+        const initialAvgCost = Math.max(0, Number(input.avg_cost_base ?? 0));
+
         const sql = `
-            INSERT INTO products (name, code, unit, category, description, isActive, created_at, updated_at)
-            VALUES (?,?,?,?,?,?, datetime('now'), datetime('now'))
+            INSERT INTO products (name, code, unit, category, description, isActive, stock_quantity, avg_cost_base, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))
         `;
         const id = await new Promise((resolve, reject) => {
             db.run(sql, [
@@ -46,7 +52,9 @@ class ProductController {
                 String(input.unit).trim(),
                 input.category ?? null,
                 input.description ?? null,
-                input.isActive ?? null
+                input.isActive ?? 1,
+                initialStock,
+                initialAvgCost,
             ], function (err) {
                 if (err) return reject(err);
                 resolve(this.lastID);
@@ -94,7 +102,7 @@ class ProductController {
             unit: 'unit',
             category: 'category',
             description: 'description',
-            isActive: 'isActive'
+            isActive: 'isActive',
         };
         const sets = [];
         const params = [];
@@ -118,7 +126,6 @@ class ProductController {
             throw err;
         }
 
-        // Prevent duplicate product names on rename (case-insensitive)
         if (input && Object.prototype.hasOwnProperty.call(input, 'name')) {
             const trimmedName = String(input.name).trim();
             if (trimmedName) {
@@ -170,10 +177,7 @@ class ProductController {
                             reject(err);
                             return;
                         }
-
-                        resolve({
-                            changes: this.changes
-                        });
+                        resolve({ changes: this.changes });
                     }
                 );
             });
@@ -189,367 +193,214 @@ class ProductController {
                 message: 'Product deleted successfully'
             };
         } catch (error) {
-            /*
-             * SQLite يمنع حذف المنتج عندما يكون مرتبطًا
-             * بفواتير أو دفعات أو حركات مخزون عن طريق
-             * FOREIGN KEY constraint.
-             *
-             * نحول الخطأ التقني إلى كود مفهوم للواجهة.
-             */
-            const message = String(error?.message ?? "");
-
+            const message = String(error?.message ?? '');
             if (
-                error?.code === "SQLITE_CONSTRAINT" ||
-                error?.code === "SQLITE_CONSTRAINT_FOREIGNKEY" ||
-                message.includes("FOREIGN KEY constraint failed") ||
-                message.includes("foreign key constraint")
+                error?.code === 'SQLITE_CONSTRAINT' ||
+                error?.code === 'SQLITE_CONSTRAINT_FOREIGNKEY' ||
+                message.includes('FOREIGN KEY constraint failed') ||
+                message.includes('foreign key constraint')
             ) {
                 const productInUseError = new Error(
-                    "Cannot delete product because it is referenced by existing records"
+                    'Cannot delete product because it is referenced by existing records'
                 );
-
-                productInUseError.code = "PRODUCT_IN_USE";
-
+                productInUseError.code = 'PRODUCT_IN_USE';
                 throw productInUseError;
             }
-
             throw error;
         }
     }
-// Add these methods to your ProductController class
 
-async listStockProducts(pagination = { page: 1, limit: 10 }) {
-    const db = await dbmanager.init();
-    const page = parseInt(pagination.page) || 1;
-    const limit = parseInt(pagination.limit) || 10;
-    const offset = (page - 1) * limit;
+    async listStockProducts(pagination = { page: 1, limit: 10 }) {
+        const db = await dbmanager.init();
+        const page = parseInt(pagination.page) || 1;
+        const limit = parseInt(pagination.limit) || 10;
+        const offset = (page - 1) * limit;
 
-    try {
-        // Get total count for pagination
         const countResult = await new Promise((resolve, reject) => {
-            db.get(
-                `SELECT COUNT(id) as total FROM products`,
-                (err, row) => {
-                    if (err) return reject(err);
-                    resolve(row);
-                }
-            );
-        });
-
-        // Get paginated products with their stock batch details
-        const rows = await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT 
-                    p.id as product_id,
-                    p.name,
-                    p.code,
-                    p.unit,
-                    p.category,
-                    p.description,
-                    p.isActive as product_active,
-                    p.created_at as product_created_at,
-                    p.updated_at as product_updated_at,
-                    sb.id as batch_id,
-                    sb.supplier_id,
-                    sb.purchase_invoice_id,
-                    sb.batch_code,
-                    sb.quantity,
-                    sb.remaining_quantity,
-                    sb.purchase_price,
-                    sb.received_date,
-                    sb.expiry_date,
-                    sb.notes as batch_notes,
-                    sb.isActive as batch_active
-                FROM (SELECT * FROM products ORDER BY id DESC LIMIT ? OFFSET ?) p
-                LEFT JOIN stock_batches sb ON p.id = sb.product_id
-                ORDER BY p.id DESC`,
-                [limit, offset],
-                (err, rows) => {
-                    if (err) return reject(err);
-                    resolve(rows);
-                }
-            );
-        });
-
-        // Group stock batches by product
-        const products = {};
-        rows.forEach(row => {
-            if (!products[row.product_id]) {
-                products[row.product_id] = {
-                    product: {
-                        id: row.product_id,
-                        name: row.name,
-                        code: row.code,
-                        unit: row.unit,
-                        category: row.category,
-                        description: row.description,
-                        isActive: row.product_active,
-                        created_at: row.product_created_at,
-                        updated_at: row.product_updated_at
-                    },
-                    stock_batches: []
-                };
-            }
-            if (row.batch_id) {
-                products[row.product_id].stock_batches.push({
-                    id: row.batch_id,
-                    supplier_id: row.supplier_id,
-                    purchase_invoice_id: row.purchase_invoice_id,
-                    batch_code: row.batch_code,
-                    quantity: row.quantity,
-                    remaining_quantity: row.remaining_quantity,
-                    purchase_price: row.purchase_price,
-                    received_date: row.received_date,
-                    expiry_date: row.expiry_date,
-                    notes: row.batch_notes,
-                    isActive: row.batch_active
-                });
-            }
-        });
-
-        return {
-            data: Object.values(products),
-            pagination: {
-                page,
-                limit,
-                total: countResult.total,
-                totalPages: Math.ceil(countResult.total / limit)
-            }
-        };
-    } catch (error) {
-        throw error;
-    }
-}
-
-async createStockProduct(input) {
-    // Validate required fields
-    if (!input || !input.product || !input.product.name) {
-        const err = new Error('Product name is required');
-        err.code = 'VALIDATION_ERROR';
-        throw err;
-    }
-
-    // Check if stock batch data is provided
-    if (!input.stock_batch || input.stock_batch.quantity === undefined) {
-        const err = new Error('Stock batch quantity is required');
-        err.code = 'VALIDATION_ERROR';
-        throw err;
-    }
-
-    const db = await dbmanager.init();
-
-    try {
-        // Start transaction
-        await new Promise((resolve, reject) => {
-            db.run('BEGIN TRANSACTION', (err) => {
+            db.get(`SELECT COUNT(id) as total FROM products`, (err, row) => {
                 if (err) return reject(err);
-                resolve();
+                resolve(row);
             });
         });
 
-        // Create the product using existing method
-        const productInput = {
+        const rows = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT * FROM products ORDER BY id DESC LIMIT ? OFFSET ?`,
+                [limit, offset],
+                (err, list) => {
+                    if (err) return reject(err);
+                    resolve(list || []);
+                }
+            );
+        });
+
+        return {
+            data: rows.map((p) => ({
+                product: p,
+                stock_batches: [],
+            })),
+            pagination: {
+                page,
+                limit,
+                total: countResult?.total ?? 0,
+                totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+            },
+        };
+    }
+
+    async createStockProduct(input) {
+        if (!input || !input.product || !input.product.name) {
+            const err = new Error('Product name is required');
+            err.code = 'VALIDATION_ERROR';
+            throw err;
+        }
+        const initialQty = round3(Math.max(0, Number(input.stock_batch?.quantity ?? input.product?.stock_quantity ?? 0)));
+        const initialCost = Math.max(0, Number(input.stock_batch?.purchase_price ?? input.product?.avg_cost_base ?? 0));
+
+        const product = await this.createProduct({
             name: input.product.name,
             code: input.product.code,
             unit: input.product.unit || null,
             category: input.product.category || null,
             description: input.product.description || null,
-            isActive: input.product.isActive !== undefined ? input.product.isActive : 1
-        };
-
-        const product = await this.createProduct(productInput);
-
-        // Now create the stock batch using StockBatchController
-        const stockBatchController = require('./stockBatchController'); // Adjust path as needed
-        
-        const stockBatchInput = {
-            product_id: product.id,
-            supplier_id: input.stock_batch.supplier_id || null,
-            purchase_invoice_id: input.stock_batch.purchase_invoice_id || null,
-            batch_code: input.stock_batch.batch_code || null,
-            quantity: input.stock_batch.quantity,
-            remaining_quantity: input.stock_batch.remaining_quantity || input.stock_batch.quantity,
-            purchase_price: input.stock_batch.purchase_price || null,
-            received_date: input.stock_batch.received_date || null,
-            expiry_date: input.stock_batch.expiry_date || null,
-            notes: input.stock_batch.notes || null,
-            isActive: input.stock_batch.isActive !== undefined ? input.stock_batch.isActive : 1
-        };
-
-        const stockBatch = await stockBatchController.createStockBatch(stockBatchInput);
-
-        // Commit transaction
-        await new Promise((resolve, reject) => {
-            db.run('COMMIT', (err) => {
-                if (err) return reject(err);
-                resolve();
-            });
-        });
-
-        // Return combined result
-        return {
-            product,
-            stock_batch: stockBatch
-        };
-    } catch (error) {
-        // Rollback on error
-        await new Promise((resolve) => {
-            db.run('ROLLBACK', () => resolve());
-        });
-        throw error;
-    }
-}
-
-async updateStockProduct(id, input) {
-    if (!id) {
-        const err = new Error('Product ID is required');
-        err.code = 'VALIDATION_ERROR';
-        throw err;
-    }
-
-    const db = await dbmanager.init();
-
-    try {
-        // Start transaction
-        await new Promise((resolve, reject) => {
-            db.run('BEGIN TRANSACTION', (err) => {
-                if (err) return reject(err);
-                resolve();
-            });
-        });
-
-        // Update product if data is provided
-        let product = null;
-        if (input.product) {
-            product = await this.updateProduct(id, input.product);
-        } else {
-            // Get current product if not updating product fields
-            product = await this.getProduct(id);
-        }
-
-        // Update stock batch if data is provided
-        let stockBatch = null;
-        if (input.stock_batch) {
-            const stockBatchController = require('./stockBatchController');
-            
-            if (input.stock_batch.id) {
-                // Update specific batch if ID is provided
-                stockBatch = await stockBatchController.updateStockBatch(input.stock_batch.id, input.stock_batch);
-            } else {
-                // Find the first stock batch for this product
-                const existingBatch = await new Promise((resolve, reject) => {
-                    db.get(
-                        `SELECT id FROM stock_batches WHERE product_id = ? LIMIT 1`,
-                        [id],
-                        (err, row) => {
-                            if (err) return reject(err);
-                            resolve(row);
-                        }
-                    );
-                });
-
-                if (existingBatch) {
-                    // Update existing batch
-                    stockBatch = await stockBatchController.updateStockBatch(existingBatch.id, input.stock_batch);
-                } else {
-                    // Create new batch if none exists
-                    const stockBatchInput = {
-                        product_id: id,
-                        supplier_id: input.stock_batch.supplier_id || null,
-                        purchase_invoice_id: input.stock_batch.purchase_invoice_id || null,
-                        batch_code: input.stock_batch.batch_code || null,
-                        quantity: input.stock_batch.quantity || null,
-                        remaining_quantity: input.stock_batch.remaining_quantity || input.stock_batch.quantity || null,
-                        purchase_price: input.stock_batch.purchase_price || null,
-                        received_date: input.stock_batch.received_date || null,
-                        expiry_date: input.stock_batch.expiry_date || null,
-                        notes: input.stock_batch.notes || null,
-                        isActive: input.stock_batch.isActive !== undefined ? input.stock_batch.isActive : 1
-                    };
-                    stockBatch = await stockBatchController.createStockBatch(stockBatchInput);
-                }
-            }
-        } else {
-            // Get existing stock batch if not updating stock fields
-            const db = await dbmanager.init();
-            const existingBatch = await new Promise((resolve, reject) => {
-                db.get(
-                    `SELECT * FROM stock_batches WHERE product_id = ? LIMIT 1`,
-                    [id],
-                    (err, row) => {
-                        if (err) return reject(err);
-                        resolve(row);
-                    }
-                );
-            });
-            if (existingBatch) {
-                stockBatch = existingBatch;
-            }
-        }
-
-        // Commit transaction
-        await new Promise((resolve, reject) => {
-            db.run('COMMIT', (err) => {
-                if (err) return reject(err);
-                resolve();
-            });
+            isActive: input.product.isActive !== undefined ? input.product.isActive : 1,
+            stock_quantity: initialQty,
+            avg_cost_base: initialCost,
         });
 
         return {
             product,
-            stock_batch: stockBatch
+            stock_batch: null,
         };
-    } catch (error) {
-        // Rollback on error
-        await new Promise((resolve) => {
-            db.run('ROLLBACK', () => resolve());
-        });
-        throw error;
     }
-}
+
+    async updateStockProduct(id, input) {
+        if (!id) {
+            const err = new Error('Product ID is required');
+            err.code = 'VALIDATION_ERROR';
+            throw err;
+        }
+        const product = input?.product ? await this.updateProduct(id, input.product) : await this.getProduct(id);
+        return {
+            product,
+            stock_batch: null,
+        };
+    }
 
     async adjustProductStock(id, input) {
         const productId = Number(id);
-        const batchId = Number(input?.stock_batch_id);
-        const qty = Number(input?.quantity);
+        const qty = round3(Number(input?.quantity));
         if (!Number.isInteger(productId) || productId <= 0) throw { code: 'VALIDATION_ERROR', message: 'معرف المنتج مطلوب.' };
-        if (!Number.isInteger(batchId) || batchId <= 0) throw { code: 'VALIDATION_ERROR', message: 'يجب اختيار الدفعة.' };
         if (!['add', 'subtract'].includes(input?.type)) throw { code: 'VALIDATION_ERROR', message: 'نوع التسوية غير صالح.' };
         if (!Number.isFinite(qty) || qty <= 0) throw { code: 'VALIDATION_ERROR', message: 'يجب أن تكون الكمية أكبر من صفر.' };
         if (!input?.reason || !String(input.reason).trim()) throw { code: 'VALIDATION_ERROR', message: 'سبب التسوية مطلوب.' };
+
         const db = await dbmanager.init();
-        await new Promise((resolve, reject) => db.run('BEGIN IMMEDIATE TRANSACTION', err => err ? reject(err) : resolve()));
+        await new Promise((resolve, reject) => db.run('BEGIN IMMEDIATE TRANSACTION', (err) => (err ? reject(err) : resolve())));
         try {
-            const batch = await new Promise((resolve, reject) => db.get('SELECT * FROM stock_batches WHERE id = ? AND product_id = ? AND isActive = 1', [batchId, productId], (err, row) => err ? reject(err) : resolve(row)));
-            if (!batch) throw { code: 'NOT_FOUND', message: 'الدفعة المحددة غير موجودة أو لا تتبع لهذا المنتج.' };
-            const before = Number(batch.remaining_quantity || 0);
+            const product = await new Promise((resolve, reject) =>
+                db.get('SELECT * FROM products WHERE id = ?', [productId], (err, row) => (err ? reject(err) : resolve(row)))
+            );
+            if (!product) throw { code: 'NOT_FOUND', message: 'المنتج غير موجود.' };
+
+            const before = round3(Number(product.stock_quantity || 0));
             const signed = input.type === 'add' ? qty : -qty;
-            const after = before + signed;
-            if (after < 0) throw { code: 'INSUFFICIENT_STOCK', message: 'الكمية المطلوب خصمها أكبر من رصيد الدفعة.' };
-            await new Promise((resolve, reject) => db.run(`INSERT INTO stock_adjustments (stock_batch_id, quantity, quantity_before, quantity_after, reason, notes, created_at, updated_at) VALUES (?,?,?,?,?,?, datetime('now'), datetime('now'))`, [batchId, signed, before, after, String(input.reason).trim(), input.notes || null], function(err){ err ? reject(err) : resolve(this.lastID); }));
-            await new Promise((resolve, reject) => db.run(`UPDATE stock_batches SET remaining_quantity = ?, updated_at = datetime('now') WHERE id = ?`, [after, batchId], function(err){ err ? reject(err) : resolve(this.changes); }));
+            const after = round3(before + signed);
+            if (after < -0.0005) {
+                throw { code: 'INSUFFICIENT_STOCK', message: `الكمية المطلوب خصمها (${qty}) أكبر من رصيد المنتج المتاح (${before}).` };
+            }
+            const cleanAfter = Math.max(0, after);
+            const cleanReason = String(input.reason).trim();
+
+            const adjustmentId = await new Promise((resolve, reject) =>
+                db.run(
+                    `INSERT INTO stock_adjustments
+                       (product_id, stock_batch_id, quantity, quantity_before, quantity_after, reason, notes, created_at, updated_at)
+                     VALUES (?, NULL, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+                    [productId, signed, before, cleanAfter, cleanReason, input.notes || null],
+                    function (err) {
+                        err ? reject(err) : resolve(this.lastID);
+                    }
+                )
+            );
+
+            await new Promise((resolve, reject) =>
+                db.run(
+                    `INSERT INTO stock_movements
+                       (product_id, stock_batch_id, movement_type, quantity, quantity_before, quantity_after,
+                        reference_type, reference_id, notes, created_at)
+                     VALUES (?, NULL, ?, ?, ?, ?, 'adjustment', ?, ?, datetime('now'))`,
+                    [
+                        productId,
+                        input.type === 'add' ? 'adjustment_in' : 'adjustment_out',
+                        qty,
+                        before,
+                        cleanAfter,
+                        adjustmentId,
+                        input.notes || cleanReason,
+                    ],
+                    function (err) {
+                        err ? reject(err) : resolve(this.lastID);
+                    }
+                )
+            );
+
+            await new Promise((resolve, reject) =>
+                db.run(
+                    `UPDATE products SET stock_quantity = ?, updated_at = datetime('now') WHERE id = ?`,
+                    [cleanAfter, productId],
+                    function (err) {
+                        err ? reject(err) : resolve(this.changes);
+                    }
+                )
+            );
 
             if (signed < 0) {
-                const lostValue = Math.abs(signed) * Number(batch.purchase_price || 0);
+                const lostValue = Math.round(Math.abs(signed) * Number(product.avg_cost_base || 0) * 100) / 100;
                 if (lostValue > 0) {
-                    const adjustCat = await new Promise((resolve) => db.get(`SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 AND name LIKE '%تسوية مخزون%' LIMIT 1`, [], (err, row) => resolve(row)))
-                                   ?? await new Promise((resolve) => db.get(`SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 ORDER BY id ASC LIMIT 1`, [], (err, row) => resolve(row)));
-                    
+                    const adjustCat =
+                        (await new Promise((resolve) =>
+                            db.get(
+                                `SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 AND name LIKE '%تسوية مخزون%' LIMIT 1`,
+                                [],
+                                (_err, row) => resolve(row)
+                            )
+                        )) ??
+                        (await new Promise((resolve) =>
+                            db.get(
+                                `SELECT id FROM transaction_categories WHERE type = 'expense' AND isActive = 1 ORDER BY id ASC LIMIT 1`,
+                                [],
+                                (_err, row) => resolve(row)
+                            )
+                        ));
+
                     if (adjustCat) {
-                        await new Promise((resolve, reject) => db.run(`
-                            INSERT INTO transactions
-                            (category_id, cashbox_id, amount, direction, transaction_date,
-                             description, reference_number, notes, status, created_at, updated_at)
-                            VALUES (?, NULL, ?, 'expense', date('now'), ?, ?, ?, 'active', datetime('now'), datetime('now'))
-                        `, [adjustCat.id, lostValue, 'تسوية نقص مخزون', String(batchId), input.notes ?? `تسوية خسارة ${Math.abs(signed)} وحدة`], function(err) { err ? reject(err) : resolve(); }));
+                        await new Promise((resolve, reject) =>
+                            db.run(
+                                `INSERT INTO transactions
+                                   (category_id, cashbox_id, amount, direction, transaction_date,
+                                    description, reference_number, notes, status, created_at, updated_at)
+                                 VALUES (?, NULL, ?, 'expense', date('now'), ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
+                                [
+                                    adjustCat.id,
+                                    lostValue,
+                                    'تسوية نقص مخزون',
+                                    String(adjustmentId),
+                                    input.notes ?? `تسوية خسارة ${Math.abs(signed)} ${product.unit || 'وحدة'} من ${product.name}`,
+                                ],
+                                function (err) {
+                                    err ? reject(err) : resolve();
+                                }
+                            )
+                        );
                     }
                 }
             }
 
-            await new Promise((resolve, reject) => db.run('COMMIT', err => err ? reject(err) : resolve()));
+            await new Promise((resolve, reject) => db.run('COMMIT', (err) => (err ? reject(err) : resolve())));
             return this.getProductWithStock(productId);
         } catch (error) {
-            await new Promise(resolve => db.run('ROLLBACK', () => resolve()));
+            await new Promise((resolve) => db.run('ROLLBACK', () => resolve()));
             throw error;
         }
     }
@@ -561,25 +412,47 @@ async updateStockProduct(id, input) {
             throw err;
         }
 
-        // Get the product using existing method
         const product = await this.getProduct(id);
-
-        // Get all stock batches for this product
         const db = await dbmanager.init();
-        const stockBatches = await new Promise((resolve, reject) => {
+
+        const suppliersRows = await new Promise((resolve, reject) => {
             db.all(
-                `SELECT sb.*, s.name AS supplier_name FROM stock_batches sb LEFT JOIN suppliers s ON s.id = sb.supplier_id WHERE sb.product_id = ? ORDER BY sb.id DESC`,
+                `SELECT DISTINCT s.name AS supplier_name
+                 FROM purchase_invoice_items pii
+                 JOIN purchase_invoices pi ON pi.id = pii.purchase_invoice_id
+                 JOIN suppliers s ON s.id = pi.supplier_id
+                 WHERE pii.product_id = ? AND pi.status != 'cancelled'`,
                 [id],
-                (err, rows) => {
-                    if (err) return reject(err);
-                    resolve(rows);
-                }
+                (err, rows) => (err ? reject(err) : resolve(rows || []))
+            );
+        });
+
+        const adjustments = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT sa.*, COALESCE(sa.product_id, sb.product_id) AS resolved_product_id
+                 FROM stock_adjustments sa
+                 LEFT JOIN stock_batches sb ON sb.id = sa.stock_batch_id
+                 WHERE COALESCE(sa.product_id, sb.product_id) = ?
+                 ORDER BY sa.id DESC`,
+                [id],
+                (err, rows) => (err ? reject(err) : resolve(rows || []))
+            );
+        });
+
+        const movements = await new Promise((resolve, reject) => {
+            db.all(
+                `SELECT * FROM stock_movements WHERE product_id = ? ORDER BY id DESC LIMIT 100`,
+                [id],
+                (err, rows) => (err ? reject(err) : resolve(rows || []))
             );
         });
 
         return {
             product,
-            stock_batches: stockBatches
+            stock_batches: [],
+            suppliers: suppliersRows.map((r) => r.supplier_name).filter(Boolean),
+            adjustments,
+            movements,
         };
     }
 }

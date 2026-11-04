@@ -56,8 +56,8 @@ export default function PrintableInvoice(props: Props) {
     </section>
 
     <table className="invoice-items">
-      <thead><tr><th className="invoice-index">م</th><th>اسم المادة</th><th>رقم الدفعة</th><th className="invoice-number-cell">الكمية</th><th className="invoice-number-cell">سعر الوحدة</th><th className="invoice-number-cell">الإجمالي</th></tr></thead>
-      <tbody>{props.items.map((item, index) => <tr key={item.id}><td className="invoice-index">{index + 1}</td><td className="invoice-product-name">{item.productName}</td><td><bdi>{item.batchCode || "—"}</bdi></td><td className="invoice-number-cell">{item.quantity.toLocaleString("en-US")}</td><td className="invoice-number-cell">{money(item.unitPrice, props.currency)}</td><td className="invoice-number-cell invoice-line-total">{money(item.lineTotal, props.currency)}</td></tr>)}</tbody>
+      <thead><tr><th className="invoice-index">م</th><th>اسم المادة</th><th className="invoice-number-cell">الكمية</th><th className="invoice-number-cell">سعر الوحدة</th><th className="invoice-number-cell">الإجمالي</th></tr></thead>
+      <tbody>{props.items.map((item, index) => <tr key={item.id}><td className="invoice-index">{index + 1}</td><td className="invoice-product-name">{item.productName}</td><td className="invoice-number-cell">{item.quantity.toLocaleString("en-US")}</td><td className="invoice-number-cell">{money(item.unitPrice, props.currency)}</td><td className="invoice-number-cell invoice-line-total">{money(item.lineTotal, props.currency)}</td></tr>)}</tbody>
     </table>
 
     <section className="invoice-bottom-grid">

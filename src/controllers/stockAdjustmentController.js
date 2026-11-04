@@ -4,18 +4,19 @@ const dbmanager = require(path.join(__dirname, '../database/databaseManager'));
 class StockAdjustmentController {
 
     async createStockAdjustment(input) {
-        if (!input || input.stock_batch_id === undefined || input.stock_batch_id === null) {
-            const err = new Error('stock_batch_id is required');
+        if (!input || !input.product_id) {
+            const err = new Error('product_id is required');
             err.code = 'VALIDATION_ERROR';
             throw err;
         }
         const db = await dbmanager.init();
         const sql = `
-            INSERT INTO stock_adjustments (stock_batch_id, quantity, quantity_before, quantity_after, reason, notes, created_at, updated_at)
-            VALUES (?,?,?,?,?,?, datetime('now'), datetime('now'))
+            INSERT INTO stock_adjustments (product_id, stock_batch_id, quantity, quantity_before, quantity_after, reason, notes, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?, datetime('now'), datetime('now'))
         `;
         const id = await new Promise((resolve, reject) => {
             db.run(sql, [
+                input.product_id ?? null,
                 input.stock_batch_id ?? null,
                 input.quantity ?? null,
                 input.quantity_before ?? 0,
@@ -35,7 +36,10 @@ class StockAdjustmentController {
         const db = await dbmanager.init();
         return await new Promise((resolve, reject) => {
             db.get(
-                `SELECT * FROM stock_adjustments WHERE id = ?`,
+                `SELECT sa.*, COALESCE(sa.product_id, sb.product_id) AS product_id
+                 FROM stock_adjustments sa
+                 LEFT JOIN stock_batches sb ON sb.id = sa.stock_batch_id
+                 WHERE sa.id = ?`,
                 [id],
                 (err, row) => {
                     if (err) return reject(err);
@@ -50,7 +54,10 @@ class StockAdjustmentController {
         const db = await dbmanager.init();
         return await new Promise((resolve, reject) => {
             db.all(
-                `SELECT * FROM stock_adjustments`,
+                `SELECT sa.*, COALESCE(sa.product_id, sb.product_id) AS product_id
+                 FROM stock_adjustments sa
+                 LEFT JOIN stock_batches sb ON sb.id = sa.stock_batch_id
+                 ORDER BY sa.id DESC`,
                 [],
                 (err, rows) => {
                     if (err) return reject(err);
@@ -64,6 +71,7 @@ class StockAdjustmentController {
         if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
 
         const mapping = {
+            product_id: 'product_id',
             stock_batch_id: 'stock_batch_id',
             quantity: 'quantity',
             quantity_before: 'quantity_before',

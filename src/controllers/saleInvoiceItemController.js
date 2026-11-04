@@ -11,19 +11,19 @@ class SaleInvoiceItemController {
         }
         const db = await dbmanager.init();
         const sql = `
-            INSERT INTO sale_invoice_items (sale_invoice_id, stock_batch_id, quantity, unit_price, line_total, cost_price, profit, supplier_due_amount, notes, created_at, updated_at)
+            INSERT INTO sale_invoice_items (sale_invoice_id, product_id, stock_batch_id, quantity, unit_price, line_total, cost_price, profit, notes, created_at, updated_at)
             VALUES (?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))
         `;
         const id = await new Promise((resolve, reject) => {
             db.run(sql, [
                 input.sale_invoice_id ?? null,
+                input.product_id ?? null,
                 input.stock_batch_id ?? null,
                 input.quantity ?? null,
                 input.unit_price ?? null,
                 input.line_total ?? null,
                 input.cost_price ?? null,
                 input.profit ?? null,
-                input.supplier_due_amount ?? null,
                 input.notes ?? null
             ], function (err) {
                 if (err) return reject(err);
@@ -68,13 +68,13 @@ class SaleInvoiceItemController {
 
         const mapping = {
             sale_invoice_id: 'sale_invoice_id',
+            product_id: 'product_id',
             stock_batch_id: 'stock_batch_id',
             quantity: 'quantity',
             unit_price: 'unit_price',
             line_total: 'line_total',
             cost_price: 'cost_price',
             profit: 'profit',
-            supplier_due_amount: 'supplier_due_amount',
             notes: 'notes'
         };
         const sets = [];

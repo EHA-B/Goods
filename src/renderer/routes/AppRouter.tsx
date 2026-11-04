@@ -6,7 +6,6 @@ import DashboardPage from "../pages/dashboard/DashboardPage";
 import InventoryPage from "../pages/inventory/InventoryPage";
 import ProductInventoryDetailsPage from "../pages/inventory/ProductInventoryDetailsPage";
 import StockAdjustmentPage from "../pages/inventory/StockAdjustmentPage";
-import StockBatchFormPage from "../pages/inventory/StockBatchFormPage";
 import StockMovementDetailsPage from "../pages/inventory/StockMovementDetailsPage";
 import ProductsPage from "../pages/products/ProductsPage";
 import ProductFormPage from "../pages/products/ProductFormPage";
@@ -75,7 +74,7 @@ function AppRouter() {
                     <Route path={PATHS.INVENTORY} element={<InventoryPage />} />
                     <Route path={PATHS.INVENTORY_DETAILS} element={<ProductInventoryDetailsPage />} />
                     <Route path={PATHS.INVENTORY_ADJUST} element={<StockAdjustmentPage />} />
-                    <Route path={PATHS.INVENTORY_BATCH_NEW} element={<StockBatchFormPage />} />
+                    <Route path={PATHS.INVENTORY_BATCH_NEW} element={<Navigate to={PATHS.INVENTORY} replace />} />
                     <Route path={PATHS.INVENTORY_MOVEMENT_DETAILS} element={<StockMovementDetailsPage />} />
                     <Route path={PATHS.CUSTOMERS} element={<CustomersPage />} />
                     <Route path={PATHS.CUSTOMER_NEW} element={<CustomerFormPage />} />

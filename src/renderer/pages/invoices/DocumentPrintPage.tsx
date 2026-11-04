@@ -290,6 +290,9 @@ function getRemainingPolicyLabel(
   policy?: string | null,
 ) {
   switch (policy) {
+    case "manual":
+      return "تسوية يدوية (دون تأثير على المخزون)";
+
     case "return_to_supplier":
       return "إعادة للمورد";
 
@@ -1344,7 +1347,7 @@ function Consignment({
           ],
 
           [
-            "سياسة المتبقي",
+            "نوع التسوية",
             getRemainingPolicyLabel(
               settlement.remaining_stock_policy,
             ),
@@ -1358,9 +1361,13 @@ function Consignment({
             <th>المنتج</th>
             <th>المستلم</th>
             <th>المباع</th>
-            <th>المتبقي عند التسوية</th>
-            <th>مصير المتبقي</th>
-            <th>الكمية المعالجة</th>
+            {settlement.remaining_stock_policy !== "manual" && (
+              <>
+                <th>المتبقي عند التسوية</th>
+                <th>مصير المتبقي</th>
+                <th>الكمية المعالجة</th>
+              </>
+            )}
             <th>قيمة المبيعات</th>
           </tr>
         </thead>
@@ -1386,23 +1393,27 @@ function Consignment({
                   )}
                 </td>
 
-                <td>
-                  {fmt(
-                    item.remaining_quantity,
-                  )}
-                </td>
+                {settlement.remaining_stock_policy !== "manual" && (
+                  <>
+                    <td>
+                      {fmt(
+                        item.remaining_quantity,
+                      )}
+                    </td>
 
-                <td>
-                  {getRemainingPolicyLabel(
-                    item.resolution_policy,
-                  )}
-                </td>
+                    <td>
+                      {getRemainingPolicyLabel(
+                        item.resolution_policy,
+                      )}
+                    </td>
 
-                <td>
-                  {fmt(
-                    item.resolved_quantity,
-                  )}
-                </td>
+                    <td>
+                      {fmt(
+                        item.resolved_quantity,
+                      )}
+                    </td>
+                  </>
+                )}
 
                 <td>
                   {money(
@@ -1477,6 +1488,7 @@ function Consignment({
         )}
       </section>
 
+      {settlement.remaining_stock_policy !== "manual" && (
       <section className="invoice-summary mt-6">
         <div className="invoice-total">
           <span>
@@ -1532,6 +1544,7 @@ function Consignment({
           </div>
         )}
       </section>
+      )}
 
       {settlement.notes && (
         <p className="mt-6 rounded-[var(--radius-md)] bg-[var(--surface-subtle)] p-4 text-sm leading-7">

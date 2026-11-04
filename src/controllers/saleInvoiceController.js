@@ -2,9 +2,10 @@
 /**
  * saleInvoiceController.js — Hardened Sale Invoice Business Module
  *
- * All mutations are atomic database transactions.
- * Stock is deducted from explicitly selected batches.
- * No generic CRUD exposed for accounting-sensitive operations.
+ * Unified Product Stock Pool Architecture:
+ * - Sales deduct directly from `products.stock_quantity` without batch selection.
+ * - Cost of goods sold is snapshotted from `products.avg_cost_base`.
+ * - All mutations are atomic database transactions.
  */
 
 const path = require('path');
@@ -24,10 +25,12 @@ const {
     normalizeCurrency,
     normalizeExchangeRate,
     toBaseAmount,
-    assertCashboxCurrency,
 } = require('./utils/currencyUtils');
 const { reversePaymentInTransaction } = require('./paymentReversalService');
 
+function round3(value) {
+    return Math.round((Number(value) || 0) * 1000) / 1000;
+}
 
 async function ensureInvoiceEditAuditColumns(db) {
     const tableName = 'sale_invoices';
@@ -106,7 +109,9 @@ class SaleInvoiceController {
             exchange_rate,
         } = input ?? {};
 
-        if (!Array.isArray(items) || items.length === 0) throw { code: 'SALE_ITEM_INVALID', message: 'يجب إضافة صنف واحد على الأقل' };
+        if (!Array.isArray(items) || items.length === 0) {
+            throw { code: 'SALE_ITEM_INVALID', message: 'يجب إضافة صنف واحد على الأقل' };
+        }
 
         const validatedDate = validateDate(invoice_date, 'invoice_date');
 
@@ -116,43 +121,52 @@ class SaleInvoiceController {
             await dbRun(db, 'BEGIN TRANSACTION');
 
             // 1. Validate customer if provided
-            let customer = null;
             if (customer_id) {
-                customer = await dbGet(db, 'SELECT * FROM customers WHERE id = ?', [customer_id]);
+                const customer = await dbGet(db, 'SELECT * FROM customers WHERE id = ?', [customer_id]);
                 if (!customer) throw { code: 'CUSTOMER_NOT_FOUND', message: 'العميل غير موجود' };
                 if (!customer.isActive) throw { code: 'INACTIVE_CUSTOMER', message: 'العميل غير نشط' };
             }
 
-            // 2. Map items to calculation shape
-            const mappedItems = items.map((item, index) => ({
+            // 2. Map items to calculation shape (product-only, no batch selection)
+            const mappedItems = items.map((item) => ({
                 ...item,
-                product_id: item.product_id,
-                stock_batch_id: item.stock_batch_id,
+                product_id: Number(item.product_id),
                 quantity: Number(item.quantity ?? 0),
                 price: Number(item.sale_price ?? item.unit_price ?? item.unitPrice ?? 0),
                 sale_price: Number(item.sale_price ?? item.unit_price ?? item.unitPrice ?? 0),
                 cost_price: 0,
             }));
 
-            // 3. Validate each item's batch
+            // 3. Validate products and aggregate requested stock per product_id
+            const requestedByProduct = new Map();
+            const productCache = new Map();
             for (let i = 0; i < mappedItems.length; i++) {
                 const item = mappedItems[i];
-                if (!item.stock_batch_id) throw { code: 'STOCK_BATCH_NOT_FOUND', message: `الصنف رقم ${i + 1}: stock_batch_id مطلوب` };
-
-                const batch = await dbGet(db, 'SELECT * FROM stock_batches WHERE id = ?', [item.stock_batch_id]);
-                if (!batch) throw { code: 'STOCK_BATCH_NOT_FOUND', message: `الصنف رقم ${i + 1}: الدفعة غير موجودة` };
-                if (batch.product_id !== item.product_id) throw { code: 'STOCK_BATCH_PRODUCT_MISMATCH', message: `الصنف رقم ${i + 1}: الدفعة لا تتعلق بالمنتج المحدد` };
-                if (!batch.isActive) throw { code: 'SALE_ITEM_INVALID', message: `الصنف رقم ${i + 1}: الدفعة غير نشطة` };
-                if (batch.remaining_quantity < item.quantity - 0.001) {
-                    throw { code: 'INSUFFICIENT_STOCK', message: `الصنف رقم ${i + 1}: الكمية المطلوبة (${item.quantity}) أكبر من المتوفر (${batch.remaining_quantity})` };
+                if (!item.product_id) {
+                    throw { code: 'PRODUCT_NOT_FOUND', message: `الصنف رقم ${i + 1}: يجب اختيار المنتج` };
+                }
+                if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
+                    throw { code: 'SALE_ITEM_INVALID', message: `الصنف رقم ${i + 1}: الكمية غير صالحة` };
                 }
 
-                const product = await dbGet(db, 'SELECT id, isActive FROM products WHERE id = ?', [item.product_id]);
-                if (!product) throw { code: 'PRODUCT_NOT_FOUND', message: `الصنف رقم ${i + 1}: المنتج غير موجود` };
-                if (!product.isActive) throw { code: 'INACTIVE_PRODUCT', message: `الصنف رقم ${i + 1}: المنتج غير نشط` };
-                // Cost is always authoritative from the selected stock batch.
-                mappedItems[i].cost_price = normalizeAmount(batch.purchase_price_base ?? batch.purchase_price);
-                mappedItems[i]._batch = batch;
+                let product = productCache.get(item.product_id);
+                if (!product) {
+                    product = await dbGet(db, 'SELECT * FROM products WHERE id = ?', [item.product_id]);
+                    if (!product) throw { code: 'PRODUCT_NOT_FOUND', message: `الصنف رقم ${i + 1}: المنتج غير موجود` };
+                    if (!product.isActive) throw { code: 'INACTIVE_PRODUCT', message: `الصنف رقم ${i + 1}: المنتج "${product.name}" غير نشط` };
+                    productCache.set(item.product_id, product);
+                }
+
+                const nextRequested = round3((requestedByProduct.get(item.product_id) ?? 0) + item.quantity);
+                const available = round3(Number(product.stock_quantity ?? 0));
+                if (nextRequested > available + 0.0005) {
+                    throw {
+                        code: 'INSUFFICIENT_STOCK',
+                        message: `الصنف رقم ${i + 1} (${product.name}): الكمية المطلوبة (${nextRequested}) أكبر من المتوفر في المخزون (${available})`,
+                    };
+                }
+                requestedByProduct.set(item.product_id, nextRequested);
+                mappedItems[i].cost_price = normalizeAmount(product.avg_cost_base ?? 0);
             }
 
             // 4. Calculate totals
@@ -180,7 +194,7 @@ class SaleInvoiceController {
             // 7. Insert sale invoice
             const invoiceCurrency = normalizeCurrency(currency);
             const invoiceRate = normalizeExchangeRate(invoiceCurrency, exchange_rate);
-            
+
             const { lastID: invoiceId } = await dbRun(db,
                 `INSERT INTO sale_invoices
                    (invoice_number, customer_id, sale_type_id, invoice_date,
@@ -193,37 +207,35 @@ class SaleInvoiceController {
                  invoiceCurrency, invoiceRate]
             );
 
-            // 8. Insert items + deduct stock + create stock movements
+            // 8. Insert items + deduct unified product stock + create stock movements
             for (let i = 0; i < normalizedItems.length; i++) {
                 const item = normalizedItems[i];
-                const batch = item._batch;
                 const costPrice = normalizeAmount(item.cost_price);
                 const revenueBase = toBaseAmount(item.price * item.quantity, invoiceRate);
                 const profit = Math.round((revenueBase - (costPrice * item.quantity)) * 100) / 100;
 
-                // Insert sale item (product_id is stored via batch)
                 await dbRun(db,
                     `INSERT INTO sale_invoice_items
-                       (sale_invoice_id, stock_batch_id, quantity, unit_price, line_total, cost_price, profit, notes, created_at, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-                    [invoiceId, item.stock_batch_id, item.quantity, item.price, item.lineTotal, costPrice, profit, item.notes ?? null]
+                       (sale_invoice_id, product_id, stock_batch_id, quantity, unit_price, line_total, cost_price, profit, notes, created_at, updated_at)
+                     VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+                    [invoiceId, item.product_id, item.quantity, item.price, item.lineTotal, costPrice, profit, item.notes ?? null]
                 );
 
-                // Deduct batch remaining quantity
-                const qtyBefore = normalizeAmount(batch.remaining_quantity);
-                const qtyAfter  = Math.round((qtyBefore - item.quantity) * 1000) / 1000;
+                const freshProd = await dbGet(db, 'SELECT stock_quantity FROM products WHERE id = ?', [item.product_id]);
+                const qtyBefore = round3(Number(freshProd?.stock_quantity ?? 0));
+                const qtyAfter = round3(Math.max(0, qtyBefore - item.quantity));
+
                 await dbRun(db,
-                    `UPDATE stock_batches SET remaining_quantity = ?, updated_at = datetime('now') WHERE id = ?`,
-                    [qtyAfter, item.stock_batch_id]
+                    `UPDATE products SET stock_quantity = ?, updated_at = datetime('now') WHERE id = ?`,
+                    [qtyAfter, item.product_id]
                 );
 
-                // Create stock movement (sale_out)
                 await dbRun(db,
                     `INSERT INTO stock_movements
                        (product_id, stock_batch_id, movement_type, quantity, quantity_before, quantity_after,
                         reference_type, reference_id, reference_number, customer_id, notes, created_at)
-                     VALUES (?, ?, 'sale_out', ?, ?, ?, 'sale_invoice', ?, ?, ?, ?, datetime('now'))`,
-                    [batch.product_id, item.stock_batch_id, item.quantity, qtyBefore, qtyAfter,
+                     VALUES (?, NULL, 'sale_out', ?, ?, ?, 'sale_invoice', ?, ?, ?, ?, datetime('now'))`,
+                    [item.product_id, item.quantity, qtyBefore, qtyAfter,
                      invoiceId, invNumber, customer_id ?? null, `فاتورة بيع ${invNumber}`]
                 );
             }
@@ -250,10 +262,10 @@ class SaleInvoiceController {
                 const cashbox = await dbGet(db, 'SELECT * FROM cashboxes WHERE id = ?', [payBox]);
                 if (!cashbox)          throw { code: 'NOT_FOUND', message: 'الصندوق غير موجود' };
                 if (!cashbox.isActive)  throw { code: 'VALIDATION_ERROR', message: 'الصندوق غير نشط' };
-                
+
                 let paymentExchangeRate = invoiceRate;
                 let cashboxAmount = payAmount;
-                
+
                 if (cashbox.currency !== invoiceCurrency) {
                     if (!initial_payment.exchange_rate) {
                         throw { code: 'MISSING_EXCHANGE_RATE', message: 'سعر الصرف مطلوب عند اختلاف عملة الصندوق عن الفاتورة' };
@@ -261,12 +273,9 @@ class SaleInvoiceController {
                     paymentExchangeRate = normalizeExchangeRate(cashbox.currency, initial_payment.exchange_rate);
                     const amountBaseFromInvoice = toBaseAmount(payAmount, invoiceRate);
                     cashboxAmount = normalizeAmount(amountBaseFromInvoice / paymentExchangeRate);
-                } else {
-                    paymentExchangeRate = invoiceRate;
                 }
                 const payBaseAmountCashbox = toBaseAmount(cashboxAmount, paymentExchangeRate);
 
-                // Increase cashbox
                 const balBefore = normalizeAmount(cashbox.balance);
                 const balAfter  = Math.round((balBefore + cashboxAmount) * 100) / 100;
                 await dbRun(db, `UPDATE cashboxes SET balance = ?, updated_at = datetime('now') WHERE id = ?`, [balAfter, payBox]);
@@ -277,7 +286,6 @@ class SaleInvoiceController {
                     [payBox, invoiceId, cashboxAmount, balBefore, balAfter, payDate, `دفعة أولى فاتورة بيع #${invNumber}`]
                 );
 
-                // Create payment record
                 await dbRun(db,
                     `INSERT INTO payments
                        (party_type, party_id, payment_type, invoice_id, cashbox_id, amount, currency, exchange_rate, amount_base, payment_date,
@@ -287,7 +295,6 @@ class SaleInvoiceController {
                      payBaseAmountCashbox, payDate, cbtId, initial_payment.notes ?? null]
                 );
 
-                // Reduce customer balance by payment
                 if (customer_id) {
                     const payBaseAmount = toBaseAmount(payAmount, invoiceRate);
                     await dbRun(db,
@@ -306,7 +313,6 @@ class SaleInvoiceController {
                 [finalPaid, remainingAmount, finalStatus, invoiceId]
             );
 
-            // 12. Activity log
             await logActivity(db, 'sale_created', 'sale_invoices', invoiceId, { invoice_number: invNumber, customer_id, total: totalAmount });
 
             await dbRun(db, 'COMMIT');
@@ -319,6 +325,7 @@ class SaleInvoiceController {
         }
     }
 
+    // ─── updateSaleInvoice ────────────────────────────────────────────────
 
     async updateSaleInvoice(id, input, userId) {
         if (!id) throw { code: 'VALIDATION_ERROR', message: 'رقم الفاتورة مطلوب' };
@@ -333,7 +340,15 @@ class SaleInvoiceController {
             if (!oldInvoice) throw { code: 'NOT_FOUND', message: 'فاتورة البيع غير موجودة' };
             if (oldInvoice.status === 'cancelled') throw { code: 'SALE_ALREADY_CANCELLED', message: 'لا يمكن تعديل فاتورة ملغاة' };
 
-            const oldItems = await dbAll(db, 'SELECT * FROM sale_invoice_items WHERE sale_invoice_id = ? ORDER BY id', [id]);
+            const oldItems = await dbAll(
+                db,
+                `SELECT sii.*, COALESCE(sii.product_id, sb.product_id) AS resolved_product_id
+                 FROM sale_invoice_items sii
+                 LEFT JOIN stock_batches sb ON sii.stock_batch_id = sb.id
+                 WHERE sii.sale_invoice_id = ?
+                 ORDER BY sii.id`,
+                [id]
+            );
             const activePayments = await dbAll(db, `SELECT * FROM payments WHERE invoice_id = ? AND payment_type = 'sale' AND status = 'active'`, [id]);
             const paidAmount = normalizeAmount(oldInvoice.paid_amount);
             const nextCurrency = normalizeCurrency(currency ?? oldInvoice.currency);
@@ -351,29 +366,50 @@ class SaleInvoiceController {
                 if (!customer || !customer.isActive) throw { code: 'CUSTOMER_NOT_FOUND', message: 'العميل غير موجود أو غير نشط' };
             }
 
-            let invNumber = String(invoice_number ?? oldInvoice.invoice_number).trim();
+            const invNumber = String(invoice_number ?? oldInvoice.invoice_number).trim();
             const duplicate = await dbGet(db, 'SELECT id FROM sale_invoices WHERE invoice_number = ? AND id <> ?', [invNumber, id]);
             if (duplicate) throw { code: 'DUPLICATE_INVOICE_NUMBER', message: `رقم الفاتورة ${invNumber} موجود مسبقًا` };
             const validatedDate = validateDate(invoice_date ?? oldInvoice.invoice_date, 'invoice_date');
 
-            // Restore old stock first; transaction rollback protects consistency if new validation fails.
+            // Restore old sold quantities to unified product stock first (atomic inside transaction)
             for (const oldItem of oldItems) {
-                const batch = await dbGet(db, 'SELECT * FROM stock_batches WHERE id = ?', [oldItem.stock_batch_id]);
-                if (!batch) throw { code: 'STOCK_BATCH_NOT_FOUND', message: 'إحدى دفعات الفاتورة القديمة لم تعد موجودة' };
-                const restored = Math.round((normalizeAmount(batch.remaining_quantity) + normalizeAmount(oldItem.quantity)) * 1000) / 1000;
-                await dbRun(db, `UPDATE stock_batches SET remaining_quantity = ?, isActive = 1, updated_at = datetime('now') WHERE id = ?`, [restored, batch.id]);
+                const pid = Number(oldItem.resolved_product_id);
+                if (!pid) continue;
+                const prod = await dbGet(db, 'SELECT stock_quantity FROM products WHERE id = ?', [pid]);
+                if (!prod) continue;
+                const restored = round3(Number(prod.stock_quantity ?? 0) + Number(oldItem.quantity ?? 0));
+                await dbRun(db, `UPDATE products SET stock_quantity = ?, updated_at = datetime('now') WHERE id = ?`, [restored, pid]);
             }
             await dbRun(db, `DELETE FROM stock_movements WHERE reference_type = 'sale_invoice' AND reference_id = ? AND movement_type = 'sale_out'`, [id]);
             await dbRun(db, 'DELETE FROM sale_invoice_items WHERE sale_invoice_id = ?', [id]);
 
-            const mappedItems = items.map((item) => ({ ...item, product_id: Number(item.product_id), stock_batch_id: Number(item.stock_batch_id), quantity: Number(item.quantity ?? 0), price: Number(item.sale_price ?? item.unit_price ?? 0), sale_price: Number(item.sale_price ?? item.unit_price ?? 0), cost_price: 0 }));
+            const mappedItems = items.map((item) => ({
+                ...item,
+                product_id: Number(item.product_id),
+                quantity: Number(item.quantity ?? 0),
+                price: Number(item.sale_price ?? item.unit_price ?? 0),
+                sale_price: Number(item.sale_price ?? item.unit_price ?? 0),
+                cost_price: 0,
+            }));
+
+            const requestedByProduct = new Map();
+            const productCache = new Map();
             for (let i = 0; i < mappedItems.length; i++) {
                 const item = mappedItems[i];
-                const batch = await dbGet(db, 'SELECT * FROM stock_batches WHERE id = ?', [item.stock_batch_id]);
-                if (!batch || Number(batch.product_id) !== item.product_id || !batch.isActive) throw { code: 'STOCK_BATCH_NOT_FOUND', message: `الصنف رقم ${i + 1}: الدفعة غير صالحة` };
-                if (normalizeAmount(batch.remaining_quantity) < item.quantity - 0.001) throw { code: 'INSUFFICIENT_STOCK', message: `الصنف رقم ${i + 1}: الكمية أكبر من المتوفر` };
-                mappedItems[i].cost_price = normalizeAmount(batch.purchase_price_base ?? batch.purchase_price);
-                mappedItems[i]._batch = batch;
+                if (!item.product_id) throw { code: 'PRODUCT_NOT_FOUND', message: `الصنف رقم ${i + 1}: يجب اختيار المنتج` };
+                let product = productCache.get(item.product_id);
+                if (!product) {
+                    product = await dbGet(db, 'SELECT * FROM products WHERE id = ?', [item.product_id]);
+                    if (!product || !product.isActive) throw { code: 'PRODUCT_NOT_FOUND', message: `الصنف رقم ${i + 1}: المنتج غير موجود أو غير نشط` };
+                    productCache.set(item.product_id, product);
+                }
+                const nextRequested = round3((requestedByProduct.get(item.product_id) ?? 0) + item.quantity);
+                const available = round3(Number(product.stock_quantity ?? 0));
+                if (nextRequested > available + 0.0005) {
+                    throw { code: 'INSUFFICIENT_STOCK', message: `الصنف رقم ${i + 1} (${product.name}): الكمية أكبر من المتوفر (${available})` };
+                }
+                requestedByProduct.set(item.product_id, nextRequested);
+                mappedItems[i].cost_price = normalizeAmount(product.avg_cost_base ?? 0);
             }
 
             const { normalizedItems, subtotal, discountAmount, totalAmount } = calculateInvoiceTotals(mappedItems, discount_amount);
@@ -388,20 +424,57 @@ class SaleInvoiceController {
             if (customer_id) await dbRun(db, `UPDATE customers SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`, [newRemainingBase, customer_id]);
 
             for (const item of normalizedItems) {
-                const batch = item._batch;
                 const costPrice = normalizeAmount(item.cost_price);
                 const profit = Math.round((toBaseAmount(item.price * item.quantity, nextRate) - costPrice * item.quantity) * 100) / 100;
-                await dbRun(db, `INSERT INTO sale_invoice_items (sale_invoice_id, stock_batch_id, quantity, unit_price, line_total, cost_price, profit, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`, [id, item.stock_batch_id, item.quantity, item.price, item.lineTotal, costPrice, profit, item.notes ?? null]);
-                const qtyBefore = normalizeAmount(batch.remaining_quantity);
-                const qtyAfter = Math.round((qtyBefore - item.quantity) * 1000) / 1000;
-                await dbRun(db, `UPDATE stock_batches SET remaining_quantity = ?, updated_at = datetime('now') WHERE id = ?`, [qtyAfter, item.stock_batch_id]);
-                await dbRun(db, `INSERT INTO stock_movements (product_id, stock_batch_id, movement_type, quantity, quantity_before, quantity_after, reference_type, reference_id, reference_number, customer_id, notes, created_at) VALUES (?, ?, 'sale_out', ?, ?, ?, 'sale_invoice', ?, ?, ?, ?, datetime('now'))`, [batch.product_id, item.stock_batch_id, item.quantity, qtyBefore, qtyAfter, id, invNumber, customer_id ?? null, `فاتورة بيع معدلة ${invNumber}`]);
+                await dbRun(
+                    db,
+                    `INSERT INTO sale_invoice_items
+                       (sale_invoice_id, product_id, stock_batch_id, quantity, unit_price, line_total, cost_price, profit, notes, created_at, updated_at)
+                     VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+                    [id, item.product_id, item.quantity, item.price, item.lineTotal, costPrice, profit, item.notes ?? null]
+                );
+
+                const freshProd = await dbGet(db, 'SELECT stock_quantity FROM products WHERE id = ?', [item.product_id]);
+                const qtyBefore = round3(Number(freshProd?.stock_quantity ?? 0));
+                const qtyAfter = round3(Math.max(0, qtyBefore - item.quantity));
+
+                await dbRun(db, `UPDATE products SET stock_quantity = ?, updated_at = datetime('now') WHERE id = ?`, [qtyAfter, item.product_id]);
+                await dbRun(
+                    db,
+                    `INSERT INTO stock_movements
+                       (product_id, stock_batch_id, movement_type, quantity, quantity_before, quantity_after,
+                        reference_type, reference_id, reference_number, customer_id, notes, created_at)
+                     VALUES (?, NULL, 'sale_out', ?, ?, ?, 'sale_invoice', ?, ?, ?, ?, datetime('now'))`,
+                    [item.product_id, item.quantity, qtyBefore, qtyAfter, id, invNumber, customer_id ?? null, `فاتورة بيع معدلة ${invNumber}`]
+                );
             }
 
-            await dbRun(db, `UPDATE sale_invoices SET invoice_number = ?, customer_id = ?, invoice_date = ?, subtotal = ?, discount = ?, discount_amount = ?, total = ?, remaining_amount = ?, status = ?, notes = ?, currency = ?, exchange_rate = ?, is_edited = 1, edit_count = COALESCE(edit_count, 0) + 1, last_edited_at = datetime('now'), last_edited_by = ?, updated_at = datetime('now') WHERE id = ?`, [invNumber, customer_id ?? null, validatedDate, subtotal, discountAmount, discountAmount, totalAmount, remainingAmount, status, notes ?? null, nextCurrency, nextRate, userId ?? null, id]);
+            await dbRun(
+                db,
+                `UPDATE sale_invoices
+                 SET invoice_number = ?, customer_id = ?, invoice_date = ?, subtotal = ?, discount = ?, discount_amount = ?,
+                     total = ?, remaining_amount = ?, status = ?, notes = ?, currency = ?, exchange_rate = ?,
+                     is_edited = 1, edit_count = COALESCE(edit_count, 0) + 1, last_edited_at = datetime('now'), last_edited_by = ?, updated_at = datetime('now')
+                 WHERE id = ?`,
+                [invNumber, customer_id ?? null, validatedDate, subtotal, discountAmount, discountAmount, totalAmount, remainingAmount, status, notes ?? null, nextCurrency, nextRate, userId ?? null, id]
+            );
 
-            const newData = { invoice_number: invNumber, customer_id: customer_id ?? null, invoice_date: validatedDate, total: totalAmount, remaining_amount: remainingAmount, currency: nextCurrency, exchange_rate: nextRate, items: normalizedItems.map(x => ({ product_id: x.product_id, stock_batch_id: x.stock_batch_id, quantity: x.quantity, sale_price: x.price })) };
-            await dbRun(db, `INSERT INTO activity_logs (user_id, action, table_name, record_id, old_data, new_data, created_at, updated_at) VALUES (?, 'sale_edited', 'sale_invoices', ?, ?, ?, datetime('now'), datetime('now'))`, [userId ?? null, id, JSON.stringify({ invoice: oldInvoice, items: oldItems }), JSON.stringify(newData)]);
+            const newData = {
+                invoice_number: invNumber,
+                customer_id: customer_id ?? null,
+                invoice_date: validatedDate,
+                total: totalAmount,
+                remaining_amount: remainingAmount,
+                currency: nextCurrency,
+                exchange_rate: nextRate,
+                items: normalizedItems.map((x) => ({ product_id: x.product_id, quantity: x.quantity, sale_price: x.price })),
+            };
+            await dbRun(
+                db,
+                `INSERT INTO activity_logs (user_id, action, table_name, record_id, old_data, new_data, created_at, updated_at)
+                 VALUES (?, 'sale_edited', 'sale_invoices', ?, ?, ?, datetime('now'), datetime('now'))`,
+                [userId ?? null, id, JSON.stringify({ invoice: oldInvoice, items: oldItems }), JSON.stringify(newData)]
+            );
             await dbRun(db, 'COMMIT');
             return this.getSaleInvoiceDetails(id);
         } catch (err) {
@@ -425,13 +498,14 @@ class SaleInvoiceController {
 
         const items = await dbAll(db,
             `SELECT sii.*,
-                    sb.batch_code, sb.product_id, sb.purchase_price as batch_cost,
-                    sb.remaining_quantity as batch_remaining, sb.received_date as batch_received_date,
-                    sb.expiry_date as batch_expiry_date, sb.isActive as batch_active,
-                    p.name as product_name, p.unit as product_unit
+                    COALESCE(sii.product_id, sb.product_id) as product_id,
+                    NULL as batch_code,
+                    p.name as product_name,
+                    p.unit as product_unit,
+                    p.stock_quantity as product_stock_quantity
              FROM sale_invoice_items sii
              LEFT JOIN stock_batches sb ON sii.stock_batch_id = sb.id
-             LEFT JOIN products p ON sb.product_id = p.id
+             LEFT JOIN products p ON COALESCE(sii.product_id, sb.product_id) = p.id
              WHERE sii.sale_invoice_id = ?
              ORDER BY sii.id`,
             [id]
@@ -528,7 +602,7 @@ class SaleInvoiceController {
             if (!invoice) throw { code: 'NOT_FOUND', message: 'فاتورة البيع غير موجودة' };
             if (invoice.status === 'cancelled') throw { code: 'SALE_ALREADY_CANCELLED', message: 'الفاتورة ملغاة مسبقًا' };
 
-            // 1. Reverse active sale payments through the same authoritative payment reversal service.
+            // 1. Reverse active sale payments
             const activePayments = await dbAll(db,
                 `SELECT * FROM payments WHERE invoice_id = ? AND payment_type = 'sale' AND status = 'active'`,
                 [id]
@@ -541,7 +615,7 @@ class SaleInvoiceController {
                 });
             }
 
-            // 2. Remove the full original customer receivable after payments have been financially reversed.
+            // 2. Remove original customer receivable
             if (invoice.customer_id) {
                 const totalBase = toBaseAmount(
                     normalizeAmount(invoice.total),
@@ -555,31 +629,34 @@ class SaleInvoiceController {
                 }
             }
 
-            // 3. Restore sold quantities to exact original stock batches + create stock movements
+            // 3. Restore sold quantities directly to unified product stock + create stock movements
             const saleItems = await dbAll(db,
-                `SELECT sii.*, sb.product_id FROM sale_invoice_items sii JOIN stock_batches sb ON sii.stock_batch_id = sb.id WHERE sii.sale_invoice_id = ?`,
+                `SELECT sii.*, COALESCE(sii.product_id, sb.product_id) AS resolved_product_id
+                 FROM sale_invoice_items sii
+                 LEFT JOIN stock_batches sb ON sii.stock_batch_id = sb.id
+                 WHERE sii.sale_invoice_id = ?`,
                 [id]
             );
             for (const item of saleItems) {
-                const qty = normalizeAmount(item.quantity);
-                // Get current remaining for movement record
-                const batch = await dbGet(db, 'SELECT remaining_quantity FROM stock_batches WHERE id = ?', [item.stock_batch_id]);
-                const qtyBefore = normalizeAmount(batch.remaining_quantity);
-                const qtyAfter  = Math.round((qtyBefore + qty) * 1000) / 1000;
+                const pid = Number(item.resolved_product_id);
+                const qty = round3(Number(item.quantity ?? 0));
+                if (!pid || qty <= 0) continue;
 
-                // Restore batch quantity
+                const prod = await dbGet(db, 'SELECT stock_quantity FROM products WHERE id = ?', [pid]);
+                const qtyBefore = round3(Number(prod?.stock_quantity ?? 0));
+                const qtyAfter  = round3(qtyBefore + qty);
+
                 await dbRun(db,
-                    `UPDATE stock_batches SET remaining_quantity = ?, isActive = 1, updated_at = datetime('now') WHERE id = ?`,
-                    [qtyAfter, item.stock_batch_id]
+                    `UPDATE products SET stock_quantity = ?, updated_at = datetime('now') WHERE id = ?`,
+                    [qtyAfter, pid]
                 );
 
-                // Stock movement: sale_cancel_in
                 await dbRun(db,
                     `INSERT INTO stock_movements
                        (product_id, stock_batch_id, movement_type, quantity, quantity_before, quantity_after,
                         reference_type, reference_id, reference_number, customer_id, notes, created_at)
-                     VALUES (?, ?, 'sale_cancel_in', ?, ?, ?, 'sale_invoice', ?, ?, ?, ?, datetime('now'))`,
-                    [item.product_id, item.stock_batch_id, qty, qtyBefore, qtyAfter,
+                     VALUES (?, NULL, 'sale_cancel_in', ?, ?, ?, 'sale_invoice', ?, ?, ?, ?, datetime('now'))`,
+                    [pid, qty, qtyBefore, qtyAfter,
                      id, invoice.invoice_number, invoice.customer_id, `إلغاء فاتورة بيع #${invoice.invoice_number}`]
                 );
             }
@@ -590,7 +667,6 @@ class SaleInvoiceController {
                 [id]
             );
 
-            // 5. Activity log
             await logActivity(db, 'sale_cancelled', 'sale_invoices', id, { reason, invoice_number: invoice.invoice_number });
 
             await dbRun(db, 'COMMIT');
@@ -622,25 +698,12 @@ class SaleInvoiceController {
         return { success: true, message: 'تم حذف الفاتورة بنجاح' };
     }
 
-    // ─── getAvailableBatches ──────────────────────────────────────────────
-
-    async getAvailableBatches(productId) {
-        if (!productId) throw { code: 'VALIDATION_ERROR', message: 'productId مطلوب' };
-        const db = await dbmanager.init();
-        return dbAll(db,
-            `SELECT sb.*, p.name as product_name, p.unit, s.name as supplier_name,
-                    pi.invoice_number as purchase_invoice_number
-             FROM stock_batches sb
-             LEFT JOIN products p ON sb.product_id = p.id
-             LEFT JOIN suppliers s ON sb.supplier_id = s.id
-             LEFT JOIN purchase_invoices pi ON sb.purchase_invoice_id = pi.id
-             WHERE sb.product_id = ? AND sb.isActive = 1 AND sb.remaining_quantity > 0
-             ORDER BY sb.received_date ASC, sb.id ASC`,
-            [productId]
-        );
-    }
-
     // ─── Legacy read methods ──────────────────────────────────────────────
+
+    async getAvailableBatches(_productId) {
+        // Deprecated under unified stock pool — kept as an empty list for backward compatibility.
+        return [];
+    }
 
     async getSaleInvoice(id) {
         if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID مطلوب' };

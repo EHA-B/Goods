@@ -6,14 +6,20 @@ type StoredDraft<T> = {
   data: T;
 };
 
+/**
+ * Builds the localStorage key of an invoice draft.
+ * When `tabId` is provided (multi-tab new invoices), every open tab gets its
+ * own isolated draft slot.
+ */
 export function invoiceDraftKey(
   kind: "sale" | "purchase",
   mode: "new" | "edit",
   id?: number,
+  tabId?: string,
 ) {
   return `stocklite.invoice-draft.v1.${kind}.${mode}${
     id ? `.${id}` : ""
-  }`;
+  }${tabId ? `.tab.${tabId}` : ""}`;
 }
 
 export function saveInvoiceDraft<T>(

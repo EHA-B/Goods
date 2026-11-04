@@ -4,6 +4,8 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../components/common/Sidebar";
 import LockScreen from "../components/auth/LockScreen";
 import FirstRunTour from "../components/onboarding/FirstRunTour";
+import { InvoiceTabsProvider } from "../invoiceTabs/InvoiceTabsContext";
+import InvoiceTabsBar from "../invoiceTabs/InvoiceTabsBar";
 import { PATHS } from "../routes/path";
 
 function MainLayout() {
@@ -48,23 +50,30 @@ function MainLayout() {
   }, [navigate, location.pathname]);
 
   return (
-    <div
-      dir="rtl"
-      className="flex h-screen overflow-hidden bg-[var(--app-background)]"
-    >
-      <Sidebar />
+    <InvoiceTabsProvider>
+      <div
+        dir="rtl"
+        className="flex h-screen overflow-hidden bg-[var(--app-background)]"
+      >
+        <Sidebar />
 
-      <LockScreen />
+        <LockScreen />
 
-      <FirstRunTour />
+        <FirstRunTour />
 
-      <main className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1600px] p-6">
-          <Outlet />
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Global bar of open (unsaved) sale / purchase invoices */}
+          <InvoiceTabsBar />
+
+          <main className="min-w-0 flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-[1600px] p-6">
+              <Outlet />
+            </div>
+          </main>
         </div>
-      </main>
-    </div>
+      </div>
+    </InvoiceTabsProvider>
   );
 }
 
-export default MainLayout;
+export default MainLayout;

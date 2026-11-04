@@ -14,8 +14,11 @@ import {
   consumeInvoiceDraft,
   invoiceDraftFingerprint,
   invoiceDraftKey,
+  loadInvoiceDraft,
   saveInvoiceDraft,
 } from "../../lib/invoiceDrafts";
+import { getReservedBatchQuantities, isInvoiceTabOpen } from "../../lib/invoiceTabs";
+import { useInvoiceTabs } from "../../invoiceTabs/InvoiceTabsContext";
 import { customersService } from "../customers/customersService";
 
 type SaleItemForm = {
@@ -42,18 +45,24 @@ const emptyItem = (): SaleItemForm => ({
 
 const money = (value: number) => value.toLocaleString("en-US");
 
-export default function SaleFormPage() {
+export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
   useArrowFieldNavigation();
   const navigate = useNavigate();
   const { saleId } = useParams();
   const editingId = Number(saleId || 0);
   const isEdit = editingId > 0;
-  const draftKey = invoiceDraftKey("sale", isEdit ? "edit" : "new", editingId || undefined);
+  // `tabId` is set when this form lives inside an open invoice tab (new invoices only).
+  const isTab = !isEdit && Boolean(tabId);
+  const draftKey = invoiceDraftKey("sale", isEdit ? "edit" : "new", editingId || undefined, isTab ? tabId : undefined);
+  const { tabs: openTabs, updateTabMeta, removeTab, requestCloseTab } = useInvoiceTabs();
+  const currentTab = isTab ? openTabs.find((tab) => tab.id === tabId) : undefined;
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [pendingInput, setPendingInput] = useState<CreateSaleInvoiceInput | null>(null);
   const [restoredDraft, setRestoredDraft] = useState(false);
   const [draftInitialized, setDraftInitialized] = useState(false);
   const draftBaselineRef = useRef<string | null>(null);
+  const latestDraftRef = useRef<unknown>(null);
+  const finishedRef = useRef(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [customerId, setCustomerId] = useState(0);
@@ -102,9 +111,11 @@ export default function SaleFormPage() {
 
   useEffect(() => {
     if (isEdit || draftInitialized) return;
-    const draft = consumeInvoiceDraft<any>(draftKey);
+    // Tab drafts stay stored while the tab is open (switching tabs remounts the form).
+    const draft = isTab ? loadInvoiceDraft<any>(draftKey) : consumeInvoiceDraft<any>(draftKey);
     if (!draft) { setDraftInitialized(true); return; }
-    setCustomerId(draft.customerId ?? 0); setInvoiceNumber(draft.invoiceNumber ?? ""); setInvoiceDate(draft.invoiceDate ?? invoiceDate); setDiscount(draft.discount ?? 0); setNotes(draft.notes ?? ""); setItems(draft.items ?? [emptyItem()]); setPaymentAmount(draft.paymentAmount ?? 0); setPaymentCashboxId(draft.paymentCashboxId ?? 0); setPaymentDate(draft.paymentDate ?? paymentDate); setPaymentExchangeRate(draft.paymentExchangeRate ?? ""); setCurrency(draft.currency ?? "SYP"); setExchangeRate(draft.exchangeRate ?? 1); setRestoredDraft(true); setDraftInitialized(true);
+    setCustomerId(draft.customerId ?? 0); setInvoiceNumber(draft.invoiceNumber ?? ""); setInvoiceDate(draft.invoiceDate ?? invoiceDate); setDiscount(draft.discount ?? 0); setNotes(draft.notes ?? ""); setItems(draft.items ?? [emptyItem()]); setPaymentAmount(draft.paymentAmount ?? 0); setPaymentCashboxId(draft.paymentCashboxId ?? 0); setPaymentDate(draft.paymentDate ?? paymentDate); setPaymentExchangeRate(draft.paymentExchangeRate ?? ""); setCurrency(draft.currency ?? "SYP"); setExchangeRate(draft.exchangeRate ?? 1); setRestoredDraft(!isTab); setDraftInitialized(true);
+    if (isTab) refreshBatchesForItems(draft.items ?? []);
   }, [isEdit, draftKey, draftInitialized]);
 
   useEffect(() => {
@@ -126,6 +137,15 @@ export default function SaleFormPage() {
       currency,
       exchangeRate,
     };
+
+    if (isTab) {
+      // Open invoice tab: keep its own draft for as long as the tab stays open.
+      latestDraftRef.current = draftData;
+      const tabTimer = window.setTimeout(() => {
+        if (tabId && isInvoiceTabOpen(tabId)) saveInvoiceDraft(draftKey, draftData);
+      }, 300);
+      return () => window.clearTimeout(tabTimer);
+    }
 
     const fingerprint =
       invoiceDraftFingerprint(
@@ -165,6 +185,8 @@ export default function SaleFormPage() {
   }, [
     draftInitialized,
     draftKey,
+    isTab,
+    tabId,
     customerId,
     invoiceNumber,
     invoiceDate,
@@ -178,6 +200,38 @@ export default function SaleFormPage() {
     currency,
     exchangeRate,
   ]);
+
+  /* ─── Open invoice tab support ─── */
+  // Flush the latest data when leaving the tab (switching tabs or pages) so
+  // nothing typed during the last few hundred milliseconds is lost.
+  useEffect(() => {
+    if (!isTab || !tabId) return;
+    return () => {
+      if (finishedRef.current) return;
+      if (latestDraftRef.current !== null && isInvoiceTabOpen(tabId)) {
+        saveInvoiceDraft(draftKey, latestDraftRef.current);
+      }
+    };
+  }, [isTab, tabId, draftKey]);
+
+  // A restored tab draft may hold stale stock: reload the batches of each product so
+  // remaining quantities reflect invoices saved from other tabs in the meantime.
+  function refreshBatchesForItems(restoredItems: SaleItemForm[]) {
+    const productIds = Array.from(new Set(restoredItems.map((item) => Number(item.product_id)).filter(Boolean)));
+    if (productIds.length === 0) return;
+    Promise.all(productIds.map(async (productId) => [productId, await salesService.getAvailableBatches(productId)] as const))
+      .then((entries) => {
+        const byProduct = new Map<number, StockBatchRecord[]>(entries);
+        setItems((curr) => curr.map((item) => (byProduct.has(item.product_id) ? { ...item, availableBatches: byProduct.get(item.product_id) ?? [] } : item)));
+      })
+      .catch(() => { /* keep the stored batches if the refresh fails */ });
+  }
+
+  // Batch quantities already used by the OTHER open sale tabs (soft warning only).
+  const reservedElsewhere = useMemo(
+    () => (isTab ? getReservedBatchQuantities(tabId) : new Map<number, number>()),
+    [isTab, tabId],
+  );
 
   /* ─── Keyboard shortcuts ─── */
   const addNewItem = useCallback(() => {
@@ -216,6 +270,10 @@ export default function SaleFormPage() {
     items.forEach((item, index) => {
       if (!item.stock_batch_id || item.quantity <= 0) return;
       const batch = item.availableBatches.find((b) => b.id === item.stock_batch_id);
+      if (!batch) {
+        errors.set(index, "الدفعة المحددة لم تعد متاحة (ربما نفدت كميتها من فاتورة أخرى). اختر دفعة أخرى.");
+        return;
+      }
       if (batch && item.quantity > Number(batch.remaining_quantity) + 0.001) {
         errors.set(index, `الكمية المطلوبة (${money(item.quantity)}) أكبر من المتاح في الدفعة (${money(Number(batch.remaining_quantity))})`);
       }
@@ -227,6 +285,18 @@ export default function SaleFormPage() {
     [lookups],
   );
   const totalBase = currency === "SYP" ? total : total * exchangeRate;
+
+  // Keep the open-invoices bar label (customer · items · total) in sync.
+  const customerName = customerId ? lookups?.customers.find((c) => c.id === customerId)?.name ?? "" : "";
+  useEffect(() => {
+    if (!isTab || !tabId || !draftInitialized) return;
+    updateTabMeta(tabId, {
+      partyName: lookups ? customerName : undefined,
+      itemCount: items.filter((item) => item.product_id).length,
+      total,
+      currency,
+    });
+  }, [isTab, tabId, draftInitialized, lookups, customerName, items, total, currency, updateTabMeta]);
 
 
   const updateItem = (index: number, patch: Partial<SaleItemForm>) =>
@@ -426,8 +496,10 @@ export default function SaleFormPage() {
     setLoading(true);
     try {
       const result = await salesService.createProcess(input);
-      clearInvoiceDraft(draftKey);
+      finishedRef.current = true;
       navigate(`/sales/${result.invoice.id}`);
+      // Saved: close its tab (also removes the tab draft).
+      if (isTab && tabId) removeTab(tabId); else clearInvoiceDraft(draftKey);
     } catch (err: unknown) {
       const e = err as Error;
       setError(getArabicErrorMessage(e, "حدث خطأ أثناء الحفظ"));
@@ -441,7 +513,7 @@ export default function SaleFormPage() {
 
   return <>
     <PageHeader
-      title={isEdit ? "تعديل فاتورة بيع" : "فاتورة بيع جديدة"}
+      title={isEdit ? "تعديل فاتورة بيع" : currentTab ? `فاتورة بيع جديدة #${currentTab.number}` : "فاتورة بيع جديدة"}
       description={isEdit ? "تعديل محمي بكلمة مرور مع حفظ سجل كامل للتغييرات." : "أدخل بيانات العميل والأصناف ودفعات المخزون والمبالغ."}
       actions={<BackButton to={PATHS.SALES} />}
     />
@@ -578,6 +650,8 @@ export default function SaleFormPage() {
                           parts.push(invoiceAndSupplier);
                         }
                         parts.push(`كمية متاحة: ${Number(b.remaining_quantity || 0).toLocaleString("en-US")}`);
+                        const reservedQty = reservedElsewhere.get(b.id) ?? 0;
+                        if (reservedQty > 0) parts.push(`محجوز بفواتير مفتوحة: ${reservedQty.toLocaleString("en-US")}`);
                         return {
                           value: String(b.id),
                           label: parts.join(" — "),
@@ -590,6 +664,18 @@ export default function SaleFormPage() {
                 </FormField>
                 <FormField label="الكمية" required>
                   <Input type="number" min="0.001" step="0.001" value={item.quantity} onChange={(e) => updateItem(index, { quantity: Number(e.target.value) })} />
+                  {(() => {
+                    const reservedQty = reservedElsewhere.get(item.stock_batch_id) ?? 0;
+                    const batch = item.availableBatches.find((b) => b.id === item.stock_batch_id);
+                    if (!batch || reservedQty <= 0) return null;
+                    const freeQty = Number(batch.remaining_quantity) - reservedQty;
+                    if (item.quantity <= freeQty + 0.001) return null;
+                    return (
+                      <p className="mt-1 text-xs font-medium text-amber-700">
+                        تنبيه: {money(reservedQty)} من هذه الدفعة مستخدمة في فواتير مفتوحة أخرى لم تُحفظ بعد (المتبقي بعدها {money(Math.max(0, freeQty))}).
+                      </p>
+                    );
+                  })()}
                 </FormField>
                 <FormField label="سعر البيع" required>
                   <Input type="number" min="0" value={item.sale_price} onChange={(e) => updateItem(index, { sale_price: Number(e.target.value) })} />
@@ -799,7 +885,7 @@ export default function SaleFormPage() {
           </span>
         </div>
 
-        <Button variant="secondary" onClick={() => navigate(PATHS.SALES)}>إلغاء</Button>
+        <Button variant="secondary" onClick={() => (isTab && tabId ? requestCloseTab(tabId) : navigate(PATHS.SALES))}>إلغاء</Button>
         <Button startIcon={<Save size={17} />} disabled={loading} onClick={submit}>
           {loading ? "جاري الحفظ..." : "حفظ الفاتورة"}
         </Button>

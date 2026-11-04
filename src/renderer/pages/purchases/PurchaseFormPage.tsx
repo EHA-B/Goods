@@ -26,8 +26,11 @@ import {
   consumeInvoiceDraft,
   invoiceDraftFingerprint,
   invoiceDraftKey,
+  loadInvoiceDraft,
   saveInvoiceDraft,
 } from "../../lib/invoiceDrafts";
+import { isInvoiceTabOpen } from "../../lib/invoiceTabs";
+import { useInvoiceTabs } from "../../invoiceTabs/InvoiceTabsContext";
 import {
   getProductErrorMessage,
   productsService,
@@ -83,18 +86,24 @@ const emptyItem = (): PurchaseItemForm => ({
 const money = (value: number) =>
   Number(value || 0).toLocaleString("en-US");
 
-export default function PurchaseFormPage() {
+export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
   useArrowFieldNavigation();
   const navigate = useNavigate();
   const { purchaseId } = useParams();
   const editingId = Number(purchaseId || 0);
   const isEdit = editingId > 0;
-  const draftKey = invoiceDraftKey("purchase", isEdit ? "edit" : "new", editingId || undefined);
+  // `tabId` is set when this form lives inside an open invoice tab (new invoices only).
+  const isTab = !isEdit && Boolean(tabId);
+  const draftKey = invoiceDraftKey("purchase", isEdit ? "edit" : "new", editingId || undefined, isTab ? tabId : undefined);
+  const { tabs: openTabs, updateTabMeta, removeTab, requestCloseTab } = useInvoiceTabs();
+  const currentTab = isTab ? openTabs.find((tab) => tab.id === tabId) : undefined;
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [pendingInput, setPendingInput] = useState<CreatePurchaseInvoiceInputWithEstimatedPrice | null>(null);
   const [restoredDraft, setRestoredDraft] = useState(false);
   const [draftInitialized, setDraftInitialized] = useState(false);
   const draftBaselineRef = useRef<string | null>(null);
+  const latestDraftRef = useRef<unknown>(null);
+  const finishedRef = useRef(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -202,8 +211,8 @@ export default function PurchaseFormPage() {
   }, [isEdit, editingId, lookups, draftKey]);
 
   useEffect(() => {
-    if (isEdit || draftInitialized) return; const draft = consumeInvoiceDraft<any>(draftKey); if (!draft) { setDraftInitialized(true); return; }
-    setSupplierId(draft.supplierId ?? 0); setInvoiceNumber(draft.invoiceNumber ?? ""); setInvoiceDate(draft.invoiceDate ?? invoiceDate); setInvoiceType(draft.invoiceType ?? "standard"); setDiscount(draft.discount ?? 0); setTransportCost(draft.transportCost ?? 0); setTransportCostBearer(draft.transportCostBearer ?? "company"); setEmptyingCost(draft.emptyingCost ?? 0); setEmptyingCostBearer(draft.emptyingCostBearer ?? "company"); setNotes(draft.notes ?? ""); setItems(draft.items ?? [emptyItem()]); setPaymentAmount(draft.paymentAmount ?? 0); setPaymentCashboxId(draft.paymentCashboxId ?? 0); setPaymentDate(draft.paymentDate ?? paymentDate); setPaymentExchangeRate(draft.paymentExchangeRate ?? ""); setCurrency(draft.currency ?? "SYP"); setExchangeRate(draft.exchangeRate ?? 1); setRestoredDraft(true); setDraftInitialized(true);
+    if (isEdit || draftInitialized) return; const draft = isTab ? loadInvoiceDraft<any>(draftKey) : consumeInvoiceDraft<any>(draftKey); if (!draft) { setDraftInitialized(true); return; }
+    setSupplierId(draft.supplierId ?? 0); setInvoiceNumber(draft.invoiceNumber ?? ""); setInvoiceDate(draft.invoiceDate ?? invoiceDate); setInvoiceType(draft.invoiceType ?? "standard"); setDiscount(draft.discount ?? 0); setTransportCost(draft.transportCost ?? 0); setTransportCostBearer(draft.transportCostBearer ?? "company"); setEmptyingCost(draft.emptyingCost ?? 0); setEmptyingCostBearer(draft.emptyingCostBearer ?? "company"); setNotes(draft.notes ?? ""); setItems(draft.items ?? [emptyItem()]); setPaymentAmount(draft.paymentAmount ?? 0); setPaymentCashboxId(draft.paymentCashboxId ?? 0); setPaymentDate(draft.paymentDate ?? paymentDate); setPaymentExchangeRate(draft.paymentExchangeRate ?? ""); setCurrency(draft.currency ?? "SYP"); setExchangeRate(draft.exchangeRate ?? 1); setRestoredDraft(!isTab); setDraftInitialized(true);
   }, [isEdit, draftKey, draftInitialized]);
 
   useEffect(() => {
@@ -230,6 +239,15 @@ export default function PurchaseFormPage() {
       currency,
       exchangeRate,
     };
+
+    if (isTab) {
+      // Open invoice tab: keep its own draft for as long as the tab stays open.
+      latestDraftRef.current = draftData;
+      const tabTimer = window.setTimeout(() => {
+        if (tabId && isInvoiceTabOpen(tabId)) saveInvoiceDraft(draftKey, draftData);
+      }, 300);
+      return () => window.clearTimeout(tabTimer);
+    }
 
     const fingerprint =
       invoiceDraftFingerprint(
@@ -273,6 +291,8 @@ export default function PurchaseFormPage() {
   }, [
     draftInitialized,
     draftKey,
+    isTab,
+    tabId,
     supplierId,
     invoiceNumber,
     invoiceDate,
@@ -291,6 +311,19 @@ export default function PurchaseFormPage() {
     currency,
     exchangeRate,
   ]);
+
+  /* ─── Open invoice tab support ─── */
+  // Flush the latest data when leaving the tab (switching tabs or pages) so
+  // nothing typed during the last few hundred milliseconds is lost.
+  useEffect(() => {
+    if (!isTab || !tabId) return;
+    return () => {
+      if (finishedRef.current) return;
+      if (latestDraftRef.current !== null && isInvoiceTabOpen(tabId)) {
+        saveInvoiceDraft(draftKey, latestDraftRef.current);
+      }
+    };
+  }, [isTab, tabId, draftKey]);
 
   /* ─── Keyboard shortcuts ─── */
   const addNewItem = useCallback(() => {
@@ -383,6 +416,18 @@ export default function PurchaseFormPage() {
     currency === "SYP"
       ? total
       : total * exchangeRate;
+
+  // Keep the open-invoices bar label (supplier · items · total) in sync.
+  const supplierName = supplierId ? lookups?.suppliers.find((s) => s.id === supplierId)?.name ?? "" : "";
+  useEffect(() => {
+    if (!isTab || !tabId || !draftInitialized) return;
+    updateTabMeta(tabId, {
+      partyName: lookups ? supplierName : undefined,
+      itemCount: items.filter((item) => item.product_id).length,
+      total,
+      currency,
+    });
+  }, [isTab, tabId, draftInitialized, lookups, supplierName, items, total, currency, updateTabMeta]);
 
   const updateItem = (
     index: number,
@@ -833,8 +878,10 @@ export default function PurchaseFormPage() {
         );
       }
 
-      clearInvoiceDraft(draftKey);
+      finishedRef.current = true;
       navigate(`/purchases/${result.invoice.id}`);
+      // Saved: close its tab (also removes the tab draft).
+      if (isTab && tabId) removeTab(tabId); else clearInvoiceDraft(draftKey);
     } catch (err: unknown) {
       const e = err as Error;
 
@@ -855,7 +902,7 @@ export default function PurchaseFormPage() {
   return (
     <>
       <PageHeader
-        title={isEdit ? "تعديل فاتورة شراء" : "فاتورة شراء جديدة"}
+        title={isEdit ? "تعديل فاتورة شراء" : currentTab ? `فاتورة شراء جديدة #${currentTab.number}` : "فاتورة شراء جديدة"}
         description={isEdit ? "تعديل محمي بكلمة مرور. لن يسمح النظام بالتعديل إذا تحرك مخزون الفاتورة لاحقًا." : isConsignment ? "استلام بضاعة أمانة من المورد. سعر الشراء المتوقع تقديري فقط ولا يمثل مبلغًا مستحقًا." : "أدخل بيانات المورد والأصناف ودفعات المخزون والمبالغ المالية."}
         actions={
           <BackButton to={PATHS.PURCHASES} />
@@ -1793,7 +1840,9 @@ export default function PurchaseFormPage() {
           <Button
             variant="secondary"
             onClick={() =>
-              navigate(PATHS.PURCHASES)
+              isTab && tabId
+                ? requestCloseTab(tabId)
+                : navigate(PATHS.PURCHASES)
             }
           >
             إلغاء

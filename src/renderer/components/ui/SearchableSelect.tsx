@@ -695,7 +695,7 @@ export default function SearchableSelect({
                   onChange={(event) => {
                     const nextValue = event.target.value;
 
-                    if (isComposingRef.current || event.nativeEvent.isComposing) {
+                    if (isComposingRef.current || (event.nativeEvent as InputEvent).isComposing) {
                       autocompleteSelectionRef.current = null;
                       setQuery(nextValue);
                       setSearchTerm(nextValue);

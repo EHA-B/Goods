@@ -145,8 +145,8 @@ const stockliteApi = {
     payment: (id: number) => invokeApi("api:print:payment", id),
     transaction: (id: number) => invokeApi("api:print:transaction", id),
     transfer: (id: string) => invokeApi("api:print:transfer", id),
-    customerStatement: (id: number) => invokeApi("api:print:customerStatement", id),
-    supplierStatement: (id: number) => invokeApi("api:print:supplierStatement", id),
+    customerStatement: (id: number, range?: { fromDate?: string; toDate?: string }) => invokeApi("api:print:customerStatement", id, range),
+    supplierStatement: (id: number, range?: { fromDate?: string; toDate?: string }) => invokeApi("api:print:supplierStatement", id, range),
     cashboxStatement: (id: number) => invokeApi("api:print:cashboxStatement", id),
     consignment: (id: number) => invokeApi("api:print:consignment", id),
   },
@@ -405,6 +405,8 @@ const stockliteApi = {
       invokeApi("api:report:generate", input),
     export: (input: unknown) =>
       invokeApi("api:report:export", input),
+    print: (input: unknown) =>
+      invokeApi("api:report:print", input),
   },
 
   activityLogs: {

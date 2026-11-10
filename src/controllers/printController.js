@@ -4,6 +4,23 @@ const dbmanager = require(path.join(__dirname, '../database/databaseManager'));
 const get = (db, sql, params=[]) => new Promise((resolve,reject)=>db.get(sql,params,(e,r)=>e?reject(e):resolve(r)));
 const all = (db, sql, params=[]) => new Promise((resolve,reject)=>db.all(sql,params,(e,r)=>e?reject(e):resolve(r||[])));
 
+const isIsoDate = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+/** Accepts an optional { fromDate, toDate } range (YYYY-MM-DD) and drops invalid values. */
+function normalizeStatementRange(range) {
+  const fromDate = isIsoDate(range?.fromDate) ? range.fromDate : null;
+  const toDate = isIsoDate(range?.toDate) ? range.toDate : null;
+  return { fromDate, toDate };
+}
+
+function buildDateRangeSql(column, fromDate, toDate) {
+  let sql = '';
+  const params = [];
+  if (fromDate) { sql += ` AND date(${column}) >= date(?)`; params.push(fromDate); }
+  if (toDate) { sql += ` AND date(${column}) <= date(?)`; params.push(toDate); }
+  return { sql, params };
+}
+
 class PrintController {
   async getPaymentDocument(id) {
     const db = await dbmanager.init();
@@ -39,26 +56,32 @@ class PrintController {
     return { transfer_group_id: groupId, movements: rows };
   }
 
-  async getCustomerStatement(id) {
+  async getCustomerStatement(id, range = {}) {
     const db = await dbmanager.init();
     const party = await get(db, `SELECT * FROM customers WHERE id=?`, [id]);
     if (!party) throw Object.assign(new Error('Customer not found'), {code:'NOT_FOUND'});
+    const { fromDate, toDate } = normalizeStatementRange(range);
+    const invoiceRange = buildDateRangeSql('invoice_date', fromDate, toDate);
+    const paymentRange = buildDateRangeSql('p.payment_date', fromDate, toDate);
     const invoices = await all(db, `SELECT id, invoice_number, invoice_date, total, paid_amount, remaining_amount, status, currency, exchange_rate,
-      total * COALESCE(exchange_rate,1) amount_base FROM sale_invoices WHERE customer_id=? ORDER BY invoice_date,id`, [id]);
+      total * COALESCE(exchange_rate,1) amount_base FROM sale_invoices WHERE customer_id=?${invoiceRange.sql} ORDER BY invoice_date,id`, [id, ...invoiceRange.params]);
     const payments = await all(db, `SELECT p.*, c.name cashbox_name FROM payments p LEFT JOIN cashboxes c ON c.id=p.cashbox_id
-      WHERE p.payment_type IN ('sale','sale_reversal') AND p.party_id=? ORDER BY p.payment_date,p.id`, [id]);
-    return { party, invoices, payments, balance: Number(party.balance||0), statement_type:'customer' };
+      WHERE p.payment_type IN ('sale','sale_reversal') AND p.party_id=?${paymentRange.sql} ORDER BY p.payment_date,p.id`, [id, ...paymentRange.params]);
+    return { party, invoices, payments, balance: Number(party.balance||0), statement_type:'customer', from_date: fromDate, to_date: toDate };
   }
 
-  async getSupplierStatement(id) {
+  async getSupplierStatement(id, range = {}) {
     const db = await dbmanager.init();
     const party = await get(db, `SELECT * FROM suppliers WHERE id=?`, [id]);
     if (!party) throw Object.assign(new Error('Supplier not found'), {code:'NOT_FOUND'});
+    const { fromDate, toDate } = normalizeStatementRange(range);
+    const invoiceRange = buildDateRangeSql('invoice_date', fromDate, toDate);
+    const paymentRange = buildDateRangeSql('p.payment_date', fromDate, toDate);
     const invoices = await all(db, `SELECT id, invoice_number, invoice_date, total, paid_amount, remaining_amount, status, currency, exchange_rate,
-      total * COALESCE(exchange_rate,1) amount_base FROM purchase_invoices WHERE supplier_id=? ORDER BY invoice_date,id`, [id]);
+      total * COALESCE(exchange_rate,1) amount_base FROM purchase_invoices WHERE supplier_id=?${invoiceRange.sql} ORDER BY invoice_date,id`, [id, ...invoiceRange.params]);
     const payments = await all(db, `SELECT p.*, c.name cashbox_name FROM payments p LEFT JOIN cashboxes c ON c.id=p.cashbox_id
-      WHERE p.payment_type IN ('purchase','purchase_reversal') AND p.party_id=? ORDER BY p.payment_date,p.id`, [id]);
-    return { party, invoices, payments, balance: Number(party.balance||0), statement_type:'supplier' };
+      WHERE p.payment_type IN ('purchase','purchase_reversal') AND p.party_id=?${paymentRange.sql} ORDER BY p.payment_date,p.id`, [id, ...paymentRange.params]);
+    return { party, invoices, payments, balance: Number(party.balance||0), statement_type:'supplier', from_date: fromDate, to_date: toDate };
   }
 
   async getCashboxStatement(id) {

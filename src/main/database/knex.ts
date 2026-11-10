@@ -31,6 +31,8 @@ import * as cashboxesSeed from './seeds/01_cashboxes';
 import * as usersSeed from './seeds/02_users';
 import * as addPurchaseExtraCostsMigration from './migrations/20260827000000_add_purchase_extra_costs';
 import * as addPurchaseExtraCostResponsibilityMigration from './migrations/20260831000000_add_purchase_extra_cost_responsibility';
+import * as unifiedStockAndManualConsignmentMigration from './migrations/20261104180000_unified_stock_and_manual_consignment';
+import * as addStockWeightToInvoiceItemsMigration from './migrations/20261105210000_add_stock_weight_to_invoice_items';
 
 let knexInstance: Knex | null = null;
 
@@ -63,6 +65,8 @@ class MigrationSource {
       '20260823120000_make_payment_invoice_optional.ts',
       '20260827000000_add_purchase_extra_costs.ts',
       '20260831000000_add_purchase_extra_cost_responsibility.ts',
+      '20261104180000_unified_stock_and_manual_consignment.ts',
+      '20261105210000_add_stock_weight_to_invoice_items.ts',
     ]);
   }
   getMigrationName(migration: string) {
@@ -146,6 +150,12 @@ class MigrationSource {
     }
     if (migration === '20260831000000_add_purchase_extra_cost_responsibility.ts') {
       return addPurchaseExtraCostResponsibilityMigration;
+    }
+    if (migration === '20261104180000_unified_stock_and_manual_consignment.ts') {
+      return unifiedStockAndManualConsignmentMigration;
+    }
+    if (migration === '20261105210000_add_stock_weight_to_invoice_items.ts') {
+      return addStockWeightToInvoiceItemsMigration;
     }
     throw new Error(`Migration ${migration} not found`);
   }

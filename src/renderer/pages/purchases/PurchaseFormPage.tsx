@@ -26,8 +26,11 @@ import {
   consumeInvoiceDraft,
   invoiceDraftFingerprint,
   invoiceDraftKey,
+  loadInvoiceDraft,
   saveInvoiceDraft,
 } from "../../lib/invoiceDrafts";
+import { formatInvoiceTabTitle, isInvoiceTabOpen } from "../../lib/invoiceTabs";
+import { useInvoiceTabs } from "../../invoiceTabs/InvoiceTabsContext";
 import {
   getProductErrorMessage,
   productsService,
@@ -41,16 +44,13 @@ type PurchaseItemForm = {
   product_id: number;
   productName: string;
   quantity: number;
+  stock_weight: number;
 
   // السعر الفعلي للمشتريات العادية فقط
   purchase_price: number;
 
   // السعر المتوقع لفواتير الأمانة فقط
   estimated_purchase_price: number;
-
-  batch_code: string;
-  received_date: string;
-  expiry_date: string;
 };
 
 /**
@@ -73,28 +73,32 @@ const emptyItem = (): PurchaseItemForm => ({
   product_id: 0,
   productName: "",
   quantity: 1,
+  stock_weight: 0,
   purchase_price: 0,
   estimated_purchase_price: 0,
-  batch_code: "",
-  received_date: new Date().toISOString().slice(0, 10),
-  expiry_date: "",
 });
 
 const money = (value: number) =>
   Number(value || 0).toLocaleString("en-US");
 
-export default function PurchaseFormPage() {
+export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
   useArrowFieldNavigation();
   const navigate = useNavigate();
   const { purchaseId } = useParams();
   const editingId = Number(purchaseId || 0);
   const isEdit = editingId > 0;
-  const draftKey = invoiceDraftKey("purchase", isEdit ? "edit" : "new", editingId || undefined);
+  // `tabId` is set when this form lives inside an open invoice tab (new invoices only).
+  const isTab = !isEdit && Boolean(tabId);
+  const draftKey = invoiceDraftKey("purchase", isEdit ? "edit" : "new", editingId || undefined, isTab ? tabId : undefined);
+  const { tabs: openTabs, updateTabMeta, removeTab, requestCloseTab } = useInvoiceTabs();
+  const currentTab = isTab ? openTabs.find((tab) => tab.id === tabId) : undefined;
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [pendingInput, setPendingInput] = useState<CreatePurchaseInvoiceInputWithEstimatedPrice | null>(null);
   const [restoredDraft, setRestoredDraft] = useState(false);
   const [draftInitialized, setDraftInitialized] = useState(false);
   const draftBaselineRef = useRef<string | null>(null);
+  const latestDraftRef = useRef<unknown>(null);
+  const finishedRef = useRef(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -178,7 +182,7 @@ export default function PurchaseFormPage() {
         });
 
         if (data.suppliers.length === 1) {
-          setSupplierId(data.suppliers[0].id);
+          setSupplierId((curr) => curr || data.suppliers[0].id);
         }
       })
       .catch((err: Error) =>
@@ -196,14 +200,14 @@ export default function PurchaseFormPage() {
     if (!isEdit || !lookups) return;
     purchasesService.getDetails(editingId).then((data) => {
       const draft = consumeInvoiceDraft<any>(draftKey);
-      const source = draft ?? { supplierId: Number(data.invoice.supplier_id), invoiceNumber: data.invoice.invoice_number, invoiceDate: data.invoice.invoice_date, invoiceType: data.invoice.invoice_type, discount: Number(data.invoice.discount_amount ?? data.invoice.discount ?? 0), transportCost: Number((data.invoice as any).transport_cost ?? 0), transportCostBearer: ((data.invoice as any).transport_cost_bearer === "supplier" ? "supplier" : "company"), emptyingCost: Number((data.invoice as any).emptying_cost ?? 0), emptyingCostBearer: ((data.invoice as any).emptying_cost_bearer === "supplier" ? "supplier" : "company"), notes: data.invoice.notes ?? "", currency: data.invoice.currency ?? "SYP", exchangeRate: Number(data.invoice.exchange_rate ?? 1), items: data.items.map((row: any) => ({ product_id: Number(row.product_id), productName: String(row.product_name ?? ""), quantity: Number(row.quantity ?? 1), purchase_price: Number(row.unit_price ?? 0), estimated_purchase_price: Number(row.estimated_purchase_price ?? row.unit_price ?? 0), batch_code: String(row.batch_code ?? ""), received_date: String(row.batch_received_date ?? row.received_date ?? data.invoice.invoice_date), expiry_date: String(row.batch_expiry_date ?? row.expiry_date ?? "") })) };
+      const source = draft ?? { supplierId: Number(data.invoice.supplier_id), invoiceNumber: data.invoice.invoice_number, invoiceDate: data.invoice.invoice_date, invoiceType: data.invoice.invoice_type, discount: Number(data.invoice.discount_amount ?? data.invoice.discount ?? 0), transportCost: Number((data.invoice as any).transport_cost ?? 0), transportCostBearer: ((data.invoice as any).transport_cost_bearer === "supplier" ? "supplier" : "company"), emptyingCost: Number((data.invoice as any).emptying_cost ?? 0), emptyingCostBearer: ((data.invoice as any).emptying_cost_bearer === "supplier" ? "supplier" : "company"), notes: data.invoice.notes ?? "", currency: data.invoice.currency ?? "SYP", exchangeRate: Number(data.invoice.exchange_rate ?? 1), items: data.items.map((row: any) => ({ product_id: Number(row.product_id), productName: String(row.product_name ?? ""), quantity: Number(row.quantity ?? 1), stock_weight: Number(row.stock_weight ?? 0), purchase_price: Number(row.unit_price ?? 0), estimated_purchase_price: Number(row.estimated_purchase_price ?? row.unit_price ?? 0) })) };
       setSupplierId(source.supplierId); setInvoiceNumber(source.invoiceNumber); setInvoiceDate(source.invoiceDate); setInvoiceType(source.invoiceType); setDiscount(source.discount); setTransportCost(source.transportCost ?? 0); setTransportCostBearer(source.transportCostBearer ?? "company"); setEmptyingCost(source.emptyingCost ?? 0); setEmptyingCostBearer(source.emptyingCostBearer ?? "company"); setNotes(source.notes); setCurrency(source.currency); setExchangeRate(source.exchangeRate); setItems(source.items); setPaymentAmount(0); setExistingPaidAmount(Number(data.invoice.paid_amount ?? 0)); setRestoredDraft(Boolean(draft)); setDraftInitialized(true);
     }).catch((err: Error) => setError(getArabicErrorMessage(err, "تعذر تحميل الفاتورة للتعديل")));
   }, [isEdit, editingId, lookups, draftKey]);
 
   useEffect(() => {
-    if (isEdit || draftInitialized) return; const draft = consumeInvoiceDraft<any>(draftKey); if (!draft) { setDraftInitialized(true); return; }
-    setSupplierId(draft.supplierId ?? 0); setInvoiceNumber(draft.invoiceNumber ?? ""); setInvoiceDate(draft.invoiceDate ?? invoiceDate); setInvoiceType(draft.invoiceType ?? "standard"); setDiscount(draft.discount ?? 0); setTransportCost(draft.transportCost ?? 0); setTransportCostBearer(draft.transportCostBearer ?? "company"); setEmptyingCost(draft.emptyingCost ?? 0); setEmptyingCostBearer(draft.emptyingCostBearer ?? "company"); setNotes(draft.notes ?? ""); setItems(draft.items ?? [emptyItem()]); setPaymentAmount(draft.paymentAmount ?? 0); setPaymentCashboxId(draft.paymentCashboxId ?? 0); setPaymentDate(draft.paymentDate ?? paymentDate); setPaymentExchangeRate(draft.paymentExchangeRate ?? ""); setCurrency(draft.currency ?? "SYP"); setExchangeRate(draft.exchangeRate ?? 1); setRestoredDraft(true); setDraftInitialized(true);
+    if (isEdit || draftInitialized) return; const draft = isTab ? loadInvoiceDraft<any>(draftKey) : consumeInvoiceDraft<any>(draftKey); if (!draft) { setDraftInitialized(true); return; }
+    setSupplierId(draft.supplierId ?? 0); setInvoiceNumber(draft.invoiceNumber ?? ""); setInvoiceDate(draft.invoiceDate ?? invoiceDate); setInvoiceType(draft.invoiceType ?? "standard"); setDiscount(draft.discount ?? 0); setTransportCost(draft.transportCost ?? 0); setTransportCostBearer(draft.transportCostBearer ?? "company"); setEmptyingCost(draft.emptyingCost ?? 0); setEmptyingCostBearer(draft.emptyingCostBearer ?? "company"); setNotes(draft.notes ?? ""); setItems(Array.isArray(draft.items) && draft.items.length > 0 ? draft.items.map((row: any) => ({ ...emptyItem(), ...row, stock_weight: Number(row.stock_weight ?? 0) })) : [emptyItem()]); setPaymentAmount(draft.paymentAmount ?? 0); setPaymentCashboxId(draft.paymentCashboxId ?? 0); setPaymentDate(draft.paymentDate ?? paymentDate); setPaymentExchangeRate(draft.paymentExchangeRate ?? ""); setCurrency(draft.currency ?? "SYP"); setExchangeRate(draft.exchangeRate ?? 1); setRestoredDraft(!isTab); setDraftInitialized(true);
   }, [isEdit, draftKey, draftInitialized]);
 
   useEffect(() => {
@@ -230,6 +234,15 @@ export default function PurchaseFormPage() {
       currency,
       exchangeRate,
     };
+
+    if (isTab) {
+      // Open invoice tab: keep its own draft for as long as the tab stays open.
+      latestDraftRef.current = draftData;
+      const tabTimer = window.setTimeout(() => {
+        if (tabId && isInvoiceTabOpen(tabId)) saveInvoiceDraft(draftKey, draftData);
+      }, 300);
+      return () => window.clearTimeout(tabTimer);
+    }
 
     const fingerprint =
       invoiceDraftFingerprint(
@@ -273,6 +286,8 @@ export default function PurchaseFormPage() {
   }, [
     draftInitialized,
     draftKey,
+    isTab,
+    tabId,
     supplierId,
     invoiceNumber,
     invoiceDate,
@@ -292,6 +307,19 @@ export default function PurchaseFormPage() {
     exchangeRate,
   ]);
 
+  /* ─── Open invoice tab support ─── */
+  // Flush the latest data when leaving the tab (switching tabs or pages) so
+  // nothing typed during the last few hundred milliseconds is lost.
+  useEffect(() => {
+    if (!isTab || !tabId) return;
+    return () => {
+      if (finishedRef.current) return;
+      if (latestDraftRef.current !== null && isInvoiceTabOpen(tabId)) {
+        saveInvoiceDraft(draftKey, latestDraftRef.current);
+      }
+    };
+  }, [isTab, tabId, draftKey]);
+
   /* ─── Keyboard shortcuts ─── */
   const addNewItem = useCallback(() => {
     setItems((curr) => [emptyItem(), ...curr]);
@@ -304,10 +332,6 @@ export default function PurchaseFormPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts when typing inside inputs / textareas / selects
-      const tag = (e.target as HTMLElement)?.tagName;
-      const isInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
-
       if (e.key === "F5") {
         e.preventDefault();
         addNewItem();
@@ -317,16 +341,11 @@ export default function PurchaseFormPage() {
         e.preventDefault();
         submitRef.current();
       }
-
-      if (e.key === "Escape" && !isInput) {
-        e.preventDefault();
-        navigate(PATHS.PURCHASES);
-      }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [addNewItem, navigate]);
+  }, [addNewItem]);
 
   /**
    * المجموع الحقيقي للمشتريات العادية.
@@ -392,6 +411,19 @@ export default function PurchaseFormPage() {
     currency === "SYP"
       ? total
       : total * exchangeRate;
+
+  // Keep the open-invoices bar label (supplier · items · total) in sync.
+  const supplierName = supplierId ? lookups?.suppliers.find((s) => s.id === supplierId)?.name ?? "" : "";
+  useEffect(() => {
+    if (!isTab || !tabId || !draftInitialized) return;
+    updateTabMeta(tabId, {
+      partyName: lookups ? supplierName : undefined,
+      itemCount: items.filter((item) => item.product_id).length,
+      total,
+      currency,
+      invoiceType,
+    });
+  }, [isTab, tabId, draftInitialized, lookups, supplierName, items, total, currency, invoiceType, updateTabMeta]);
 
   const updateItem = (
     index: number,
@@ -687,7 +719,7 @@ export default function PurchaseFormPage() {
     }
 
     const invalidItem = items.some((item) => {
-      if (!item.product_id) {
+      if (!item.product_id || !Number.isFinite(item.stock_weight ?? 0) || Number(item.stock_weight ?? 0) < 0) {
         return true;
       }
 
@@ -720,17 +752,6 @@ export default function PurchaseFormPage() {
           item.estimated_purchase_price,
         ) ||
           item.estimated_purchase_price < 0)
-      ) {
-        return true;
-      }
-
-      if (!item.received_date) {
-        return true;
-      }
-
-      if (
-        item.expiry_date &&
-        item.expiry_date < item.received_date
       ) {
         return true;
       }
@@ -778,6 +799,7 @@ export default function PurchaseFormPage() {
         items: items.map((item) => ({
           product_id: item.product_id,
           quantity: item.quantity,
+          stock_weight: Number(item.stock_weight || 0),
 
           /**
            * للأمانة:
@@ -793,15 +815,6 @@ export default function PurchaseFormPage() {
             isConsignment
               ? item.estimated_purchase_price
               : undefined,
-
-          batch_code:
-            item.batch_code || undefined,
-
-          received_date:
-            item.received_date || undefined,
-
-          expiry_date:
-            item.expiry_date || undefined,
         })),
 
         /**
@@ -842,8 +855,10 @@ export default function PurchaseFormPage() {
         );
       }
 
-      clearInvoiceDraft(draftKey);
-      navigate(`/purchases/${result.invoice.id}`);
+      finishedRef.current = true;
+      // Saved: close its tab immediately and navigate to invoice details.
+      if (isTab && tabId) removeTab(tabId); else clearInvoiceDraft(draftKey);
+      navigate(`/purchases/${result.invoice.id}`, { replace: true });
     } catch (err: unknown) {
       const e = err as Error;
 
@@ -864,8 +879,8 @@ export default function PurchaseFormPage() {
   return (
     <>
       <PageHeader
-        title={isEdit ? "تعديل فاتورة شراء" : "فاتورة شراء جديدة"}
-        description={isEdit ? "تعديل محمي بكلمة مرور. لن يسمح النظام بالتعديل إذا تحرك مخزون الفاتورة لاحقًا." : isConsignment ? "استلام بضاعة أمانة من المورد. سعر الشراء المتوقع تقديري فقط ولا يمثل مبلغًا مستحقًا." : "أدخل بيانات المورد والأصناف ودفعات المخزون والمبالغ المالية."}
+        title={isEdit ? "تعديل فاتورة شراء" : currentTab ? `فاتورة ${formatInvoiceTabTitle(currentTab)}` : "فاتورة شراء جديدة"}
+        description={isEdit ? "تعديل محمي بكلمة مرور مع تحديث الرصيد الموحد للمخزون تلقائيًا." : isConsignment ? "استلام بضاعة أمانة من المورد وإضافتها للمخزون الموحد. التسوية لاحقًا تتم يدويًا." : "أدخل بيانات المورد والأصناف والمبالغ المالية لإضافة الكميات إلى المخزون الموحد."}
         actions={
           <BackButton to={PATHS.PURCHASES} />
         }
@@ -873,7 +888,7 @@ export default function PurchaseFormPage() {
 
       <div className="space-y-5 pb-24">
         {restoredDraft && <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"><span>تم تحميل آخر مسودة غير مكتملة.</span><Button size="sm" variant="secondary" onClick={() => { clearInvoiceDraft(draftKey); window.location.reload(); }}>تجاهل المسودة</Button></div>}
-        {isEdit && <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3 text-sm text-[var(--text-secondary)]">التعديل يتطلب كلمة المرور عند الحفظ. إذا كانت دفعة مخزون من هذه الفاتورة قد بيعت أو عُدلت، سيرفض الباك التعديل حفاظًا على السجل.</div>}
+        {isEdit && <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3 text-sm text-[var(--text-secondary)]">التعديل يتطلب كلمة المرور عند الحفظ، ويحدّث رصيد المخزون الموحد للمنتجات وفق فرق الكميات.</div>}
         {error && (
           <div className="rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
             {error}
@@ -1053,20 +1068,7 @@ export default function PurchaseFormPage() {
                 </FormField>
               )}
 
-            <FormField
-              label="ملاحظات"
-              htmlFor="notes"
-              className="md:col-span-2 xl:col-span-4"
-            >
-              <Textarea
-                id="notes"
-                value={notes}
-                placeholder="ملاحظات عامة..."
-                onChange={(e) =>
-                  setNotes(e.target.value)
-                }
-              />
-            </FormField>
+            
           </div>
         </FormSection>
 
@@ -1075,8 +1077,8 @@ export default function PurchaseFormPage() {
           header="أصناف الفاتورة"
           description={
             isConsignment
-              ? "أضف المنتجات وحدد الكمية وسعر تسويق المنتج وبيانات دفعة المخزون. سعر التسويق يحدد إجمالي الفاتورة ويمكن دفع دفعات منه للمورد."
-              : "أضف المنتجات وحدد الكمية وسعر الشراء وبيانات دفعة المخزون."
+              ? "أضف المنتجات وحدد الكمية وسعر تسويق المنتج. تُضاف الكميات مباشرة إلى المخزون الموحد."
+              : "أضف المنتجات وحدد الكمية وسعر الشراء لإضافتها مباشرة إلى المخزون الموحد."
           }
         >
           {/* ─── Sticky "add item" bar ─── */}
@@ -1132,7 +1134,7 @@ export default function PurchaseFormPage() {
                     حذف الصنف
                   </Button>
 
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                     <FormField
                       label="المنتج"
                       required
@@ -1217,6 +1219,21 @@ export default function PurchaseFormPage() {
                       />
                     </FormField>
 
+                    <FormField label="الوزن القائم">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        value={item.stock_weight}
+                        placeholder="0"
+                        onChange={(e) =>
+                          updateItem(index, {
+                            stock_weight: Number(e.target.value),
+                          })
+                        }
+                      />
+                    </FormField>
+
                     {isConsignment ? (
                       <FormField label="سعر تسويق المنتج" required>
                         <Input
@@ -1263,62 +1280,10 @@ export default function PurchaseFormPage() {
                       </FormField>
                     )}
 
-                    <FormField
-                      label={
-                        isConsignment
-                          ? "إجمالي السطر"
-                          : "إجمالي السطر"
-                      }
-                    >
+                    <FormField label="إجمالي السطر">
                       <Input
                         readOnly
                         value={money(lineTotal)}
-                      />
-                    </FormField>
-
-                    <FormField label="كود الدفعة">
-                      <Input
-                        placeholder="اختياري — يُنشأ تلقائيًا"
-                        value={item.batch_code}
-                        onChange={(e) =>
-                          updateItem(index, {
-                            batch_code:
-                              e.target.value,
-                          })
-                        }
-                      />
-                    </FormField>
-
-                    <FormField
-                      label="تاريخ الاستلام"
-                      required
-                    >
-                      <Input
-                        type="date"
-                        value={
-                          item.received_date
-                        }
-                        onChange={(e) =>
-                          updateItem(index, {
-                            received_date:
-                              e.target.value,
-                          })
-                        }
-                      />
-                    </FormField>
-
-                    <FormField label="تاريخ الانتهاء">
-                      <Input
-                        type="date"
-                        value={
-                          item.expiry_date
-                        }
-                        onChange={(e) =>
-                          updateItem(index, {
-                            expiry_date:
-                              e.target.value,
-                          })
-                        }
                       />
                     </FormField>
                   </div>
@@ -1411,6 +1376,20 @@ export default function PurchaseFormPage() {
                 />
               </FormField>
             </div>
+            <FormField
+              label="ملاحظات"
+              htmlFor="notes"
+              className="md:col-span-2 xl:col-span-4"
+            >
+              <Textarea
+                id="notes"
+                value={notes}
+                placeholder="ملاحظات عامة..."
+                onChange={(e) =>
+                  setNotes(e.target.value)
+                }
+              />
+            </FormField>
           </FormSection> : <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4 text-sm text-[var(--text-secondary)]">الدفعات السابقة تبقى كما هي ولا يتم تعديلها من نموذج الفاتورة.</div>}
           </>
         )}
@@ -1427,11 +1406,9 @@ export default function PurchaseFormPage() {
                   <th className="px-4 py-3 text-center">#</th>
                   <th className="px-4 py-3 text-center">المنتج</th>
                   <th className="px-4 py-3 text-center">الكمية</th>
+                  <th className="px-4 py-3 text-center">الوزن القائم</th>
                   <th className="px-4 py-3 text-center">{isConsignment ? "سعر التسويق" : "سعر الشراء"}</th>
                   <th className="px-4 py-3 text-center">إجمالي السطر</th>
-                  <th className="px-4 py-3 text-center">كود الدفعة</th>
-                  <th className="px-4 py-3 text-center">تاريخ الاستلام</th>
-                  <th className="px-4 py-3 text-center">تاريخ الانتهاء</th>
                 </tr>
               </thead>
               <tbody>
@@ -1442,11 +1419,9 @@ export default function PurchaseFormPage() {
                       <td className="px-4 py-3 text-center align-middle">{index + 1}</td>
                       <td className="px-4 py-3 text-center align-middle font-medium">{item.productName || "لم يتم اختيار المنتج"}</td>
                       <td className="px-4 py-3 text-center align-middle" dir="ltr">{money(item.quantity)}</td>
+                      <td className="px-4 py-3 text-center align-middle" dir="ltr">{Number(item.stock_weight) > 0 ? money(item.stock_weight) : "—"}</td>
                       <td className="px-4 py-3 text-center align-middle" dir="ltr">{money(price)} {currency}</td>
                       <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{money(item.quantity * price)} {currency}</td>
-                      <td className="px-4 py-3 text-center align-middle">{item.batch_code || "تلقائي"}</td>
-                      <td className="px-4 py-3 text-center align-middle" dir="ltr">{item.received_date || "—"}</td>
-                      <td className="px-4 py-3 text-center align-middle" dir="ltr">{item.expiry_date || "—"}</td>
                     </tr>
                   );
                 })}
@@ -1455,31 +1430,28 @@ export default function PurchaseFormPage() {
                 <tr>
                   <td colSpan={2} className="px-4 py-3 text-center align-middle font-bold">إجمالي المنتجات</td>
                   <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{money(items.reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</td>
+                  <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{money(items.reduce((sum, item) => sum + Number(item.stock_weight || 0), 0))}</td>
                   <td className="px-4 py-3 text-center align-middle">—</td>
                   <td className="px-4 py-3 text-center align-middle font-bold text-[var(--primary)]" dir="ltr">{money(isConsignment ? estimatedSubtotal : standardSubtotal)} {currency}</td>
-                  <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                 </tr>
                 {transportCost > 0 && (
                   <tr className="border-t border-[var(--border)]">
-                    <td colSpan={4} className="px-4 py-3 text-center align-middle font-medium">تكلفة النقل — {transportCostBearer === "company" ? "علينا" : "على المورد"}</td>
+                    <td colSpan={5} className="px-4 py-3 text-center align-middle font-medium">تكلفة النقل — {transportCostBearer === "company" ? "علينا" : "على المورد"}</td>
                     <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{transportCostBearer === "supplier" ? "− " : "+ "}{money(transportCost)} {currency}</td>
-                    <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                   </tr>
                 )}
                 {emptyingCost > 0 && (
                   <tr className="border-t border-[var(--border)]">
-                    <td colSpan={4} className="px-4 py-3 text-center align-middle font-medium">تكلفة العتالة — {emptyingCostBearer === "company" ? "علينا" : "على المورد"}</td>
+                    <td colSpan={5} className="px-4 py-3 text-center align-middle font-medium">تكلفة العتالة — {emptyingCostBearer === "company" ? "علينا" : "على المورد"}</td>
                     <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{emptyingCostBearer === "supplier" ? "− " : "+ "}{money(emptyingCost)} {currency}</td>
-                    <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                   </tr>
                 )}
                 {(transportCost > 0 || emptyingCost > 0) && (
                   <tr className="border-t-2 border-[var(--border-strong)]">
-                    <td colSpan={4} className="px-4 py-3 text-center align-middle text-base font-bold">الإجمالي مع النقل والعتالة</td>
+                    <td colSpan={5} className="px-4 py-3 text-center align-middle text-base font-bold">الإجمالي مع النقل والعتالة</td>
                     <td className="px-4 py-3 text-center align-middle text-base font-bold text-[var(--primary)]" dir="ltr">
                       {money((isConsignment ? estimatedSubtotal : standardSubtotal) + transportCost * (transportCostBearer === "company" ? 1 : -1) + emptyingCost * (emptyingCostBearer === "company" ? 1 : -1))} {currency}
                     </td>
-                    <td colSpan={3} className="px-4 py-3 text-center align-middle">—</td>
                   </tr>
                 )}
               </tfoot>
@@ -1802,7 +1774,9 @@ export default function PurchaseFormPage() {
           <Button
             variant="secondary"
             onClick={() =>
-              navigate(PATHS.PURCHASES)
+              isTab && tabId
+                ? requestCloseTab(tabId)
+                : navigate(PATHS.PURCHASES)
             }
           >
             إلغاء

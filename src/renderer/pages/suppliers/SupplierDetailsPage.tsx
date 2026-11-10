@@ -1,6 +1,5 @@
 import {
   AlertCircle,
-  Boxes,
   CreditCard,
   Eye,
   Mail,
@@ -48,8 +47,7 @@ import {
 
 type ActivityTab =
   | "purchases"
-  | "payments"
-  | "batches";
+  | "payments";
 
 type BadgeVariant =
   | "success"
@@ -79,16 +77,6 @@ const money = (
     currency === "SYP" ? "ل.س" : currency
   }`;
 };
-
-const quantity = (
-  value: number | string | null | undefined,
-) =>
-  numberValue(value).toLocaleString(
-    "en-US",
-    {
-      maximumFractionDigits: 3,
-    },
-  );
 
 const formatDate = (
   value?: string | null,
@@ -264,9 +252,6 @@ export default function SupplierDetailsPage() {
 
       payments:
         transactions.payments.length,
-
-      batches:
-        transactions.stockBatches.length,
     }),
     [transactions],
   );
@@ -388,52 +373,52 @@ export default function SupplierDetailsPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-  <div className="flex items-start justify-between gap-4">
-    <div>
-      <p className="text-xs font-bold text-[var(--text-muted)]">
-        الرصيد الحالي
-      </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold text-[var(--text-muted)]">
+                الرصيد الحالي
+              </p>
 
-      <p
-        dir="ltr"
-        className={`mt-2 text-right text-2xl font-bold ${
-          supplier.balance > 0
-            ? "text-red-600"
-            : "text-green-600"
-        }`}
-      >
-        {money(
-          supplier.balance,
-          "SYP",
-        )}
-      </p>
+              <p
+                dir="ltr"
+                className={`mt-2 text-right text-2xl font-bold ${
+                  supplier.balance > 0
+                    ? "text-red-600"
+                    : "text-green-600"
+                }`}
+              >
+                {money(
+                  supplier.balance,
+                  "SYP",
+                )}
+              </p>
 
-      <p
-        className={`mt-1 text-xs font-medium ${
-          supplier.balance > 0
-            ? "text-red-600"
-            : "text-green-600"
-        }`}
-      >
-        {supplier.balance > 0
-          ? "مبلغ مستحق للمورد"
-          : supplier.balance < 0
-            ? "دفعة مقدمة للمورد"
-            : "الحساب متوازن"}
-      </p>
-    </div>
+              <p
+                className={`mt-1 text-xs font-medium ${
+                  supplier.balance > 0
+                    ? "text-red-600"
+                    : "text-green-600"
+                }`}
+              >
+                {supplier.balance > 0
+                  ? "مبلغ مستحق للمورد"
+                  : supplier.balance < 0
+                    ? "دفعة مقدمة للمورد"
+                    : "الحساب متوازن"}
+              </p>
+            </div>
 
-    <div
-      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
-        supplier.balance > 0
-          ? "bg-red-50 text-red-600"
-          : "bg-green-50 text-green-600"
-      }`}
-    >
-      <WalletCards size={21} />
-    </div>
-  </div>
-</Card>
+            <div
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
+                supplier.balance > 0
+                  ? "bg-red-50 text-red-600"
+                  : "bg-green-50 text-green-600"
+              }`}
+            >
+              <WalletCards size={21} />
+            </div>
+          </div>
+        </Card>
 
         <Card>
           <div className="flex items-start justify-between gap-4">
@@ -536,7 +521,7 @@ export default function SupplierDetailsPage() {
 
       <Card
         header="الحركات والدفعات"
-        description="فواتير الشراء والدفعات ودفعات المخزون المرتبطة بالمورد من قاعدة البيانات."
+        description="فواتير الشراء والدفعات المرتبطة بالمورد من قاعدة البيانات."
         className="mt-5"
         padding={false}
       >
@@ -555,13 +540,6 @@ export default function SupplierDetailsPage() {
                 "الدفعات",
                 totals.payments,
                 CreditCard,
-              ],
-
-              [
-                "batches",
-                "دفعات المخزون",
-                totals.batches,
-                Boxes,
               ],
             ] as const
           ).map(
@@ -851,131 +829,6 @@ export default function SupplierDetailsPage() {
               <EmptyState
                 title="لا توجد دفعات"
                 description="لم تُسجل دفعات مرتبطة بهذا المورد بعد."
-              />
-            ))}
-
-          {activeTab ===
-            "batches" &&
-            (transactions.stockBatches
-              .length ? (
-              <table className="w-full min-w-[900px] text-sm">
-                <thead className="bg-[var(--surface-subtle)] text-[var(--text-muted)]">
-                  <tr>
-                    <th className="px-4 py-3 text-right">
-                      المنتج
-                    </th>
-
-                    <th className="px-4 py-3 text-right">
-                      كود الدفعة
-                    </th>
-
-                    <th className="px-4 py-3 text-right">
-                      الكمية الأصلية
-                    </th>
-
-                    <th className="px-4 py-3 text-right">
-                      المتبقي
-                    </th>
-
-                    <th className="px-4 py-3 text-right">
-                      سعر الشراء
-                    </th>
-
-                    <th className="px-4 py-3 text-right">
-                      الاستلام
-                    </th>
-
-                    <th className="px-4 py-3 text-right">
-                      الانتهاء
-                    </th>
-
-                    <th className="px-4 py-3 text-right">
-                      الحالة
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {transactions.stockBatches.map(
-                    (batch) => (
-                      <tr
-                        key={
-                          batch.id
-                        }
-                        className="border-t border-[var(--border)]"
-                      >
-                        <td className="px-4 py-3 font-bold">
-                          {batch.productName ||
-                            `منتج #${batch.productId}`}
-                        </td>
-
-                        <td
-                          className="px-4 py-3"
-                          dir="ltr"
-                        >
-                          {batch.batchCode ||
-                            "—"}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <span dir="ltr">
-                            {quantity(
-                              batch.quantity,
-                            )}
-                          </span>
-                        </td>
-
-                        <td className="px-4 py-3 font-bold">
-                          <span dir="ltr">
-                            {quantity(
-                              batch.remainingQuantity,
-                            )}
-                          </span>
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <span dir="ltr">
-                            {money(
-                              batch.purchasePrice,
-                              "SYP",
-                            )}
-                          </span>
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {formatDate(
-                            batch.receivedDate,
-                          )}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {formatDate(
-                            batch.expiryDate,
-                          )}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <StatusBadge
-                            variant={
-                              batch.isActive
-                                ? "success"
-                                : "gray"
-                            }
-                          >
-                            {batch.isActive
-                              ? "نشطة"
-                              : "غير نشطة"}
-                          </StatusBadge>
-                        </td>
-                      </tr>
-                    ),
-                  )}
-                </tbody>
-              </table>
-            ) : (
-              <EmptyState
-                title="لا توجد دفعات مخزون"
-                description="لم تُنشأ دفعات مخزون مرتبطة بهذا المورد بعد."
               />
             ))}
         </div>

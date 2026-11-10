@@ -26,6 +26,7 @@ export const reportsCatalog: ReportDefinition[] = [
       "product",
       "currency",
       "status",
+      "reportMode",
     ],
   },
   {
@@ -54,6 +55,7 @@ export const reportsCatalog: ReportDefinition[] = [
       "product",
       "currency",
       "status",
+      "reportMode",
     ],
   },
   {

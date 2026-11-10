@@ -53,10 +53,23 @@ export default function InventoryRow({
       <DataTableCell>
         <div>
           <p className="font-medium text-[var(--text-primary)]">
+            شراء: <span dir="ltr">{item.purchasedWeight.toLocaleString("en-US")}</span>
+          </p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
+            بيع: <span dir="ltr">{item.soldWeight.toLocaleString("en-US")}</span>
+          </p>
+        </div>
+      </DataTableCell>
+
+      <DataTableCell>
+        <div>
+          <p className="font-medium text-[var(--text-primary)]">
             {getSuppliersLabel(item.supplierNames)}
           </p>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            {item.batchesCount.toLocaleString("en-US")} دفعة
+            {item.suppliersCount > 0
+              ? `${item.suppliersCount.toLocaleString("en-US")} مورد`
+              : "لا يوجد توريد مسجل"}
           </p>
         </div>
       </DataTableCell>
@@ -67,7 +80,7 @@ export default function InventoryRow({
             {item.stockValue.toLocaleString("en-US")} ل.س
           </span>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            متوسط الشراء {item.averagePurchasePrice.toLocaleString("en-US")} ل.س
+            متوسط التكلفة {item.averagePurchasePrice.toLocaleString("en-US")} ل.س
           </p>
         </div>
       </DataTableCell>

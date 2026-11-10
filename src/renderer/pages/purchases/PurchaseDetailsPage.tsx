@@ -81,8 +81,8 @@ export default function PurchaseDetailsPage() {
   };
 
   return <>
-    <PageHeader title={`فاتورة الشراء ${invoice.invoice_number}`} description="تفاصيل المورد والأصناف ودفعات المخزون والمدفوعات." actions={<div className="flex flex-wrap gap-2"><BackButton to={PATHS.PURCHASES} />{invoice.status !== "cancelled" && <Button variant="secondary" startIcon={<Pencil size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/edit`)}>تعديل محمي</Button>}<Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/print`)}>طباعة / PDF</Button>{invoice.invoice_type === "consignment" && <Button variant="secondary" startIcon={<HandCoins size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/consignment`)}>متابعة الأمانة</Button>}{invoice.status !== "paid" && invoice.status !== "cancelled" && !(invoice.invoice_type === "consignment" && invoice.settlement_status === "settled") && <Button startIcon={<Plus size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/payments/new`)}>تسجيل دفعة</Button>}{canCancel && <Button variant="danger" startIcon={<XCircle size={17} />} onClick={() => setCancelOpen(true)}>إلغاء الفاتورة</Button>}<Button variant="danger" startIcon={<Trash2 size={17} />} disabled={!editable} title={!editable ? "الحذف متاح للفواتير المسودة فقط" : undefined} onClick={() => setDeleteOpen(true)}>حذف</Button></div>} />
-    <p className="mb-5 text-xs text-[var(--text-muted)]">التعديل محمي بكلمة مرور، ويُرفض تلقائيًا إذا كانت دفعات المخزون الناتجة عن الفاتورة قد دخلت في حركات لاحقة.</p>
+    <PageHeader title={`فاتورة الشراء ${invoice.invoice_number}`} description="تفاصيل المورد والأصناف والمدفوعات." actions={<div className="flex flex-wrap gap-2"><BackButton to={PATHS.PURCHASES} />{invoice.status !== "cancelled" && <Button variant="secondary" startIcon={<Pencil size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/edit`)}>تعديل محمي</Button>}<Button variant="secondary" startIcon={<Printer size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/print`)}>طباعة / PDF</Button>{invoice.invoice_type === "consignment" && <Button variant="secondary" startIcon={<HandCoins size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/consignment`)}>متابعة الأمانة</Button>}{invoice.status !== "paid" && invoice.status !== "cancelled" && !(invoice.invoice_type === "consignment" && invoice.settlement_status === "settled") && <Button startIcon={<Plus size={17} />} onClick={() => navigate(`/purchases/${invoice.id}/payments/new`)}>تسجيل دفعة</Button>}{canCancel && <Button variant="danger" startIcon={<XCircle size={17} />} onClick={() => setCancelOpen(true)}>إلغاء الفاتورة</Button>}<Button variant="danger" startIcon={<Trash2 size={17} />} disabled={!editable} title={!editable ? "الحذف متاح للفواتير المسودة فقط" : undefined} onClick={() => setDeleteOpen(true)}>حذف</Button></div>} />
+    <p className="mb-5 text-xs text-[var(--text-muted)]">التعديل محمي بكلمة مرور، ويحدّث رصيد المخزون الموحد تلقائيًا عند تغيير الكميات.</p>
     <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
       <div className="space-y-5">
         <Card header="بيانات الفاتورة">
@@ -101,23 +101,18 @@ export default function PurchaseDetailsPage() {
               </div>
             ))}
           </div>
-          {invoice.notes && (
-            <div className="mt-5 border-t border-[var(--border)] pt-4">
-              <p className="text-xs font-bold text-[var(--text-muted)]">الملاحظات</p>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">{invoice.notes}</p>
-            </div>
-          )}
+         
         </Card>
 
         {editHistory.length > 0 && <Card header="سجل تعديلات الفاتورة" description="كل حفظ تعديل موثق في سجل النشاط مع النسخة السابقة والجديدة.">
           <div className="space-y-2">{editHistory.map((entry, index) => <div key={String(entry.id ?? index)} className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2 text-sm"><span className="font-bold text-[var(--text-primary)]">تعديل #{editHistory.length - index}</span><span className="text-[var(--text-muted)]">{String(entry.created_at ?? "—")}</span></div>)}</div>
         </Card>}
 
-        <Card padding={false} header="أصناف الفاتورة" description="المنتجات والكميات وأسعار الشراء وبيانات دفعات المخزون.">
+        <Card padding={false} header="أصناف الفاتورة" description="المنتجات والكميات المضافة إلى المخزون الموحد وأسعارها.">
           <DataTable>
             <DataTableHead>
               <DataTableRow>
-                {["المنتج", "الكمية", "سعر الشراء", "الإجمالي", "كود الدفعة", "الاستلام", "الانتهاء"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
+                {["المنتج", "الكمية", "الوزن القائم", invoice.invoice_type === "consignment" ? "سعر التسويق" : "سعر الشراء", "الإجمالي"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
               </DataTableRow>
             </DataTableHead>
             <DataTableBody>
@@ -125,11 +120,9 @@ export default function PurchaseDetailsPage() {
                 <DataTableRow key={idx}>
                   <DataTableCell className="font-bold text-[var(--text-primary)]">{String(item.product_name ?? "-")}</DataTableCell>
                   <DataTableCell>{String(item.quantity ?? "-")}</DataTableCell>
+                  <DataTableCell>{Number(item.stock_weight) > 0 ? Number(item.stock_weight).toLocaleString("en-US") : "—"}</DataTableCell>
                   <DataTableCell>{money(Number(item.unit_price ?? 0), invoice.currency)}</DataTableCell>
                   <DataTableCell>{money(Number(item.line_total ?? 0), invoice.currency)}</DataTableCell>
-                  <DataTableCell>{String(item.batch_code ?? "-")}</DataTableCell>
-                  <DataTableCell>{String(item.batch_received_date ?? item.received_date ?? "-")}</DataTableCell>
-                  <DataTableCell>{String(item.batch_expiry_date ?? item.expiry_date ?? "-")}</DataTableCell>
                 </DataTableRow>
               ))}
             </DataTableBody>
@@ -221,6 +214,7 @@ export default function PurchaseDetailsPage() {
               القيمة الأساسية: {money(financial_summary.total_base, "SYP")}
             </div>
           )}
+          
         </div>
       </Card>
 

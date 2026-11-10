@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileDown, Printer } from "lucide-react";
+import { CalendarDays, FileDown, Printer, RotateCcw } from "lucide-react";
 import { useParams } from "react-router-dom";
 
 import {
   BackButton,
   Button,
+  Card,
   EmptyState,
+  Input,
   PageHeader,
 } from "../../components/ui";
 
@@ -109,6 +111,8 @@ type StatementDocument = {
   invoices: StatementInvoice[];
   payments: StatementPayment[];
   statement_type?: "customer" | "supplier" | string;
+  from_date?: string | null;
+  to_date?: string | null;
 };
 
 type CashboxMovement = {
@@ -290,6 +294,9 @@ function getRemainingPolicyLabel(
   policy?: string | null,
 ) {
   switch (policy) {
+    case "manual":
+      return "تسوية يدوية (دون تأثير على المخزون)";
+
     case "return_to_supplier":
       return "إعادة للمورد";
 
@@ -338,6 +345,17 @@ export default function DocumentPrintPage({
   const [savingPdf, setSavingPdf] =
     useState(false);
 
+  /** Optional statement period (customer / supplier statements only). */
+  const [fromDate, setFromDate] =
+    useState("");
+
+  const [toDate, setToDate] =
+    useState("");
+
+  const isStatement =
+    kind === "customer" ||
+    kind === "supplier";
+
   useEffect(() => {
     let cancelled = false;
 
@@ -345,6 +363,11 @@ export default function DocumentPrintPage({
       try {
         const api =
           window.stockliteApi.printDocuments;
+
+        const range = {
+          fromDate: fromDate || undefined,
+          toDate: toDate || undefined,
+        };
 
         const loaders: Record<
           Kind,
@@ -370,11 +393,13 @@ export default function DocumentPrintPage({
           customer: (documentId) =>
             api.customerStatement(
               Number(documentId),
+              range,
             ),
 
           supplier: (documentId) =>
             api.supplierStatement(
               Number(documentId),
+              range,
             ),
 
           cashbox: (documentId) =>
@@ -419,7 +444,7 @@ export default function DocumentPrintPage({
     return () => {
       cancelled = true;
     };
-  }, [kind, id]);
+  }, [kind, id, fromDate, toDate]);
 
   const title = useMemo(
     () =>
@@ -517,6 +542,64 @@ export default function DocumentPrintPage({
             </div>
           }
         />
+
+        {isStatement && (
+          <Card
+            header="النطاق الزمني لكشف الحساب"
+            description="حدد فترة زمنية لتصفية الفواتير والدفعات المعروضة في الكشف، أو اتركها فارغة لعرض كامل السجل."
+          >
+            <div className="grid gap-4 md:grid-cols-3 md:items-end">
+              <label className="space-y-2 text-sm font-bold text-[var(--text-secondary)]">
+                <span>من تاريخ</span>
+                <Input
+                  type="date"
+                  value={fromDate}
+                  onChange={(event) =>
+                    setFromDate(
+                      event.target.value,
+                    )
+                  }
+                  startContent={
+                    <CalendarDays size={16} />
+                  }
+                />
+              </label>
+
+              <label className="space-y-2 text-sm font-bold text-[var(--text-secondary)]">
+                <span>إلى تاريخ</span>
+                <Input
+                  type="date"
+                  value={toDate}
+                  onChange={(event) =>
+                    setToDate(
+                      event.target.value,
+                    )
+                  }
+                  startContent={
+                    <CalendarDays size={16} />
+                  }
+                />
+              </label>
+
+              {(fromDate || toDate) && (
+                <div>
+                  <Button
+                    variant="secondary"
+                    startIcon={
+                      <RotateCcw size={16} />
+                    }
+                    onClick={() => {
+                      setFromDate("");
+                      setToDate("");
+                    }}
+                  >
+                    عرض كل الفترات
+                  </Button>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
       </div>
 
       <article
@@ -1013,6 +1096,15 @@ function Statement({
       ? getSaleStatusLabel
       : getPurchaseStatusLabel;
 
+  const periodLabel =
+    d.from_date && d.to_date
+      ? `من ${d.from_date} إلى ${d.to_date}`
+      : d.from_date
+        ? `من ${d.from_date}`
+        : d.to_date
+          ? `حتى ${d.to_date}`
+          : "كل الفترات";
+
   return (
     <>
       <Meta
@@ -1038,6 +1130,11 @@ function Statement({
               d.balance,
               "SYP",
             ),
+          ],
+
+          [
+            "الفترة الزمنية",
+            periodLabel,
           ],
         ]}
       />
@@ -1344,7 +1441,7 @@ function Consignment({
           ],
 
           [
-            "سياسة المتبقي",
+            "نوع التسوية",
             getRemainingPolicyLabel(
               settlement.remaining_stock_policy,
             ),
@@ -1358,9 +1455,13 @@ function Consignment({
             <th>المنتج</th>
             <th>المستلم</th>
             <th>المباع</th>
-            <th>المتبقي عند التسوية</th>
-            <th>مصير المتبقي</th>
-            <th>الكمية المعالجة</th>
+            {settlement.remaining_stock_policy !== "manual" && (
+              <>
+                <th>المتبقي عند التسوية</th>
+                <th>مصير المتبقي</th>
+                <th>الكمية المعالجة</th>
+              </>
+            )}
             <th>قيمة المبيعات</th>
           </tr>
         </thead>
@@ -1386,23 +1487,27 @@ function Consignment({
                   )}
                 </td>
 
-                <td>
-                  {fmt(
-                    item.remaining_quantity,
-                  )}
-                </td>
+                {settlement.remaining_stock_policy !== "manual" && (
+                  <>
+                    <td>
+                      {fmt(
+                        item.remaining_quantity,
+                      )}
+                    </td>
 
-                <td>
-                  {getRemainingPolicyLabel(
-                    item.resolution_policy,
-                  )}
-                </td>
+                    <td>
+                      {getRemainingPolicyLabel(
+                        item.resolution_policy,
+                      )}
+                    </td>
 
-                <td>
-                  {fmt(
-                    item.resolved_quantity,
-                  )}
-                </td>
+                    <td>
+                      {fmt(
+                        item.resolved_quantity,
+                      )}
+                    </td>
+                  </>
+                )}
 
                 <td>
                   {money(
@@ -1477,6 +1582,7 @@ function Consignment({
         )}
       </section>
 
+      {settlement.remaining_stock_policy !== "manual" && (
       <section className="invoice-summary mt-6">
         <div className="invoice-total">
           <span>
@@ -1532,6 +1638,7 @@ function Consignment({
           </div>
         )}
       </section>
+      )}
 
       {settlement.notes && (
         <p className="mt-6 rounded-[var(--radius-md)] bg-[var(--surface-subtle)] p-4 text-sm leading-7">

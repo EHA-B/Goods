@@ -7,11 +7,22 @@ export default function ConsignmentSettlementResult({ settlement }: { settlement
   const rows: [string, string][] = [
     ["رقم التسوية", settlement.settlement_number],
     ["تاريخ التسوية", settlement.settlement_date],
+    ...(settlement.sold_quantity !== undefined
+      ? [["الكمية المباعة", Number(settlement.sold_quantity || 0).toLocaleString("en-US")] as [string, string]]
+      : []),
     ["إجمالي المبيعات", money(settlement.total_sales_amount, settlement.currency)],
     ["نسبة العمولة", `${Number(settlement.commission_percentage || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}%`],
-    ["قيمة العمولة", money(settlement.commission_amount, settlement.currency)],
+    ["قيمة العمولة المحتفظ بها", money(settlement.commission_amount, settlement.currency)],
     ["حصة المورد من المبيعات", money(settlement.supplier_share, settlement.currency)],
   ];
+
+  if ((settlement.prepaid_amount ?? 0) > 0) {
+    rows.push(["المدفوع مسبقاً للمورد", money(settlement.prepaid_amount, settlement.currency)]);
+    rows.push([
+      "صافي المسحوب من الصندوق",
+      money(Math.max(0, Number(settlement.supplier_share || 0) - Number(settlement.prepaid_amount || 0)), settlement.currency),
+    ]);
+  }
 
   if (settlement.remaining_stock_policy === "spoilage" && settlement.spoilage_quantity > 0) {
     rows.push(["الكمية التالفة", String(settlement.spoilage_quantity)]);
@@ -20,10 +31,44 @@ export default function ConsignmentSettlementResult({ settlement }: { settlement
     }
   } else if (settlement.remaining_stock_policy === "return_to_supplier" && settlement.returned_quantity > 0) {
     rows.push(["الكمية المرتجعة", String(settlement.returned_quantity)]);
-    rows.push(["قيمة المرتجع (مستردة للصندوق)", money(settlement.return_value, settlement.currency)]);
+    rows.push(["قيمة المرتجع", money(settlement.return_value, settlement.currency)]);
   }
 
   rows.push(["الصندوق", settlement.cashbox_name]);
-  rows.push(["معالجة المتبقي", policyLabels[settlement.remaining_stock_policy]]);
-  return <Card><div className="mb-5 flex items-center gap-3">{settlement.status === "reversed" ? <RotateCcw size={34} className="text-[var(--warning)]" /> : <CheckCircle2 size={34} className="text-[var(--success)]" />}<div><h2 className="text-lg font-black">{settlement.status === "reversed" ? "تم عكس تسوية فاتورة الأمانة" : "تمت تسوية فاتورة الأمانة"}</h2><p className="text-xs text-[var(--text-muted)]">البيانات محفوظة ومربوطة بالحركات المالية والمخزنية.</p></div></div><div className="grid gap-4 sm:grid-cols-2">{rows.map(([label, value]) => <div key={label} className="rounded-lg bg-[var(--surface-subtle)] p-3"><p className="text-xs font-bold text-[var(--text-muted)]">{label}</p><p className="mt-1 text-sm font-black text-[var(--text-primary)]">{value}</p></div>)}</div>{settlement.notes && <p className="mt-4 rounded-lg border border-[var(--border)] p-3 text-sm text-[var(--text-secondary)]">{settlement.notes}</p>}</Card>;
+  rows.push(["نوع التسوية", policyLabels[settlement.remaining_stock_policy] ?? "تسوية يدوية"]);
+
+  return (
+    <Card>
+      <div className="mb-5 flex items-center gap-3">
+        {settlement.status === "reversed" ? (
+          <RotateCcw size={34} className="text-[var(--warning)]" />
+        ) : (
+          <CheckCircle2 size={34} className="text-[var(--success)]" />
+        )}
+        <div>
+          <h2 className="text-lg font-black">
+            {settlement.status === "reversed" ? "تم عكس تسوية فاتورة الأمانة" : "تمت تسوية فاتورة الأمانة"}
+          </h2>
+          <p className="text-xs text-[var(--text-muted)]">
+            البيانات محفوظة ومربوطة بحركات الصندوق وحساب المورد دون التأثير على المخزون.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {rows.map(([label, value]) => (
+          <div key={label} className="rounded-lg bg-[var(--surface-subtle)] p-3">
+            <p className="text-xs font-bold text-[var(--text-muted)]">{label}</p>
+            <p className="mt-1 text-sm font-black text-[var(--text-primary)]">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      {settlement.notes && (
+        <p className="mt-4 rounded-lg border border-[var(--border)] p-3 text-sm text-[var(--text-secondary)]">
+          {settlement.notes}
+        </p>
+      )}
+    </Card>
+  );
 }

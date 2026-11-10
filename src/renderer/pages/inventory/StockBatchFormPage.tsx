@@ -12,7 +12,7 @@ export default function StockBatchFormPage() {
   useArrowFieldNavigation();
   const { productId } = useParams(); const navigate = useNavigate(); const id = Number(productId);
   const [product, setProduct] = useState<InventoryItem>(); const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [batchCode, setBatchCode] = useState(""); const [supplierId, setSupplierId] = useState(""); const [quantity, setQuantity] = useState<number>(0); const [purchasePrice, setPurchasePrice] = useState<number>(0); const [receivedDate, setReceivedDate] = useState(new Date().toISOString().split("T")[0]); const [expiryDate, setExpiryDate] = useState(""); const [notes, setNotes] = useState("");
+  const [batchCode, setBatchCode] = useState(""); const [supplierId, setSupplierId] = useState(""); const [quantity, setQuantity] = useState<number>(0); const [stockWeight, setStockWeight] = useState<number>(0); const [purchasePrice, setPurchasePrice] = useState<number>(0); const [receivedDate, setReceivedDate] = useState(new Date().toISOString().split("T")[0]); const [expiryDate, setExpiryDate] = useState(""); const [notes, setNotes] = useState("");
   const [registrationMode, setRegistrationMode] = useState<"new" | "existing">("new");
   const [existingInvoiceId, setExistingInvoiceId] = useState("");
   const [supplierInvoices, setSupplierInvoices] = useState<any[]>([]);
@@ -46,6 +46,7 @@ export default function StockBatchFormPage() {
       const item = {
         product_id: id,
         quantity,
+        stock_weight: stockWeight > 0 ? stockWeight : 0,
         purchase_price: purchasePrice,
         batch_code: batchCode || undefined,
         received_date: receivedDate || undefined,
@@ -88,6 +89,7 @@ export default function StockBatchFormPage() {
         </FormField>
       )}
       <FormField label="الكمية" required><NumberInput min={0.001} step={0.001} value={String(quantity)} suffix={product.unit} onChange={(e) => setQuantity(Number(e.target.value))} /></FormField>
+      <FormField label="الوزن القائم" hint="اختياري"><NumberInput min={0} step={0.001} value={String(stockWeight)} onChange={(e) => setStockWeight(Number(e.target.value))} /></FormField>
       <FormField label="سعر الشراء" required><NumberInput min={0} value={String(purchasePrice)} suffix="ل.س" onChange={(e) => setPurchasePrice(Number(e.target.value))} /></FormField>
       <FormField label="تاريخ الاستلام" required><Input type="date" dir="ltr" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} /></FormField>
       <FormField label="تاريخ الانتهاء"><Input type="date" dir="ltr" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} /></FormField>

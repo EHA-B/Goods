@@ -8,6 +8,7 @@
  */
 const path = require("node:path");
 const dbmanager = require(path.join(__dirname, "../database/databaseManager"));
+const { ensureStockWeightColumn } = require("./utils/invoiceUtils");
 
 function all(db, sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -178,9 +179,68 @@ function buildCurrencySummary(rows, labelPrefix) {
   return summary;
 }
 
+/**
+ * Labels shown in each invoice block AFTER the items table (quantities and
+ * financial totals). Everything else (party, type, status, currency...) is
+ * header information shown before the table and is dropped in compact mode.
+ */
+const invoiceFooterSummaryLabels = new Set([
+  "الكمية الكلية",
+  "الكمية المستلمة",
+  "المتبقي بالمخزون",
+  "المجموع الفرعي",
+  "الخصم",
+  "الضريبة",
+  "الإجمالي",
+  "المدفوع",
+  "المتبقي",
+  "ربح الأصناف الأساسي",
+]);
+
+function isInvoiceFooterSummaryLabel(label) {
+  return (
+    invoiceFooterSummaryLabels.has(label) ||
+    label.startsWith("الوزن القائم") ||
+    label.startsWith("تكلفة النقل") ||
+    label.startsWith("تكلفة العتالة")
+  );
+}
+
+/**
+ * Detailed sales/purchases reports support two modes:
+ * - "detailed" (default): report summary cards + full invoice blocks.
+ * - "compact": invoice details only (title, items table and invoice totals),
+ *   without the report summary cards and the per-invoice header information.
+ */
+function applyInvoiceReportMode(report, filters, compactTitle) {
+  const layout = "invoice-details";
+
+  if (filters?.reportMode !== "compact") {
+    return { ...report, layout };
+  }
+
+  return {
+    ...report,
+    layout,
+    mode: "compact",
+    title: compactTitle,
+    summary: [],
+    sections: (report.sections || []).map((section) => ({
+      ...section,
+      summary: (section.summary || []).filter((item) =>
+        isInvoiceFooterSummaryLabel(
+          String(item?.label || ""),
+        ),
+      ),
+    })),
+  };
+}
+
 class ReportController {
   async getOptions() {
     const db = await dbmanager.init();
+    await ensureStockWeightColumn(db, "purchase_invoice_items");
+    await ensureStockWeightColumn(db, "sale_invoice_items");
 
     const [customers, suppliers, products, cashboxes] = await Promise.all([
       all(
@@ -233,11 +293,19 @@ class ReportController {
     }
 
     if (reportId === "sales-details") {
-      return this.generateSalesDetails(filters);
+      return applyInvoiceReportMode(
+        await this.generateSalesDetails(filters),
+        filters,
+        "تقرير المبيعات المختصر",
+      );
     }
 
     if (reportId === "purchases-details") {
-      return this.generatePurchasesDetails(filters);
+      return applyInvoiceReportMode(
+        await this.generatePurchasesDetails(filters),
+        filters,
+        "تقرير المشتريات المختصر",
+      );
     }
 
     return {
@@ -252,6 +320,8 @@ class ReportController {
 
   async generateSalesDetails(filters = {}) {
     const db = await dbmanager.init();
+    await ensureStockWeightColumn(db, "purchase_invoice_items");
+    await ensureStockWeightColumn(db, "sale_invoice_items");
 
     const where = ["1 = 1"];
     const params = [];
@@ -300,10 +370,10 @@ class ReportController {
         EXISTS (
           SELECT 1
           FROM sale_invoice_items filter_sii
-          JOIN stock_batches filter_sb
+          LEFT JOIN stock_batches filter_sb
             ON filter_sb.id = filter_sii.stock_batch_id
           WHERE filter_sii.sale_invoice_id = si.id
-            AND filter_sb.product_id = ?
+            AND COALESCE(filter_sii.product_id, filter_sb.product_id) = ?
         )
       `);
       params.push(filters.productId);
@@ -376,7 +446,7 @@ class ReportController {
       filters.productId &&
       filters.productId !== "all"
     ) {
-      itemWhere.push(`sb.product_id = ?`);
+      itemWhere.push(`COALESCE(sii.product_id, sb.product_id) = ?`);
       itemParams.push(filters.productId);
     }
 
@@ -389,18 +459,18 @@ class ReportController {
               sii.id AS item_id,
               p.name AS product_name,
               p.unit AS product_unit,
-              sb.batch_code,
               sii.quantity,
+              COALESCE(sii.stock_weight, 0) AS stock_weight,
               sii.unit_price,
               sii.line_total,
               sii.cost_price,
               sii.profit,
               sii.notes
             FROM sale_invoice_items sii
-            JOIN stock_batches sb
+            LEFT JOIN stock_batches sb
               ON sb.id = sii.stock_batch_id
             JOIN products p
-              ON p.id = sb.product_id
+              ON p.id = COALESCE(sii.product_id, sb.product_id)
             WHERE sii.sale_invoice_id IN (
               ${invoices.map(() => "?").join(",")}
             )
@@ -473,13 +543,13 @@ class ReportController {
               format: "text",
             },
             {
-              key: "batch_code",
-              label: "الدفعة",
-              format: "text",
-            },
-            {
               key: "quantity",
               label: "الكمية",
+              format: "number",
+            },
+            {
+              key: "stock_weight",
+              label: "الوزن القائم",
               format: "number",
             },
             {
@@ -509,8 +579,8 @@ class ReportController {
                 ? ` (${item.product_unit})`
                 : ""
             }`,
-            batch_code: item.batch_code || "—",
             quantity: number(item.quantity),
+            stock_weight: number(item.stock_weight),
             unit_price: number(item.unit_price),
             line_total: number(item.line_total),
             cost_price_base: number(
@@ -555,6 +625,13 @@ class ReportController {
               label: "الكمية الكلية",
               value: formatNumber(
                 totalQuantity,
+                3,
+              ),
+            },
+            {
+              label: invoice.invoice_type !== undefined ? "الوزن القائم المستلم" : "الوزن القائم الكلي",
+              value: formatNumber(
+                invoiceItems.reduce((sum, item) => sum + number(item.stock_weight), 0),
                 3,
               ),
             },
@@ -642,6 +719,16 @@ class ReportController {
       0,
     );
 
+    const totalStockWeight = sections.reduce(
+      (sum, section) =>
+        sum +
+        section.rows.reduce(
+          (sectionSum, row) => sectionSum + number(row.stock_weight),
+          0,
+        ),
+      0,
+    );
+
     const cancelledCount =
       invoices.filter(
         (invoice) =>
@@ -689,6 +776,10 @@ class ReportController {
           value: totalItems,
         },
         {
+          label: "إجمالي الوزن القائم المباع",
+          value: formatNumber(totalStockWeight, 3),
+        },
+        {
           label: "إجمالي الكمية المباعة",
           value: formatNumber(
             totalQuantity,
@@ -717,6 +808,8 @@ class ReportController {
 
   async generatePurchasesDetails(filters = {}) {
     const db = await dbmanager.init();
+    await ensureStockWeightColumn(db, "purchase_invoice_items");
+    await ensureStockWeightColumn(db, "sale_invoice_items");
 
     const where = ["1 = 1"];
     const params = [];
@@ -853,23 +946,14 @@ class ReportController {
               p.name AS product_name,
               p.unit AS product_unit,
               pii.quantity,
+              COALESCE(pii.stock_weight, 0) AS stock_weight,
               pii.unit_price,
               pii.line_total,
-              pii.notes,
-
-              sb.batch_code,
-              sb.remaining_quantity,
-              sb.received_date,
-              sb.expiry_date
+              pii.notes
 
             FROM purchase_invoice_items pii
             JOIN products p
               ON p.id = pii.product_id
-            LEFT JOIN stock_batches sb
-              ON sb.purchase_invoice_id =
-                 pii.purchase_invoice_id
-             AND sb.product_id =
-                 pii.product_id
 
             WHERE pii.purchase_invoice_id IN (
               ${invoices.map(() => "?").join(",")}
@@ -924,16 +1008,6 @@ class ReportController {
             0,
           );
 
-        const remainingQuantity =
-          invoiceItems.reduce(
-            (sum, item) =>
-              sum +
-              number(
-                item.remaining_quantity,
-              ),
-            0,
-          );
-
         return {
           title: `فاتورة شراء ${invoice.invoice_number} — ${
             invoice.supplier_name || "مورد غير معروف"
@@ -945,18 +1019,13 @@ class ReportController {
               format: "text",
             },
             {
-              key: "batch_code",
-              label: "كود الدفعة",
-              format: "text",
-            },
-            {
               key: "quantity",
               label: "الكمية المستلمة",
               format: "number",
             },
             {
-              key: "remaining_quantity",
-              label: "المتبقي بالمخزون",
+              key: "stock_weight",
+              label: "الوزن القائم",
               format: "number",
             },
             {
@@ -969,16 +1038,6 @@ class ReportController {
               label: "إجمالي السطر",
               format: "currency",
             },
-            {
-              key: "received_date",
-              label: "تاريخ الاستلام",
-              format: "date",
-            },
-            {
-              key: "expiry_date",
-              label: "تاريخ الانتهاء",
-              format: "date",
-            },
           ],
           rows: invoiceItems.map((item) => ({
             product_name: `${item.product_name}${
@@ -986,17 +1045,10 @@ class ReportController {
                 ? ` (${item.product_unit})`
                 : ""
             }`,
-            batch_code: item.batch_code || "—",
             quantity: number(item.quantity),
-            remaining_quantity: number(
-              item.remaining_quantity,
-            ),
+            stock_weight: number(item.stock_weight),
             unit_price: number(item.unit_price),
             line_total: number(item.line_total),
-            received_date:
-              item.received_date || "—",
-            expiry_date:
-              item.expiry_date || "—",
             currency,
           })),
           summary: [
@@ -1052,9 +1104,9 @@ class ReportController {
               ),
             },
             {
-              label: "المتبقي بالمخزون",
+              label: invoice.invoice_type !== undefined ? "الوزن القائم المستلم" : "الوزن القائم الكلي",
               value: formatNumber(
-                remainingQuantity,
+                invoiceItems.reduce((sum, item) => sum + number(item.stock_weight), 0),
                 3,
               ),
             },
@@ -1149,6 +1201,16 @@ class ReportController {
       0,
     );
 
+    const totalStockWeight = sections.reduce(
+      (sum, section) =>
+        sum +
+        section.rows.reduce(
+          (sectionSum, row) => sectionSum + number(row.stock_weight),
+          0,
+        ),
+      0,
+    );
+
     const cancelledCount =
       invoices.filter(
         (invoice) =>
@@ -1191,6 +1253,10 @@ class ReportController {
         {
           label: "عدد بنود الأصناف",
           value: totalItems,
+        },
+        {
+          label: "إجمالي الوزن القائم المستلم",
+          value: formatNumber(totalStockWeight, 3),
         },
         {
           label: "إجمالي الكمية المستلمة",
@@ -1269,6 +1335,8 @@ class ReportController {
 
   async generateConsignmentCommission(filters = {}) {
     const db = await dbmanager.init();
+    await ensureStockWeightColumn(db, "purchase_invoice_items");
+    await ensureStockWeightColumn(db, "sale_invoice_items");
 
     const where = [
       `pi.invoice_type = 'consignment'`,
@@ -1326,76 +1394,15 @@ class ReportController {
           p.name AS product_name,
 
           COALESCE(
+            MAX(NULLIF(pii.estimated_purchase_price, 0)),
             MAX(NULLIF(pii.unit_price, 0)),
-            (
-              SELECT MAX(NULLIF(sb_price.purchase_price, 0))
-              FROM stock_batches sb_price
-              WHERE sb_price.purchase_invoice_id = pi.id
-                AND sb_price.product_id = p.id
-            ),
             0
           ) AS marketing_price,
 
-          COALESCE(
-            (
-              SELECT SUM(sb.quantity)
-              FROM stock_batches sb
-              WHERE sb.purchase_invoice_id = pi.id
-                AND sb.product_id = p.id
-            ),
-            SUM(pii.quantity),
-            0
-          ) AS live_received_quantity,
-
-          COALESCE(
-            (
-              SELECT SUM(sb.remaining_quantity)
-              FROM stock_batches sb
-              WHERE sb.purchase_invoice_id = pi.id
-                AND sb.product_id = p.id
-            ),
-            0
-          ) AS live_remaining_quantity,
-
-          COALESCE(
-            (
-              SELECT SUM(
-                CASE
-                  WHEN si.status <> 'cancelled'
-                  THEN sii.quantity
-                  ELSE 0
-                END
-              )
-              FROM sale_invoice_items sii
-              JOIN sale_invoices si
-                ON si.id = sii.sale_invoice_id
-              JOIN stock_batches sb
-                ON sb.id = sii.stock_batch_id
-              WHERE sb.purchase_invoice_id = pi.id
-                AND sb.product_id = p.id
-            ),
-            0
-          ) AS live_sold_quantity,
-
-          COALESCE(
-            (
-              SELECT SUM(
-                CASE
-                  WHEN si.status <> 'cancelled'
-                  THEN sii.line_total * COALESCE(NULLIF(si.exchange_rate, 0), 1)
-                  ELSE 0
-                END
-              )
-              FROM sale_invoice_items sii
-              JOIN sale_invoices si
-                ON si.id = sii.sale_invoice_id
-              JOIN stock_batches sb
-                ON sb.id = sii.stock_batch_id
-              WHERE sb.purchase_invoice_id = pi.id
-                AND sb.product_id = p.id
-            ),
-            0
-          ) / COALESCE(NULLIF(pi.exchange_rate, 0), 1) AS live_sales_amount,
+          COALESCE(SUM(pii.quantity), 0) AS live_received_quantity,
+          COALESCE(SUM(pii.quantity), 0) AS live_remaining_quantity,
+          0 AS live_sold_quantity,
+          0 AS live_sales_amount,
 
           cs.id AS settlement_id,
           cs.settlement_number,
@@ -1484,7 +1491,9 @@ class ReportController {
     const rows = rawRows
       .map((row) => {
         const status = settlementStatus(row);
-        const hasSettlement = number(row.settlement_id) > 0;
+        const hasSettlement =
+          number(row.settlement_id) > 0 &&
+          status === "settled";
 
         const receivedQuantity = hasSettlement
           ? number(row.settled_received_quantity)
@@ -1919,6 +1928,8 @@ class ReportController {
 
   async getProfitLossReport(filters = {}) {
       const db = await dbmanager.init();
+    await ensureStockWeightColumn(db, "purchase_invoice_items");
+    await ensureStockWeightColumn(db, "sale_invoice_items");
 
       // ── Date range defaults ──────────────────────────────────────────────
       const today      = new Date().toISOString().split('T')[0];
@@ -2107,18 +2118,18 @@ class ReportController {
       const stockLossRows = await all(db, `
           SELECT
               sa.quantity,
-              COALESCE(sb.purchase_price_base, sb.purchase_price, 0) AS purchase_price,
+              COALESCE(NULLIF(p.avg_cost_base, 0), sb.purchase_price_base, sb.purchase_price, 0) AS purchase_price,
               (
                 ABS(sa.quantity) *
-                COALESCE(sb.purchase_price_base, sb.purchase_price, 0)
+                COALESCE(NULLIF(p.avg_cost_base, 0), sb.purchase_price_base, sb.purchase_price, 0)
               ) AS loss_amount,
               p.name AS product_name,
               DATE(sa.created_at) AS adjustment_date,
               sa.reason,
               sa.notes
           FROM stock_adjustments sa
-          JOIN stock_batches sb ON sb.id = sa.stock_batch_id
-          JOIN products p ON p.id = sb.product_id
+          LEFT JOIN stock_batches sb ON sb.id = sa.stock_batch_id
+          JOIN products p ON p.id = COALESCE(sa.product_id, sb.product_id)
           WHERE sa.quantity < 0
             AND COALESCE(sa.reason, '') NOT IN (
               'consignment_return_out',
@@ -2158,7 +2169,7 @@ class ReportController {
               COUNT(DISTINCT si.id)                                                            AS invoice_count
           FROM sale_invoice_items sii
           JOIN sale_invoices si ON si.id = sii.sale_invoice_id
-          JOIN stock_batches sb ON sb.id = sii.stock_batch_id
+          LEFT JOIN stock_batches sb ON sb.id = sii.stock_batch_id
           LEFT JOIN purchase_invoices pi ON pi.id = sb.purchase_invoice_id
           WHERE si.status != 'cancelled'
             AND si.invoice_date >= ?

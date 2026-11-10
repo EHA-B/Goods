@@ -80,19 +80,20 @@ class NotificationController {
     }
 
     const activeItems = [];
-    if (await this.tableExists(db, 'products') && await this.tableExists(db, 'stock_batches')) {
+    if (await this.tableExists(db, 'products')) {
       const productColumns = await this.columnNames(db, 'products');
       const defaultMinimum = await this.getDefaultMinimumStock(db);
       const minimumExpression = productColumns.has('min_stock')
         ? `COALESCE(p.min_stock, ?)`
         : `?`;
+      const quantityExpression = productColumns.has('stock_quantity')
+        ? `COALESCE(p.stock_quantity, 0)`
+        : `0`;
       const rows = await all(db, `SELECT p.id,p.name,
-        COALESCE(SUM(CASE WHEN COALESCE(sb.isActive,1)=1 THEN COALESCE(sb.remaining_quantity,0) ELSE 0 END),0) quantity,
+        ${quantityExpression} quantity,
         ${minimumExpression} min_stock
         FROM products p
-        LEFT JOIN stock_batches sb ON sb.product_id=p.id
-        WHERE COALESCE(p.isActive,1)=1
-        GROUP BY p.id,p.name${productColumns.has('min_stock') ? ',p.min_stock' : ''}`, [defaultMinimum]);
+        WHERE COALESCE(p.isActive,1)=1`, [defaultMinimum]);
 
       for (const row of rows) {
         const quantity = Number(row.quantity || 0);
@@ -117,7 +118,7 @@ class NotificationController {
       const columns = await this.columnNames(db, 'purchase_invoices');
       if (columns.has('invoice_type')) {
         const settlementFilter = columns.has('settlement_status')
-          ? `AND COALESCE(settlement_status,'pending')='pending'`
+          ? `AND COALESCE(settlement_status,'pending') IN ('pending','reversed')`
           : '';
         const statusFilter = columns.has('status')
           ? `AND COALESCE(status,'')!='cancelled'`

@@ -11,7 +11,6 @@ class SupplierController {
         }
         const db = await dbmanager.init();
 
-        // Prevent duplicate supplier names (case-insensitive)
         const trimmedName = String(input.name).trim();
         const existingSupplier = await new Promise((resolve, reject) => {
             db.get(
@@ -108,7 +107,6 @@ class SupplierController {
             throw err;
         }
 
-        // Prevent duplicate supplier names on rename (case-insensitive)
         if (input && Object.prototype.hasOwnProperty.call(input, 'name')) {
             const trimmedName = String(input.name).trim();
             if (trimmedName) {
@@ -164,7 +162,7 @@ class SupplierController {
     async getSupplierTransactions(id) {
         if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
         const db = await dbmanager.init();
-        
+
         const payments = await new Promise((resolve, reject) => {
             db.all(
                 `SELECT pay.*, cb.name AS cashbox_name
@@ -182,8 +180,8 @@ class SupplierController {
 
         const purchases = await new Promise((resolve, reject) => {
             db.all(
-                `SELECT id, invoice_number, invoice_date, invoice_type, total,
-                        paid_amount, remaining_amount, status, notes
+                `SELECT id, invoice_number, invoice_date, invoice_type, total, currency,
+                        paid_amount, remaining_amount, status, settlement_status, notes
                  FROM purchase_invoices
                  WHERE supplier_id = ?
                  ORDER BY invoice_date DESC, id DESC`,
@@ -195,25 +193,10 @@ class SupplierController {
             );
         });
 
-        const stockBatches = await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT sb.*, p.name AS product_name
-                 FROM stock_batches sb
-                 LEFT JOIN products p ON sb.product_id = p.id
-                 WHERE sb.supplier_id = ?
-                 ORDER BY sb.received_date DESC, sb.id DESC`,
-                [id],
-                (err, rows) => {
-                    if (err) return reject(err);
-                    resolve(rows || []);
-                }
-            );
-        });
-
         return {
             payments,
             purchases,
-            stockBatches
+            stockBatches: [],
         };
     }
 }

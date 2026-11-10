@@ -2,6 +2,7 @@ import type { RemainingStockPolicy, SettlementStatus } from "./consignmentTypes"
 
 export const money = (value: number, currency = "SYP") => `${Number(value || 0).toLocaleString("en-US")} ${currency === "SYP" ? "ل.س" : currency}`;
 export const policyLabels: Record<RemainingStockPolicy, string> = {
+  manual: "تسوية يدوية (دون تأثير على المخزون)",
   return_to_supplier: "إعادة المتبقي للمورد",
   spoilage: "اعتبار المتبقي تالفًا",
 };

@@ -9,5 +9,30 @@ import { money } from "../../pages/purchases/consignment/consignmentUtils";
 import { formatNumber } from "../../utils/numberFormat";
 
 export default function ConsignmentSalesTable({ items, currency }: { items: ConsignmentInvoiceItemSummary[]; currency: string }) {
-  return <DataTable><DataTableHead><DataTableRow>{["المنتج", "كود الدفعة", "المستلم", "المباع", "المتبقي", "قيمة المبيعات", "الانتهاء"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}</DataTableRow></DataTableHead><DataTableBody>{items.map((item) => <DataTableRow key={item.stock_batch_id}><DataTableCell className="font-bold text-[var(--text-primary)]">{item.product_name}</DataTableCell><DataTableCell>{item.batch_code || "-"}</DataTableCell><DataTableCell>{formatNumber(item.received_quantity)}</DataTableCell><DataTableCell>{formatNumber(item.sold_quantity)}</DataTableCell><DataTableCell>{formatNumber(item.remaining_quantity)}</DataTableCell><DataTableCell className="font-bold">{money(item.total_sales_amount, currency)}</DataTableCell><DataTableCell>{item.expiry_date || "-"}</DataTableCell></DataTableRow>)}</DataTableBody></DataTable>;
+  return (
+    <DataTable>
+      <DataTableHead>
+        <DataTableRow>
+          {["المنتج", "الكمية المستلمة", "الوزن القائم", "سعر التسويق المرجعي", "الكمية المباعة", "قيمة المبيعات"].map((h) => (
+            <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>
+          ))}
+        </DataTableRow>
+      </DataTableHead>
+      <DataTableBody>
+        {items.map((item, idx) => (
+          <DataTableRow key={item.purchase_invoice_item_id ?? `${item.product_id}-${idx}`}>
+            <DataTableCell className="font-bold text-[var(--text-primary)]">
+              {item.product_name}
+              {item.product_unit ? ` (${item.product_unit})` : ""}
+            </DataTableCell>
+            <DataTableCell>{formatNumber(item.received_quantity)}</DataTableCell>
+            <DataTableCell>{Number(item.stock_weight) > 0 ? formatNumber(Number(item.stock_weight)) : "—"}</DataTableCell>
+            <DataTableCell>{money(item.estimated_unit_price ?? 0, currency)}</DataTableCell>
+            <DataTableCell>{formatNumber(item.sold_quantity)}</DataTableCell>
+            <DataTableCell className="font-bold">{money(item.total_sales_amount, currency)}</DataTableCell>
+          </DataTableRow>
+        ))}
+      </DataTableBody>
+    </DataTable>
+  );
 }

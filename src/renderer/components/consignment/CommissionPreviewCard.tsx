@@ -1,4 +1,4 @@
-import { AlertCircle, Building2, Calculator, HandCoins, Landmark, Minus, WalletCards } from "lucide-react";
+import { AlertCircle, Building2, Calculator, HandCoins, Landmark, Minus, PackageCheck, WalletCards } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ConsignmentClosingPreview } from "../../pages/purchases/consignment/consignmentTypes";
 import { money } from "../../pages/purchases/consignment/consignmentUtils";
@@ -6,7 +6,6 @@ import { money } from "../../pages/purchases/consignment/consignmentUtils";
 type Props = {
   preview: ConsignmentClosingPreview | null;
   loading?: boolean;
-  policyLabel?: string;
 };
 
 type RowProps = {
@@ -42,16 +41,16 @@ function SummaryRow({ icon, label, value, emphasis, danger, muted }: RowProps) {
   );
 }
 
-export default function CommissionPreviewCard({ preview, loading = false, policyLabel }: Props) {
+export default function CommissionPreviewCard({ preview, loading = false }: Props) {
   return (
-    <aside className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)]">
+    <aside className="h-fit overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)]">
       <div className="border-b border-[var(--border)] px-5 py-4">
         <div className="flex items-center gap-2">
           <Calculator size={18} className="text-[var(--primary)]" />
-          <h2 className="text-sm font-black text-[var(--text-primary)]">ملخص العملية</h2>
+          <h2 className="text-sm font-black text-[var(--text-primary)]">ملخص التسوية المالية</h2>
         </div>
         <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-          يتم تحديث القيم تلقائيًا بعد اكتمال البيانات.
+          يتحدث تلقائيًا حسب المبيعات ونسبة العمولة المدخلة.
         </p>
       </div>
 
@@ -64,6 +63,13 @@ export default function CommissionPreviewCard({ preview, loading = false, policy
           </div>
         ) : preview ? (
           <>
+            {preview.sold_quantity !== undefined && (
+              <SummaryRow
+                icon={<PackageCheck size={16} />}
+                label="الكمية المباعة"
+                value={Number(preview.sold_quantity || 0).toLocaleString("en-US")}
+              />
+            )}
             <SummaryRow
               icon={<WalletCards size={16} />}
               label="إجمالي المبيعات"
@@ -71,7 +77,7 @@ export default function CommissionPreviewCard({ preview, loading = false, policy
             />
             <SummaryRow
               icon={<Calculator size={16} />}
-              label="قيمة العمولة"
+              label={`قيمة العمولة (${preview.commission_percentage}%)`}
               value={money(preview.commission_amount, preview.currency)}
             />
             <SummaryRow
@@ -80,22 +86,6 @@ export default function CommissionPreviewCard({ preview, loading = false, policy
               value={money(preview.supplier_share_base, preview.currency)}
               muted
             />
-            {preview.spoilage_value > 0 && (
-              <SummaryRow
-                icon={<Calculator size={16} />}
-                label="القيمة التقديرية للتلف"
-                value={money(preview.spoilage_value, preview.currency)}
-                muted
-              />
-            )}
-            {preview.return_value > 0 && (
-              <SummaryRow
-                icon={<Landmark size={16} />}
-                label="قيمة المرتجع (مستردة للصندوق)"
-                value={money(preview.return_value, preview.currency)}
-                emphasis
-              />
-            )}
             {preview.prepaid_amount > 0 && (
               <SummaryRow
                 icon={<Minus size={16} />}
@@ -106,7 +96,7 @@ export default function CommissionPreviewCard({ preview, loading = false, policy
             )}
             <SummaryRow
               icon={<HandCoins size={16} />}
-              label={preview.prepaid_amount > 0 ? "صافي المبلغ المستحق (من الصندوق)" : "حصة المورد"}
+              label={preview.prepaid_amount > 0 ? "صافي المسحوب من الصندوق للمورد" : "المسحوب من الصندوق للمورد"}
               value={money(preview.net_supplier_payout, preview.currency)}
               emphasis
             />
@@ -117,16 +107,10 @@ export default function CommissionPreviewCard({ preview, loading = false, policy
             />
             <SummaryRow
               icon={<Building2 size={16} />}
-              label="الرصيد بعد التسوية"
+              label="رصيد الصندوق بعد السحب"
               value={money(preview.balance_after_settlement, preview.currency)}
               danger={preview.balance_after_settlement < 0}
             />
-            {policyLabel && (
-              <div className="rounded-lg border border-[var(--border)] px-3 py-3">
-                <p className="text-xs font-bold text-[var(--text-muted)]">معالجة الكمية المتبقية</p>
-                <p className="mt-1 text-sm font-black text-[var(--text-primary)]">{policyLabel}</p>
-              </div>
-            )}
             {preview.warnings.length > 0 && (
               <div className="space-y-2 rounded-lg border border-[var(--warning)] bg-[var(--warning-subtle)] p-3">
                 {preview.warnings.map((warning) => (
@@ -143,7 +127,7 @@ export default function CommissionPreviewCard({ preview, loading = false, policy
             <Calculator size={28} className="mx-auto text-[var(--text-muted)]" />
             <p className="mt-3 text-sm font-bold text-[var(--text-primary)]">أكمل بيانات التسوية</p>
             <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-              اختر الصندوق وأدخل نسبة عمولة صحيحة لعرض الملخص.
+              اختر الصندوق وأدخل المبيعات ونسبة العمولة لعرض الملخص.
             </p>
           </div>
         )}

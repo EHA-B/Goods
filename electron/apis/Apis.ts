@@ -163,17 +163,35 @@ const invoiceFinancialSummaryLabels = new Set([
 
 const invoiceOperationalSummaryLabels = new Set([
   'الكمية الكلية',
+  'الوزن القائم الكلي',
   'الكمية المستلمة',
+  'الوزن القائم المستلم',
   'المتبقي بالمخزون',
   'عدد الدفعات',
   'آخر دفعة',
 ]);
 
 function isDetailedInvoiceReport(report) {
+  if (report?.layout === 'invoice-details') return true;
   const title = String(report?.title || '');
   return (
     title.includes('المبيعات التفصيلي') ||
     title.includes('المشتريات التفصيلي')
+  );
+}
+
+function isInvoiceFinancialLabel(label) {
+  return (
+    invoiceFinancialSummaryLabels.has(label) ||
+    label.startsWith('تكلفة النقل') ||
+    label.startsWith('تكلفة العتالة')
+  );
+}
+
+function isInvoiceOperationalLabel(label) {
+  return (
+    invoiceOperationalSummaryLabels.has(label) ||
+    label.startsWith('الوزن القائم')
   );
 }
 
@@ -182,16 +200,16 @@ function splitInvoiceSummary(summary) {
 
   return {
     financial: items.filter((item) =>
-      invoiceFinancialSummaryLabels.has(String(item?.label || '')),
+      isInvoiceFinancialLabel(String(item?.label || '')),
     ),
     operational: items.filter((item) =>
-      invoiceOperationalSummaryLabels.has(String(item?.label || '')),
+      isInvoiceOperationalLabel(String(item?.label || '')),
     ),
     identity: items.filter((item) => {
       const label = String(item?.label || '');
       return (
-        !invoiceFinancialSummaryLabels.has(label) &&
-        !invoiceOperationalSummaryLabels.has(label)
+        !isInvoiceFinancialLabel(label) &&
+        !isInvoiceOperationalLabel(label)
       );
     }),
   };
@@ -1210,8 +1228,8 @@ ipcMain.handle = ((channel, listener) =>
 ipcMain.handle('api:print:payment', async (_event,id)=>{ try{return success(await printController.getPaymentDocument(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
 ipcMain.handle('api:print:transaction', async (_event,id)=>{ try{return success(await printController.getTransactionDocument(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
 ipcMain.handle('api:print:transfer', async (_event,id)=>{ try{return success(await printController.getTransferDocument(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
-ipcMain.handle('api:print:customerStatement', async (_event,id)=>{ try{return success(await printController.getCustomerStatement(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
-ipcMain.handle('api:print:supplierStatement', async (_event,id)=>{ try{return success(await printController.getSupplierStatement(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
+ipcMain.handle('api:print:customerStatement', async (_event,id,range)=>{ try{return success(await printController.getCustomerStatement(id,range||{}));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
+ipcMain.handle('api:print:supplierStatement', async (_event,id,range)=>{ try{return success(await printController.getSupplierStatement(id,range||{}));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
 ipcMain.handle('api:print:cashboxStatement', async (_event,id)=>{ try{return success(await printController.getCashboxStatement(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
 ipcMain.handle('api:print:consignment', async (_event,id)=>{ try{return success(await printController.getConsignmentDocument(id));}catch(e){return failure(e.code||'PRINT_LOAD_FAILED',e.message,e.details);} });
 
@@ -1321,6 +1339,64 @@ ipcMain.handle('api:report:export', async (event, input) => {
   } finally {
     if (exportWindow && !exportWindow.isDestroyed()) {
       exportWindow.destroy();
+    }
+  }
+});
+
+/** Prints a generated report on A4 paper through the system print dialog. */
+ipcMain.handle('api:report:print', async (event, input) => {
+  let printWindow = null;
+
+  try {
+    const report = await reportController.generate({
+      reportId: input?.reportId,
+      filters: input?.filters || {},
+    });
+
+    const parentWindow = BrowserWindow.fromWebContents(event.sender);
+
+    printWindow = new BrowserWindow({
+      show: false,
+      parent: parentWindow || undefined,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+
+    const html = renderReportHtml(report);
+    await printWindow.loadURL(
+      `data:text/html;charset=utf-8,${encodeURIComponent(html)}`,
+    );
+
+    const outcome = await new Promise((resolve) => {
+      printWindow.webContents.print(
+        {
+          silent: false,
+          printBackground: true,
+          landscape: false,
+          pageSize: 'A4',
+          margins: { marginType: 'default' },
+        },
+        (printed, failureReason) => resolve({ printed, failureReason }),
+      );
+    });
+
+    if (!outcome.printed) {
+      const reason = String(outcome.failureReason || '');
+      if (!reason || reason.toLowerCase() === 'cancelled' || reason.toLowerCase() === 'canceled') {
+        return success({ success: false, canceled: true });
+      }
+      return failure('REPORT_PRINT_FAILED', `تعذر طباعة التقرير: ${reason}`);
+    }
+
+    return success({ success: true });
+  } catch (e) {
+    return failure(e.code || 'REPORT_PRINT_FAILED', e.message || 'تعذر طباعة التقرير', e.details);
+  } finally {
+    if (printWindow && !printWindow.isDestroyed()) {
+      printWindow.destroy();
     }
   }
 });

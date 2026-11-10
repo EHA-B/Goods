@@ -1,28 +1,11 @@
 const path = require('path');
 const dbmanager = require(path.join(__dirname, '../database/databaseManager'));
+const { ensureStockWeightColumn } = require('./utils/invoiceUtils');
 
 class StockBatchController {
 
-    async createStockBatch(input) {
-        const productId = Number(input?.product_id);
-        const supplierId = Number(input?.supplier_id);
-        const quantity = Number(input?.quantity);
-        const purchasePrice = Number(input?.purchase_price);
-        if (!Number.isInteger(productId) || productId <= 0) throw { code: 'VALIDATION_ERROR', message: 'يجب تحديد المنتج.' };
-        if (!Number.isInteger(supplierId) || supplierId <= 0) throw { code: 'VALIDATION_ERROR', message: 'يجب اختيار المورد.' };
-        if (!Number.isFinite(quantity) || quantity <= 0) throw { code: 'VALIDATION_ERROR', message: 'يجب أن تكون كمية الدفعة أكبر من صفر.' };
-        if (!Number.isFinite(purchasePrice) || purchasePrice < 0) throw { code: 'VALIDATION_ERROR', message: 'سعر الشراء غير صالح.' };
-        if (!input?.received_date) throw { code: 'VALIDATION_ERROR', message: 'تاريخ الاستلام مطلوب.' };
-        if (input.expiry_date && input.expiry_date < input.received_date) throw { code: 'VALIDATION_ERROR', message: 'تاريخ الانتهاء يجب أن يكون بعد تاريخ الاستلام.' };
-        const db = await dbmanager.init();
-        const sql = `INSERT INTO stock_batches (product_id, supplier_id, purchase_invoice_id, batch_code, quantity, remaining_quantity, purchase_price, received_date, expiry_date, notes, isActive, created_at, updated_at)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))`;
-        const id = await new Promise((resolve, reject) => {
-            db.run(sql, [productId, supplierId, input.purchase_invoice_id ?? null, input.batch_code && String(input.batch_code).trim() ? String(input.batch_code).trim() : null, quantity, quantity, purchasePrice, input.received_date, input.expiry_date || null, input.notes || null, input.isActive ?? 1], function (err) {
-                if (err) return reject(err); resolve(this.lastID);
-            });
-        });
-        return this.getStockBatch(id);
+    async createStockBatch(_input) {
+        throw { code: 'BATCHES_DISABLED', message: 'نظام الدفعات ملغى — يتم تحديث المخزون مباشرة على مستوى المنتج.' };
     }
 
     async getStockBatch(id) {
@@ -30,7 +13,11 @@ class StockBatchController {
         const db = await dbmanager.init();
         return await new Promise((resolve, reject) => {
             db.get(
-                `SELECT sb.*, s.name AS supplier_name, p.name AS product_name, p.code AS product_code FROM stock_batches sb LEFT JOIN suppliers s ON s.id = sb.supplier_id LEFT JOIN products p ON p.id = sb.product_id WHERE sb.id = ?`,
+                `SELECT sb.*, s.name AS supplier_name, p.name AS product_name, p.code AS product_code
+                 FROM stock_batches sb
+                 LEFT JOIN suppliers s ON s.id = sb.supplier_id
+                 LEFT JOIN products p ON p.id = sb.product_id
+                 WHERE sb.id = ?`,
                 [id],
                 (err, row) => {
                     if (err) return reject(err);
@@ -42,193 +29,153 @@ class StockBatchController {
     }
 
     async getAllStockBatchs() {
-        const db = await dbmanager.init();
-        return await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT sb.*, s.name AS supplier_name, p.name AS product_name, p.code AS product_code FROM stock_batches sb LEFT JOIN suppliers s ON s.id = sb.supplier_id LEFT JOIN products p ON p.id = sb.product_id ORDER BY sb.id DESC`,
-                [],
-                (err, rows) => {
-                    if (err) return reject(err);
-                    resolve(rows);
-                }
-            );
-        });
+        return [];
     }
 
-    async updateStockBatch(id, input) {
-        if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
-
-        const mapping = {
-            product_id: 'product_id',
-            supplier_id: 'supplier_id',
-            purchase_invoice_id: 'purchase_invoice_id',
-            batch_code: 'batch_code',
-            quantity: 'quantity',
-            remaining_quantity: 'remaining_quantity',
-            purchase_price: 'purchase_price',
-            received_date: 'received_date',
-            expiry_date: 'expiry_date',
-            notes: 'notes',
-            isActive: 'isActive'
-        };
-        const sets = [];
-        const params = [];
-
-        for (const key of Object.keys(mapping)) {
-            if (input && Object.prototype.hasOwnProperty.call(input, key)) {
-                sets.push(`${mapping[key]} = ?`);
-                params.push(input[key] ?? null);
-            }
-        }
-
-        if (sets.length === 0) {
-            const err = new Error('No fields provided to update');
-            err.code = 'VALIDATION_ERROR';
-            throw err;
-        }
-        sets.push(`updated_at = datetime('now')`);
-        const sql = `UPDATE stock_batches SET ${sets.join(', ')} WHERE id = ?`;
-        params.push(id);
-
-        const db = await dbmanager.init();
-        const info = await new Promise((resolve, reject) => {
-            db.run(sql, params, function (err) {
-                if (err) return reject(err);
-                resolve({ changes: this.changes });
-            });
-        });
-
-        if (!info || info.changes === 0) throw { code: 'NOT_FOUND', message: 'StockBatch not found' };
-
-        return this.getStockBatch(id);
+    async updateStockBatch(_id, _input) {
+        throw { code: 'BATCHES_DISABLED', message: 'نظام الدفعات ملغى — يتم تحديث المخزون مباشرة على مستوى المنتج.' };
     }
 
-    async deleteStockBatch(id) {
-        if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
-        const db = await dbmanager.init();
-        const info = await new Promise((resolve, reject) => {
-            db.run(`DELETE FROM stock_batches WHERE id = ?`, [id], function (err) {
-                if (err) return reject(err);
-                resolve({ changes: this.changes });
-            });
-        });
-        if (!info || info.changes === 0) throw { code: 'NOT_FOUND', message: 'StockBatch not found' };
-        return { success: true, message: 'StockBatch deleted successfully' };
+    async deleteStockBatch(_id) {
+        throw { code: 'BATCHES_DISABLED', message: 'نظام الدفعات ملغى — يتم تحديث المخزون مباشرة على مستوى المنتج.' };
     }
 
     async getStockSummary() {
         const db = await dbmanager.init();
-        
-        // Total units and Total value
-        const totals = await new Promise((resolve, reject) => {
-            db.get(`
-                SELECT 
-                    SUM(remaining_quantity) as total_units,
-                    SUM(remaining_quantity * purchase_price) as total_value
-                FROM stock_batches 
-                WHERE isActive = 1 AND remaining_quantity > 0
-            `, (err, row) => {
-                if (err) return reject(err);
-                resolve(row);
-            });
-        });
-    
-        // Aggregated product balances for low stock and out of stock
-        const productBalances = await new Promise((resolve, reject) => {
-            db.all(`
-                SELECT 
-                    p.id, 
-                    SUM(CASE WHEN sb.isActive = 1 AND sb.remaining_quantity > 0 THEN sb.remaining_quantity ELSE 0 END) as total_qty
-                FROM products p
-                LEFT JOIN stock_batches sb ON p.id = sb.product_id
-                WHERE p.isActive = 1
-                GROUP BY p.id
-            `, (err, rows) => {
-                if (err) return reject(err);
-                resolve(rows);
-            });
-        });
-    
+        await ensureStockWeightColumn(db, 'purchase_invoice_items');
+        await ensureStockWeightColumn(db, 'sale_invoice_items');
+
+        const [products, purchasedWeightRow, soldWeightRow] = await Promise.all([
+            new Promise((resolve, reject) => {
+                db.all(
+                    `SELECT id, COALESCE(stock_quantity, 0) AS stock_quantity, COALESCE(avg_cost_base, 0) AS avg_cost_base
+                     FROM products
+                     WHERE COALESCE(isActive, 1) = 1`,
+                    [],
+                    (err, rows) => (err ? reject(err) : resolve(rows || []))
+                );
+            }),
+            new Promise((resolve, reject) => {
+                db.get(
+                    `SELECT COALESCE(SUM(COALESCE(pii.stock_weight, 0)), 0) AS total_purchased_weight
+                     FROM purchase_invoice_items pii
+                     JOIN purchase_invoices pi ON pi.id = pii.purchase_invoice_id
+                     JOIN products p ON p.id = pii.product_id
+                     WHERE pi.status != 'cancelled' AND COALESCE(p.isActive, 1) = 1`,
+                    [],
+                    (err, row) => (err ? reject(err) : resolve(row || { total_purchased_weight: 0 }))
+                );
+            }),
+            new Promise((resolve, reject) => {
+                db.get(
+                    `SELECT COALESCE(SUM(COALESCE(sii.stock_weight, 0)), 0) AS total_sold_weight
+                     FROM sale_invoice_items sii
+                     JOIN sale_invoices si ON si.id = sii.sale_invoice_id
+                     LEFT JOIN stock_batches sb ON sb.id = sii.stock_batch_id
+                     JOIN products p ON p.id = COALESCE(sii.product_id, sb.product_id)
+                     WHERE si.status != 'cancelled' AND COALESCE(p.isActive, 1) = 1`,
+                    [],
+                    (err, row) => (err ? reject(err) : resolve(row || { total_sold_weight: 0 }))
+                );
+            }),
+        ]);
+
+        const DEFAULT_MIN_LIMIT = 10;
+        let total_units = 0;
+        let total_value = 0;
         let low_stock_count = 0;
         let out_of_stock_count = 0;
-        // Assuming default min_limit = 10 for all products since it's missing from DB
-        const DEFAULT_MIN_LIMIT = 10;
-    
-        productBalances.forEach(p => {
-            if (p.total_qty <= 0) {
+
+        for (const p of products) {
+            const qty = Number(p.stock_quantity || 0);
+            const avgCost = Number(p.avg_cost_base || 0);
+            if (qty > 0) {
+                total_units += qty;
+                total_value += qty * avgCost;
+            }
+            if (qty <= 0) {
                 out_of_stock_count++;
-            } else if (p.total_qty <= DEFAULT_MIN_LIMIT) {
+            } else if (qty <= DEFAULT_MIN_LIMIT) {
                 low_stock_count++;
             }
-        });
-    
-        // Expiring soon (e.g. within 30 days)
-        const expiringSoon = await new Promise((resolve, reject) => {
-            db.get(`
-                SELECT COUNT(id) as count
-                FROM stock_batches
-                WHERE isActive = 1 
-                  AND remaining_quantity > 0 
-                  AND expiry_date IS NOT NULL 
-                  AND expiry_date <= date('now', '+30 days')
-            `, (err, row) => {
-                if (err) return reject(err);
-                resolve(row);
-            });
-        });
-    
+        }
+
         return {
-            total_units: totals?.total_units || 0,
-            total_value: totals?.total_value || 0,
+            total_units: Math.round(total_units * 1000) / 1000,
+            total_value: Math.round(total_value * 100) / 100,
+            total_purchased_weight: Math.round(Number(purchasedWeightRow?.total_purchased_weight || 0) * 1000) / 1000,
+            total_sold_weight: Math.round(Number(soldWeightRow?.total_sold_weight || 0) * 1000) / 1000,
             low_stock_count,
             out_of_stock_count,
-            expiring_soon_count: expiringSoon?.count || 0
+            expiring_soon_count: 0,
         };
     }
-    
+
     async getInventoryItems(pagination = { page: 1, limit: 10 }) {
         const db = await dbmanager.init();
+        await ensureStockWeightColumn(db, 'purchase_invoice_items');
+        await ensureStockWeightColumn(db, 'sale_invoice_items');
         const page = parseInt(pagination.page) || 1;
         const limit = parseInt(pagination.limit) || 10;
         const offset = (page - 1) * limit;
-    
+
         const countResult = await new Promise((resolve, reject) => {
-            db.get(`SELECT COUNT(id) as total FROM products WHERE isActive = 1`, (err, row) => {
+            db.get(`SELECT COUNT(id) as total FROM products WHERE COALESCE(isActive, 1) = 1`, (err, row) => {
                 if (err) return reject(err);
                 resolve(row);
             });
         });
-    
+
         const rows = await new Promise((resolve, reject) => {
-            db.all(`
-                SELECT 
+            db.all(
+                `SELECT
                     p.id as product_id,
                     p.name as product_name,
                     p.code as product_code,
                     p.unit as product_unit,
                     p.category as product_category,
-                    SUM(CASE WHEN sb.isActive = 1 THEN sb.remaining_quantity ELSE 0 END) as current_balance,
-                    SUM(CASE WHEN sb.isActive = 1 THEN sb.remaining_quantity * sb.purchase_price ELSE 0 END) as total_value,
-                    COUNT(CASE WHEN sb.isActive = 1 AND sb.remaining_quantity > 0 THEN sb.id END) as batch_count,
-                    GROUP_CONCAT(DISTINCT s.name) as suppliers
-                FROM (SELECT * FROM products WHERE isActive = 1 ORDER BY id DESC LIMIT ? OFFSET ?) p
-                LEFT JOIN stock_batches sb ON p.id = sb.product_id AND sb.isActive = 1 AND sb.remaining_quantity > 0
-                LEFT JOIN suppliers s ON sb.supplier_id = s.id
-                GROUP BY p.id
-                ORDER BY p.id DESC
-            `, [limit, offset], (err, rows) => {
-                if (err) return reject(err);
-                resolve(rows);
-            });
+                    COALESCE(p.stock_quantity, 0) as current_balance,
+                    COALESCE(p.avg_cost_base, 0) as avg_cost_base,
+                    GROUP_CONCAT(DISTINCT s.name) as suppliers,
+                    COALESCE((
+                        SELECT SUM(COALESCE(pii2.stock_weight, 0))
+                        FROM purchase_invoice_items pii2
+                        JOIN purchase_invoices pi2 ON pi2.id = pii2.purchase_invoice_id
+                        WHERE pii2.product_id = p.id AND pi2.status != 'cancelled'
+                    ), 0) as purchased_weight,
+                    COALESCE((
+                        SELECT SUM(COALESCE(sii2.stock_weight, 0))
+                        FROM sale_invoice_items sii2
+                        JOIN sale_invoices si2 ON si2.id = sii2.sale_invoice_id
+                        LEFT JOIN stock_batches sb2 ON sb2.id = sii2.stock_batch_id
+                        WHERE COALESCE(sii2.product_id, sb2.product_id) = p.id AND si2.status != 'cancelled'
+                    ), 0) as sold_weight
+                 FROM (SELECT * FROM products WHERE COALESCE(isActive, 1) = 1 ORDER BY id DESC LIMIT ? OFFSET ?) p
+                 LEFT JOIN purchase_invoice_items pii ON pii.product_id = p.id
+                 LEFT JOIN purchase_invoices pi ON pi.id = pii.purchase_invoice_id AND pi.status != 'cancelled'
+                 LEFT JOIN suppliers s ON s.id = pi.supplier_id
+                 GROUP BY p.id
+                 ORDER BY p.id DESC`,
+                [limit, offset],
+                (err, list) => {
+                    if (err) return reject(err);
+                    resolve(list || []);
+                }
+            );
         });
-    
-        const items = rows.map(row => {
-            const DEFAULT_MIN_LIMIT = 10; // since it doesn't exist in DB yet
-            const balance = row.current_balance || 0;
+
+        const DEFAULT_MIN_LIMIT = 10;
+        const items = rows.map((row) => {
+            const balance = Math.round((Number(row.current_balance || 0)) * 1000) / 1000;
+            const avgCost = Math.round((Number(row.avg_cost_base || 0)) * 100) / 100;
+            const totalValue = balance > 0 ? Math.round(balance * avgCost * 100) / 100 : 0;
+            const purchasedWeight = Math.round((Number(row.purchased_weight || 0)) * 1000) / 1000;
+            const soldWeight = Math.round((Number(row.sold_weight || 0)) * 1000) / 1000;
+
             let status = 'متوفر';
             if (balance <= 0) status = 'نافد';
             else if (balance <= DEFAULT_MIN_LIMIT) status = 'مخزون منخفض';
-    
+
             return {
                 product_id: row.product_id,
                 product_name: row.product_name,
@@ -236,23 +183,25 @@ class StockBatchController {
                 product_category: row.product_category,
                 product_unit: row.product_unit,
                 current_balance: balance,
-                total_value: row.total_value || 0,
-                average_purchase_price: balance > 0 ? (row.total_value / balance) : 0,
-                batch_count: row.batch_count || 0,
-                suppliers: row.suppliers ? row.suppliers.split(',') : [],
+                purchased_weight: purchasedWeight,
+                sold_weight: soldWeight,
+                total_value: totalValue,
+                average_purchase_price: avgCost,
+                batch_count: 0,
+                suppliers: row.suppliers ? row.suppliers.split(',').filter(Boolean) : [],
                 status,
-                min_limit: DEFAULT_MIN_LIMIT
+                min_limit: DEFAULT_MIN_LIMIT,
             };
         });
-    
+
         return {
             data: items,
             pagination: {
                 page,
                 limit,
-                total: countResult.total,
-                totalPages: Math.ceil(countResult.total / limit)
-            }
+                total: countResult?.total ?? 0,
+                totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+            },
         };
     }
 }

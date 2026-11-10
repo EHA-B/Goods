@@ -3,6 +3,8 @@ export type InventoryStatus = "available" | "low" | "out";
 export type InventorySummary = {
   totalUnits: number;
   inventoryValue: number;
+  totalPurchasedWeight: number;
+  totalSoldWeight: number;
   lowStockCount: number;
   outOfStockCount: number;
   expiringBatchesCount: number;
@@ -15,6 +17,8 @@ export type InventoryItem = {
   categoryName: string;
   unit: string;
   totalQuantity: number;
+  purchasedWeight: number;
+  soldWeight: number;
   minimumStock: number;
   batchesCount: number;
   averagePurchasePrice: number;
@@ -42,11 +46,25 @@ export type StockBatch = {
 
 export type StockAdjustment = {
   id: number;
-  stockBatchId: number;
+  productId: number;
+  stockBatchId: number | null;
   quantity: number;
   quantityBefore: number;
   quantityAfter: number;
   reason: string;
+  notes: string | null;
+  createdAt: string;
+};
+
+export type ProductStockMovement = {
+  id: number;
+  movementType: string;
+  sourceType: string;
+  sourceId: number | null;
+  quantityBefore: number;
+  quantityChange: number;
+  quantityAfter: number;
+  unitCost: number;
   notes: string | null;
   createdAt: string;
 };
@@ -78,43 +96,44 @@ function mapInventoryItem(row: RawRecord): InventoryItem {
     productCode: textValue(row.product_code ?? row.code) || "—",
     categoryName: textValue(row.product_category ?? row.category) || "غير مصنف",
     unit: textValue(row.product_unit ?? row.unit) || "وحدة",
-    totalQuantity: numberValue(row.current_balance ?? row.total_quantity),
-    minimumStock: numberValue(row.min_limit ?? row.minimum_stock ?? 10),
-    batchesCount: numberValue(row.batch_count ?? row.batches_count),
-    averagePurchasePrice: numberValue(row.average_purchase_price),
+    totalQuantity: numberValue(row.current_balance ?? row.total_quantity ?? row.stock_quantity),
+    purchasedWeight: numberValue(row.purchased_weight),
+    soldWeight: numberValue(row.sold_weight),
+    minimumStock: numberValue(row.min_limit ?? row.minimum_stock ?? row.min_stock ?? 10),
+    batchesCount: 0,
+    averagePurchasePrice: numberValue(row.average_purchase_price ?? row.avg_cost_base),
     stockValue: numberValue(row.total_value ?? row.stock_value),
-    nearestExpiryDate: nullableText(row.nearest_expiry_date),
+    nearestExpiryDate: null,
     suppliersCount: numberValue(row.suppliers_count) || suppliers.length,
     supplierNames: suppliers,
     status: mapStatus(row.status),
   };
 }
 
-function mapBatch(row: RawRecord): StockBatch {
-  return {
-    id: numberValue(row.id),
-    productId: numberValue(row.product_id),
-    batchCode: textValue(row.batch_code) || "—",
-    supplierId: row.supplier_id == null ? null : numberValue(row.supplier_id),
-    supplierName: nullableText(row.supplier_name),
-    quantity: numberValue(row.quantity),
-    remainingQuantity: numberValue(row.remaining_quantity),
-    purchasePrice: numberValue(row.purchase_price),
-    receivedDate: textValue(row.received_date),
-    expiryDate: nullableText(row.expiry_date),
-    notes: nullableText(row.notes),
-    isActive: Boolean(Number(row.isActive ?? 1)),
-  };
-}
-
 function mapAdjustment(row: RawRecord): StockAdjustment {
   return {
     id: numberValue(row.id),
-    stockBatchId: numberValue(row.stock_batch_id),
+    productId: numberValue(row.product_id),
+    stockBatchId: row.stock_batch_id == null ? null : numberValue(row.stock_batch_id),
     quantity: numberValue(row.quantity),
     quantityBefore: numberValue(row.quantity_before),
     quantityAfter: numberValue(row.quantity_after),
     reason: textValue(row.reason),
+    notes: nullableText(row.notes),
+    createdAt: textValue(row.created_at),
+  };
+}
+
+function mapMovement(row: RawRecord): ProductStockMovement {
+  return {
+    id: numberValue(row.id),
+    movementType: textValue(row.movement_type),
+    sourceType: textValue(row.source_type),
+    sourceId: row.source_id == null ? null : numberValue(row.source_id),
+    quantityBefore: numberValue(row.quantity_before),
+    quantityChange: numberValue(row.quantity_change),
+    quantityAfter: numberValue(row.quantity_after),
+    unitCost: numberValue(row.unit_cost),
     notes: nullableText(row.notes),
     createdAt: textValue(row.created_at),
   };
@@ -127,36 +146,54 @@ function api() {
 
 export const inventoryService = {
   async summary(): Promise<InventorySummary> {
-    const row = await api().stockBatches.summary() as RawRecord;
+    const row = (await api().stockBatches.summary()) as RawRecord;
     return {
       totalUnits: numberValue(row.total_units),
       inventoryValue: numberValue(row.total_value),
+      totalPurchasedWeight: numberValue(row.total_purchased_weight),
+      totalSoldWeight: numberValue(row.total_sold_weight),
       lowStockCount: numberValue(row.low_stock_count),
       outOfStockCount: numberValue(row.out_of_stock_count),
-      expiringBatchesCount: numberValue(row.expiring_soon_count),
+      expiringBatchesCount: 0,
     };
   },
 
   async list(page = 1, limit = 100): Promise<{ items: InventoryItem[]; total: number }> {
-    const result = await api().stockBatches.inventoryItems({ page, limit }) as RawRecord;
+    const result = (await api().stockBatches.inventoryItems({ page, limit })) as RawRecord;
     const rawItems = Array.isArray(result.items) ? result.items : Array.isArray(result.data) ? result.data : [];
     const pagination = (result.pagination ?? {}) as RawRecord;
-    return { items: rawItems.map((x) => mapInventoryItem(x as RawRecord)), total: numberValue(result.total ?? pagination.total) || rawItems.length };
+    return {
+      items: rawItems.map((x) => mapInventoryItem(x as RawRecord)),
+      total: numberValue(result.total ?? pagination.total) || rawItems.length,
+    };
   },
 
-  async productDetails(productId: number): Promise<{ item: InventoryItem; batches: StockBatch[]; adjustments: StockAdjustment[] }> {
-    const [raw, allAdjustments] = await Promise.all([
-      api().products.getWithStock(productId) as Promise<RawRecord>,
-      api().stockAdjustments.list() as Promise<RawRecord[]>,
-    ]);
+  async productDetails(productId: number): Promise<{
+    item: InventoryItem;
+    batches: StockBatch[];
+    adjustments: StockAdjustment[];
+    movements: ProductStockMovement[];
+  }> {
+    const raw = (await api().products.getWithStock(productId)) as RawRecord;
     const product = (raw.product ?? {}) as RawRecord;
-    const batchesRaw = Array.isArray(raw.stock_batches) ? raw.stock_batches as RawRecord[] : [];
-    const batches = batchesRaw.map(mapBatch);
-    const totalQuantity = batches.reduce((sum, batch) => sum + batch.remainingQuantity, 0);
-    const stockValue = batches.reduce((sum, batch) => sum + batch.remainingQuantity * batch.purchasePrice, 0);
-    const supplierNames = [...new Set(batches.map((x) => x.supplierName).filter((x): x is string => Boolean(x)))];
-    const weighted = totalQuantity > 0 ? stockValue / totalQuantity : 0;
-    const activeExpiry = batches.map((x) => x.expiryDate).filter((x): x is string => Boolean(x)).sort()[0] ?? null;
+    const totalQuantity = numberValue(product.stock_quantity);
+    const averagePurchasePrice = numberValue(product.avg_cost_base);
+    const stockValue = Math.max(0, totalQuantity) * averagePurchasePrice;
+    const minimumStock = numberValue(product.min_stock ?? product.minimum_stock ?? 10);
+
+    const rawSuppliers = Array.isArray(raw.suppliers) ? raw.suppliers : [];
+    const supplierNames = [
+      ...new Set(
+        rawSuppliers
+          .map((s) =>
+            typeof s === "string"
+              ? s.trim()
+              : textValue((s as RawRecord)?.name ?? (s as RawRecord)?.supplier_name).trim(),
+          )
+          .filter(Boolean),
+      ),
+    ];
+
     const item: InventoryItem = {
       productId,
       productName: textValue(product.name),
@@ -164,24 +201,39 @@ export const inventoryService = {
       categoryName: textValue(product.category) || "غير مصنف",
       unit: textValue(product.unit) || "وحدة",
       totalQuantity,
-      minimumStock: numberValue(product.minimum_stock ?? 10),
-      batchesCount: batches.length,
-      averagePurchasePrice: weighted,
+      purchasedWeight: numberValue(raw.purchased_weight),
+      soldWeight: numberValue(raw.sold_weight),
+      minimumStock,
+      batchesCount: 0,
+      averagePurchasePrice,
       stockValue,
-      nearestExpiryDate: activeExpiry,
+      nearestExpiryDate: null,
       suppliersCount: supplierNames.length,
       supplierNames,
-      status: totalQuantity <= 0 ? "out" : totalQuantity <= numberValue(product.minimum_stock ?? 10) ? "low" : "available",
+      status: totalQuantity <= 0 ? "out" : totalQuantity <= minimumStock ? "low" : "available",
     };
-    const batchIds = new Set(batches.map((x) => x.id));
-    const adjustments = (Array.isArray(allAdjustments) ? allAdjustments : []).filter((x) => batchIds.has(numberValue(x.stock_batch_id))).map(mapAdjustment).sort((a, b) => b.id - a.id);
-    return { item, batches, adjustments };
+
+    const adjustmentsRaw = Array.isArray(raw.adjustments) ? (raw.adjustments as RawRecord[]) : [];
+    const adjustments = adjustmentsRaw.map(mapAdjustment).sort((a, b) => b.id - a.id);
+
+    const movementsRaw = Array.isArray(raw.movements) ? (raw.movements as RawRecord[]) : [];
+    const movements = movementsRaw.map(mapMovement).sort((a, b) => b.id - a.id);
+
+    return { item, batches: [], adjustments, movements };
   },
 
-  async createBatch(input: RawRecord) { return api().stockBatches.create(input); },
-  async updateBatch(id: number, input: RawRecord) { return api().stockBatches.update(id, input); },
-  async removeBatch(id: number) { return api().stockBatches.remove(id); },
-  async adjust(productId: number, input: RawRecord) { return api().products.adjustStock(productId, input); },
+  async createBatch(input: RawRecord) {
+    return api().stockBatches.create(input);
+  },
+  async updateBatch(id: number, input: RawRecord) {
+    return api().stockBatches.update(id, input);
+  },
+  async removeBatch(id: number) {
+    return api().stockBatches.remove(id);
+  },
+  async adjust(productId: number, input: RawRecord) {
+    return api().products.adjustStock(productId, input);
+  },
 };
 
 export function getInventoryErrorMessage(error: unknown) {

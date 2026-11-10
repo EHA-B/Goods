@@ -6,7 +6,6 @@ import DashboardPage from "../pages/dashboard/DashboardPage";
 import InventoryPage from "../pages/inventory/InventoryPage";
 import ProductInventoryDetailsPage from "../pages/inventory/ProductInventoryDetailsPage";
 import StockAdjustmentPage from "../pages/inventory/StockAdjustmentPage";
-import StockBatchFormPage from "../pages/inventory/StockBatchFormPage";
 import StockMovementDetailsPage from "../pages/inventory/StockMovementDetailsPage";
 import ProductsPage from "../pages/products/ProductsPage";
 import ProductFormPage from "../pages/products/ProductFormPage";
@@ -58,6 +57,7 @@ import HelpArticlePage from "../pages/help/HelpArticlePage";
 import ReportsPage from "../pages/reports/ReportsPage";
 import PaymentsPage from "../pages/payments/PaymentsPage";
 import PaymentFormPage from "../pages/payments/PaymentFormPage";
+import NewInvoiceTabRoute from "../invoiceTabs/NewInvoiceTabRoute";
 import { PATHS } from "./path";
 
 function AppRouter() {
@@ -74,7 +74,7 @@ function AppRouter() {
                     <Route path={PATHS.INVENTORY} element={<InventoryPage />} />
                     <Route path={PATHS.INVENTORY_DETAILS} element={<ProductInventoryDetailsPage />} />
                     <Route path={PATHS.INVENTORY_ADJUST} element={<StockAdjustmentPage />} />
-                    <Route path={PATHS.INVENTORY_BATCH_NEW} element={<StockBatchFormPage />} />
+                    <Route path={PATHS.INVENTORY_BATCH_NEW} element={<Navigate to={PATHS.INVENTORY} replace />} />
                     <Route path={PATHS.INVENTORY_MOVEMENT_DETAILS} element={<StockMovementDetailsPage />} />
                     <Route path={PATHS.CUSTOMERS} element={<CustomersPage />} />
                     <Route path={PATHS.CUSTOMER_NEW} element={<CustomerFormPage />} />
@@ -89,13 +89,13 @@ function AppRouter() {
                     <Route path={PATHS.WORKER_DETAILS} element={<WorkerDetailsPage />} />
                     <Route path={PATHS.WORKER_EDIT} element={<WorkerFormPage />} />
                     <Route path={PATHS.SALES} element={<SalesPage />} />
-                    <Route path={PATHS.SALE_NEW} element={<SaleFormPage />} />
+                    <Route path={PATHS.SALE_NEW} element={<NewInvoiceTabRoute kind="sale" />} />
                     <Route path={PATHS.SALE_DETAILS} element={<SaleDetailsPage />} />
                     <Route path={PATHS.SALE_EDIT} element={<SaleFormPage />} />
                     <Route path={PATHS.SALE_PAYMENT_NEW} element={<SalePaymentPage />} />
                     <Route path={PATHS.SALE_PRINT} element={<InvoicePrintPage type="sale" />} />
                     <Route path={PATHS.PURCHASES} element={<PurchasesPage />} />
-                    <Route path={PATHS.PURCHASE_NEW} element={<PurchaseFormPage />} />
+                    <Route path={PATHS.PURCHASE_NEW} element={<NewInvoiceTabRoute kind="purchase" />} />
                     <Route path={PATHS.PURCHASE_DETAILS} element={<PurchaseDetailsPage />} />
                     <Route path={PATHS.PURCHASE_EDIT} element={<PurchaseFormPage />} />
                     <Route path={PATHS.PURCHASE_PAYMENT_NEW} element={<PurchasePaymentPage />} />

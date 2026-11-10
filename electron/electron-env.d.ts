@@ -29,6 +29,9 @@ type ProductApiRecord = {
   unit: string;
   category: string | null;
   description: string | null;
+  stock_quantity?: number;
+  avg_cost_base?: number;
+  min_stock?: number | null;
   isActive: number | boolean;
   created_at?: string | null;
   updated_at?: string | null;
@@ -303,7 +306,7 @@ type PurchaseInvoiceRecord = {
   transport_cost_bearer?: 'company' | 'supplier';
   emptying_cost?: number;
   emptying_cost_bearer?: 'company' | 'supplier';
-  settlement_status: 'settled' | 'paid' | 'partial' | 'overdue';
+  settlement_status: 'settled' | 'pending' | 'reversed' | 'paid' | 'partial' | 'overdue';
   tax: number;
   total: number;
   paid_amount: number;
@@ -332,7 +335,9 @@ type PurchaseInvoiceDetails = {
 type PurchaseInvoiceItem = {
   product_id: number;
   quantity: number;
-  purchase_price: number;
+  purchase_price?: number;
+  stock_weight?: number;
+  estimated_purchase_price?: number;
   batch_code?: string | null;
   received_date?: string;
   expiry_date?: string | null;
@@ -399,9 +404,10 @@ type SaleInvoiceDetails = {
 
 type SaleInvoiceItem = {
   product_id: number;
-  stock_batch_id: number;
+  stock_batch_id?: number | null;
   quantity: number;
   sale_price: number;
+  stock_weight?: number;
   notes?: string | null;
 };
 
@@ -463,8 +469,8 @@ interface Window {
       payment(id: number): Promise<unknown>;
       transaction(id: number): Promise<unknown>;
       transfer(id: string): Promise<unknown>;
-      customerStatement(id: number): Promise<unknown>;
-      supplierStatement(id: number): Promise<unknown>;
+      customerStatement(id: number, range?: { fromDate?: string; toDate?: string }): Promise<unknown>;
+      supplierStatement(id: number, range?: { fromDate?: string; toDate?: string }): Promise<unknown>;
       cashboxStatement(id: number): Promise<unknown>;
       consignment(id: number): Promise<unknown>;
     };
@@ -643,6 +649,13 @@ interface Window {
       }): Promise<{
         success: boolean;
         filePath?: string;
+        canceled?: boolean;
+      }>;
+      print(input: {
+        reportId: string;
+        filters: Record<string, unknown>;
+      }): Promise<{
+        success: boolean;
         canceled?: boolean;
       }>;
     };

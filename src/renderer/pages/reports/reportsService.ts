@@ -4,6 +4,7 @@ type ReportsApi = {
   options?: () => Promise<ReportFilterOptions>;
   generate?: (input: { reportId: string; filters: ReportFilters }) => Promise<ReportResult>;
   export?: (input: { reportId: string; filters: ReportFilters; format: Exclude<ReportOutputFormat, "preview"> }) => Promise<{ success: boolean; filePath?: string; canceled?: boolean }>;
+  print?: (input: { reportId: string; filters: ReportFilters }) => Promise<{ success: boolean; canceled?: boolean }>;
 };
 
 function api(): ReportsApi | undefined {
@@ -35,5 +36,12 @@ export const reportsService = {
     const exporter = api()?.export;
     if (!exporter) throw new Error("تصدير التقارير غير مربوط بالباك بعد.");
     return exporter({ reportId, filters, format });
+  },
+
+  /** Prints the report on A4 paper via the system print dialog. */
+  async print(reportId: string, filters: ReportFilters) {
+    const printer = api()?.print;
+    if (!printer) throw new Error("طباعة التقارير غير مربوطة بالباك بعد.");
+    return printer({ reportId, filters });
   },
 };

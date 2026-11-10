@@ -7,6 +7,8 @@
 
 'use strict';
 
+const ensuredColumnsCache = new WeakMap();
+
 // ─── Amount Validation ────────────────────────────────────────────────────────
 
 /**
@@ -31,6 +33,45 @@ function validatePositiveAmount(value, fieldName = 'amount') {
 function normalizeAmount(value) {
     const n = Number(value ?? 0);
     return isFinite(n) ? Math.round(n * 100) / 100 : 0;
+}
+
+/**
+ * Normalize an optional gross weight value (round to 3 decimal places, non-negative).
+ * @param {*} value
+ * @param {string} [fieldLabel]
+ * @returns {number}
+ */
+function normalizeWeight(value, fieldLabel = 'الوزن القائم') {
+    if (value === undefined || value === null || value === '') return 0;
+    const n = Number(value);
+    if (!isFinite(n) || n < 0) {
+        throw { code: 'VALIDATION_ERROR', message: `${fieldLabel} لا يمكن أن يكون سالبًا` };
+    }
+    return Math.round(n * 1000) / 1000;
+}
+
+/**
+ * Ensure `stock_weight` column exists on an invoice item table at runtime.
+ * @param {object} db
+ * @param {'purchase_invoice_items'|'sale_invoice_items'} tableName
+ */
+async function ensureStockWeightColumn(db, tableName) {
+    if (!db || !tableName) return;
+    let tableSet = ensuredColumnsCache.get(db);
+    if (!tableSet) {
+        tableSet = new Set();
+        ensuredColumnsCache.set(db, tableSet);
+    }
+    if (tableSet.has(tableName)) return;
+
+    const columns = await dbAll(db, `PRAGMA table_info(${tableName})`);
+    if (columns.length > 0) {
+        const hasColumn = columns.some((col) => String(col.name) === 'stock_weight');
+        if (!hasColumn) {
+            await dbRun(db, `ALTER TABLE ${tableName} ADD COLUMN stock_weight DECIMAL(15, 3) NOT NULL DEFAULT 0`);
+        }
+        tableSet.add(tableName);
+    }
 }
 
 // ─── Date Validation ──────────────────────────────────────────────────────────
@@ -79,6 +120,10 @@ function calculateInvoiceTotals(items, discountAmount = 0) {
     const normalizedItems = items.map((item, index) => {
         const qty = Number(item.quantity ?? 0);
         const price = Number(item.price ?? item.purchase_price ?? item.sale_price ?? 0);
+        const stockWeight = normalizeWeight(
+            item.stock_weight ?? item.stock_waight ?? 0,
+            `الصنف رقم ${index + 1}: الوزن القائم`
+        );
 
         if (!item.product_id) {
             throw { code: 'VALIDATION_ERROR', message: `الصنف رقم ${index + 1}: product_id مطلوب` };
@@ -91,7 +136,7 @@ function calculateInvoiceTotals(items, discountAmount = 0) {
         }
 
         const lineTotal = Math.round(qty * price * 100) / 100;
-        return { ...item, quantity: qty, price, lineTotal };
+        return { ...item, quantity: qty, stock_weight: stockWeight, price, lineTotal };
     });
 
     const subtotal = normalizedItems.reduce((sum, item) => sum + item.lineTotal, 0);
@@ -222,6 +267,8 @@ function dbAll(db, sql, params = []) {
 module.exports = {
     validatePositiveAmount,
     normalizeAmount,
+    normalizeWeight,
+    ensureStockWeightColumn,
     validateDate,
     calculateInvoiceTotals,
     calculatePaymentState,

@@ -18,6 +18,8 @@ const dbmanager = require(path.join(__dirname, '../database/databaseManager'));
 const {
     validateDate,
     normalizeAmount,
+    normalizeWeight,
+    ensureStockWeightColumn,
     calculateInvoiceTotals,
     calculatePaymentState,
     generateInvoiceNumber,
@@ -261,6 +263,7 @@ class PurchaseInvoiceController {
         const validatedDate = validateDate(invoice_date, 'invoice_date');
 
         const db = await dbmanager.init();
+        await ensureStockWeightColumn(db, 'purchase_invoice_items');
 
         try {
             await dbRun(db, 'BEGIN TRANSACTION');
@@ -277,6 +280,7 @@ class PurchaseInvoiceController {
                     ...item,
                     product_id: Number(item.product_id),
                     quantity: Number(item.quantity ?? 0),
+                    stock_weight: normalizeWeight(item.stock_weight ?? item.stock_waight ?? 0),
                     price: rawPrice,
                     purchase_price: rawPrice,
                     estimated_purchase_price:
@@ -352,9 +356,9 @@ class PurchaseInvoiceController {
 
                 await dbRun(db,
                     `INSERT INTO purchase_invoice_items
-                       (purchase_invoice_id, product_id, quantity, unit_price, estimated_purchase_price, line_total, notes, created_at, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-                    [invoiceId, item.product_id, item.quantity, item.purchase_price, estPrice, item.lineTotal, item.notes ?? null]
+                       (purchase_invoice_id, product_id, quantity, stock_weight, unit_price, estimated_purchase_price, line_total, notes, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+                    [invoiceId, item.product_id, item.quantity, item.stock_weight, item.purchase_price, estPrice, item.lineTotal, item.notes ?? null]
                 );
 
                 const unitPriceBase = toBaseAmount(item.purchase_price, invoiceRate);
@@ -517,6 +521,7 @@ class PurchaseInvoiceController {
         if (!Array.isArray(items) || items.length === 0) throw { code: 'PURCHASE_ITEM_INVALID', message: 'يجب إضافة صنف واحد على الأقل' };
 
         const db = await dbmanager.init();
+        await ensureStockWeightColumn(db, 'purchase_invoice_items');
 
         try {
             await dbRun(db, 'BEGIN TRANSACTION');
@@ -538,6 +543,7 @@ class PurchaseInvoiceController {
                     ...item,
                     product_id: Number(item.product_id),
                     quantity: Number(item.quantity ?? 0),
+                    stock_weight: normalizeWeight(item.stock_weight ?? item.stock_waight ?? 0),
                     price: rawPrice,
                     purchase_price: rawPrice,
                     estimated_purchase_price:
@@ -572,9 +578,9 @@ class PurchaseInvoiceController {
 
                 await dbRun(db,
                     `INSERT INTO purchase_invoice_items
-                       (purchase_invoice_id, product_id, quantity, unit_price, estimated_purchase_price, line_total, notes, created_at, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-                    [invoiceId, item.product_id, item.quantity, item.purchase_price, estPrice, item.lineTotal, item.notes ?? null]
+                       (purchase_invoice_id, product_id, quantity, stock_weight, unit_price, estimated_purchase_price, line_total, notes, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+                    [invoiceId, item.product_id, item.quantity, item.stock_weight, item.purchase_price, estPrice, item.lineTotal, item.notes ?? null]
                 );
 
                 const unitPriceBase = toBaseAmount(item.purchase_price, invoiceRate);
@@ -644,6 +650,7 @@ class PurchaseInvoiceController {
 
         const db = await dbmanager.init();
         await ensureInvoiceEditAuditColumns(db);
+        await ensureStockWeightColumn(db, 'purchase_invoice_items');
         try {
             await dbRun(db, 'BEGIN TRANSACTION');
             const oldInvoice = await dbGet(db, 'SELECT * FROM purchase_invoices WHERE id = ?', [id]);
@@ -690,6 +697,7 @@ class PurchaseInvoiceController {
                     ...item,
                     product_id: Number(item.product_id),
                     quantity: Number(item.quantity ?? 0),
+                    stock_weight: normalizeWeight(item.stock_weight ?? item.stock_waight ?? 0),
                     price: rawPrice,
                     purchase_price: rawPrice,
                     estimated_purchase_price:
@@ -790,9 +798,9 @@ class PurchaseInvoiceController {
                 await dbRun(
                     db,
                     `INSERT INTO purchase_invoice_items
-                       (purchase_invoice_id, product_id, quantity, unit_price, estimated_purchase_price, line_total, notes, created_at, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-                    [id, item.product_id, item.quantity, item.purchase_price, estPrice, item.lineTotal, item.notes ?? null]
+                       (purchase_invoice_id, product_id, quantity, stock_weight, unit_price, estimated_purchase_price, line_total, notes, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+                    [id, item.product_id, item.quantity, item.stock_weight, item.purchase_price, estPrice, item.lineTotal, item.notes ?? null]
                 );
 
                 await dbRun(
@@ -878,7 +886,7 @@ class PurchaseInvoiceController {
                         remaining_amount: remainingAmount,
                         currency: nextCurrency,
                         exchange_rate: nextRate,
-                        items: normalizedItems.map((x) => ({ product_id: x.product_id, quantity: x.quantity, purchase_price: x.purchase_price })),
+                        items: normalizedItems.map((x) => ({ product_id: x.product_id, quantity: x.quantity, stock_weight: x.stock_weight, purchase_price: x.purchase_price })),
                     }),
                 ]
             );
@@ -895,6 +903,7 @@ class PurchaseInvoiceController {
     async getPurchaseInvoiceDetails(id) {
         if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID مطلوب' };
         const db = await dbmanager.init();
+        await ensureStockWeightColumn(db, 'purchase_invoice_items');
 
         const invoice = await dbGet(db, 'SELECT * FROM purchase_invoices WHERE id = ?', [id]);
         if (!invoice) throw { code: 'NOT_FOUND', message: 'فاتورة الشراء غير موجودة' };
@@ -915,6 +924,7 @@ class PurchaseInvoiceController {
 
         const items = invoiceItems.map((item) => ({
             ...item,
+            stock_weight: round3(Number(item.stock_weight ?? 0)),
             batch_code: null,
             remaining_quantity: null,
             batch_received_date: null,
@@ -1143,6 +1153,7 @@ class PurchaseInvoiceController {
     async getConsignmentSummary(invoiceId) {
         if (!invoiceId) throw { code: 'VALIDATION_ERROR', message: 'ID مطلوب' };
         const db = await dbmanager.init();
+        await ensureStockWeightColumn(db, 'purchase_invoice_items');
 
         const invoice = await dbGet(db, 'SELECT * FROM purchase_invoices WHERE id = ?', [invoiceId]);
         if (!invoice) throw { code: 'PURCHASE_NOT_FOUND', message: 'الفاتورة غير موجودة' };
@@ -1159,6 +1170,7 @@ class PurchaseInvoiceController {
                 p.name AS product_name,
                 p.unit AS product_unit,
                 pii.quantity AS received_quantity,
+                COALESCE(pii.stock_weight, 0) AS stock_weight,
                 pii.unit_price,
                 pii.estimated_purchase_price,
                 pii.line_total
@@ -1214,6 +1226,7 @@ class PurchaseInvoiceController {
                 stock_batch_id: null,
                 batch_code: null,
                 received_quantity: receivedQty,
+                stock_weight: round3(Number(row.stock_weight ?? 0)),
                 sold_quantity: soldQty,
                 remaining_quantity: round3(Math.max(0, receivedQty - soldQty)),
                 total_sales_amount: salesAmt,

@@ -13,7 +13,7 @@ export default function ConsignmentSalesTable({ items, currency }: { items: Cons
     <DataTable>
       <DataTableHead>
         <DataTableRow>
-          {["المنتج", "الكمية المستلمة", "سعر التسويق المرجعي", "الكمية المباعة", "قيمة المبيعات"].map((h) => (
+          {["المنتج", "الكمية المستلمة", "الوزن القائم", "سعر التسويق المرجعي", "الكمية المباعة", "قيمة المبيعات"].map((h) => (
             <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>
           ))}
         </DataTableRow>
@@ -26,6 +26,7 @@ export default function ConsignmentSalesTable({ items, currency }: { items: Cons
               {item.product_unit ? ` (${item.product_unit})` : ""}
             </DataTableCell>
             <DataTableCell>{formatNumber(item.received_quantity)}</DataTableCell>
+            <DataTableCell>{Number(item.stock_weight) > 0 ? formatNumber(Number(item.stock_weight)) : "—"}</DataTableCell>
             <DataTableCell>{money(item.estimated_unit_price ?? 0, currency)}</DataTableCell>
             <DataTableCell>{formatNumber(item.sold_quantity)}</DataTableCell>
             <DataTableCell className="font-bold">{money(item.total_sales_amount, currency)}</DataTableCell>

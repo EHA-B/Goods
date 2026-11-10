@@ -131,8 +131,9 @@ export default function ProductInventoryDetailsPage() {
             </div>
           </div>
 
-          <div className="grid min-w-full grid-cols-2 gap-3 sm:min-w-[420px] lg:min-w-[520px] lg:grid-cols-3">
+          <div className="grid min-w-full grid-cols-2 gap-3 sm:min-w-[420px] lg:min-w-[620px] lg:grid-cols-4">
             <Summary label="الرصيد الحالي" value={`${product.totalQuantity.toLocaleString("en-US")} ${product.unit}`} />
+            <Summary label="الوزن القائم (شراء / بيع)" value={`${product.purchasedWeight.toLocaleString("en-US")} / ${product.soldWeight.toLocaleString("en-US")}`} />
             <Summary label="متوسط التكلفة" value={`${product.averagePurchasePrice.toLocaleString("en-US")} ل.س`} />
             <Summary label="قيمة المخزون" value={`${product.stockValue.toLocaleString("en-US")} ل.س`} />
           </div>
@@ -156,6 +157,8 @@ export default function ProductInventoryDetailsPage() {
               <Card header="بيانات المخزون">
                 <dl className="divide-y divide-[var(--border)]">
                   <Line label="الرصيد الحالي" value={`${product.totalQuantity.toLocaleString("en-US")} ${product.unit}`} />
+                  <Line label="الوزن القائم (شراء)" value={product.purchasedWeight.toLocaleString("en-US")} />
+                  <Line label="الوزن القائم (بيع)" value={product.soldWeight.toLocaleString("en-US")} />
                   <Line label="حد التنبيه المؤقت" value={`${product.minimumStock.toLocaleString("en-US")} ${product.unit}`} />
                   <Line label="متوسط التكلفة" value={`${product.averagePurchasePrice.toLocaleString("en-US")} ل.س`} />
                   <Line label="قيمة المخزون" value={`${product.stockValue.toLocaleString("en-US")} ل.س`} />

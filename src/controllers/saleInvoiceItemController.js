@@ -1,5 +1,6 @@
 const path = require('path');
 const dbmanager = require(path.join(__dirname, '../database/databaseManager'));
+const { normalizeWeight, ensureStockWeightColumn } = require('./utils/invoiceUtils');
 
 class SaleInvoiceItemController {
 
@@ -9,10 +10,12 @@ class SaleInvoiceItemController {
             err.code = 'VALIDATION_ERROR';
             throw err;
         }
+        const stockWeight = normalizeWeight(input.stock_weight ?? input.stock_waight ?? 0);
         const db = await dbmanager.init();
+        await ensureStockWeightColumn(db, 'sale_invoice_items');
         const sql = `
-            INSERT INTO sale_invoice_items (sale_invoice_id, product_id, stock_batch_id, quantity, unit_price, line_total, cost_price, profit, notes, created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))
+            INSERT INTO sale_invoice_items (sale_invoice_id, product_id, stock_batch_id, quantity, stock_weight, unit_price, line_total, cost_price, profit, notes, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))
         `;
         const id = await new Promise((resolve, reject) => {
             db.run(sql, [
@@ -20,6 +23,7 @@ class SaleInvoiceItemController {
                 input.product_id ?? null,
                 input.stock_batch_id ?? null,
                 input.quantity ?? null,
+                stockWeight,
                 input.unit_price ?? null,
                 input.line_total ?? null,
                 input.cost_price ?? null,
@@ -36,6 +40,7 @@ class SaleInvoiceItemController {
     async getSaleInvoiceItem(id) {
         if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
         const db = await dbmanager.init();
+        await ensureStockWeightColumn(db, 'sale_invoice_items');
         return await new Promise((resolve, reject) => {
             db.get(
                 `SELECT * FROM sale_invoice_items WHERE id = ?`,
@@ -51,6 +56,7 @@ class SaleInvoiceItemController {
 
     async getAllSaleInvoiceItems() {
         const db = await dbmanager.init();
+        await ensureStockWeightColumn(db, 'sale_invoice_items');
         return await new Promise((resolve, reject) => {
             db.all(
                 `SELECT * FROM sale_invoice_items`,
@@ -87,6 +93,11 @@ class SaleInvoiceItemController {
             }
         }
 
+        if (input && (Object.prototype.hasOwnProperty.call(input, 'stock_weight') || Object.prototype.hasOwnProperty.call(input, 'stock_waight'))) {
+            sets.push('stock_weight = ?');
+            params.push(normalizeWeight(input.stock_weight ?? input.stock_waight ?? 0));
+        }
+
         if (sets.length === 0) {
             const err = new Error('No fields provided to update');
             err.code = 'VALIDATION_ERROR';
@@ -97,6 +108,7 @@ class SaleInvoiceItemController {
         params.push(id);
 
         const db = await dbmanager.init();
+        await ensureStockWeightColumn(db, 'sale_invoice_items');
         const info = await new Promise((resolve, reject) => {
             db.run(sql, params, function (err) {
                 if (err) return reject(err);

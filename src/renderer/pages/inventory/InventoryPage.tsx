@@ -7,7 +7,7 @@ import { Button, Card, EmptyState, LoadingSpinner, PageHeader } from "../../comp
 import { getInventoryErrorMessage, inventoryService, type InventoryItem, type InventorySummary } from "./inventoryService";
 import { RECORDS_PAGE_SIZE, useClientPagination } from "../../lib/pagination";
 
-const emptySummary: InventorySummary = { totalUnits: 0, inventoryValue: 0, lowStockCount: 0, outOfStockCount: 0, expiringBatchesCount: 0 };
+const emptySummary: InventorySummary = { totalUnits: 0, inventoryValue: 0, totalPurchasedWeight: 0, totalSoldWeight: 0, lowStockCount: 0, outOfStockCount: 0, expiringBatchesCount: 0 };
 
 export default function InventoryPage() {
   const navigate = useNavigate();

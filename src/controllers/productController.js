@@ -1,5 +1,6 @@
 const path = require('path');
 const dbmanager = require(path.join(__dirname, '../database/databaseManager'));
+const { ensureStockWeightColumn } = require('./utils/invoiceUtils');
 
 function round3(value) {
     return Math.round((Number(value) || 0) * 1000) / 1000;
@@ -414,42 +415,67 @@ class ProductController {
 
         const product = await this.getProduct(id);
         const db = await dbmanager.init();
+        await ensureStockWeightColumn(db, 'purchase_invoice_items');
+        await ensureStockWeightColumn(db, 'sale_invoice_items');
 
-        const suppliersRows = await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT DISTINCT s.name AS supplier_name
-                 FROM purchase_invoice_items pii
-                 JOIN purchase_invoices pi ON pi.id = pii.purchase_invoice_id
-                 JOIN suppliers s ON s.id = pi.supplier_id
-                 WHERE pii.product_id = ? AND pi.status != 'cancelled'`,
-                [id],
-                (err, rows) => (err ? reject(err) : resolve(rows || []))
-            );
-        });
-
-        const adjustments = await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT sa.*, COALESCE(sa.product_id, sb.product_id) AS resolved_product_id
-                 FROM stock_adjustments sa
-                 LEFT JOIN stock_batches sb ON sb.id = sa.stock_batch_id
-                 WHERE COALESCE(sa.product_id, sb.product_id) = ?
-                 ORDER BY sa.id DESC`,
-                [id],
-                (err, rows) => (err ? reject(err) : resolve(rows || []))
-            );
-        });
-
-        const movements = await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT * FROM stock_movements WHERE product_id = ? ORDER BY id DESC LIMIT 100`,
-                [id],
-                (err, rows) => (err ? reject(err) : resolve(rows || []))
-            );
-        });
+        const [suppliersRows, adjustments, movements, purchasedWeightRow, soldWeightRow] = await Promise.all([
+            new Promise((resolve, reject) => {
+                db.all(
+                    `SELECT DISTINCT s.name AS supplier_name
+                     FROM purchase_invoice_items pii
+                     JOIN purchase_invoices pi ON pi.id = pii.purchase_invoice_id
+                     JOIN suppliers s ON s.id = pi.supplier_id
+                     WHERE pii.product_id = ? AND pi.status != 'cancelled'`,
+                    [id],
+                    (err, rows) => (err ? reject(err) : resolve(rows || []))
+                );
+            }),
+            new Promise((resolve, reject) => {
+                db.all(
+                    `SELECT sa.*, COALESCE(sa.product_id, sb.product_id) AS resolved_product_id
+                     FROM stock_adjustments sa
+                     LEFT JOIN stock_batches sb ON sb.id = sa.stock_batch_id
+                     WHERE COALESCE(sa.product_id, sb.product_id) = ?
+                     ORDER BY sa.id DESC`,
+                    [id],
+                    (err, rows) => (err ? reject(err) : resolve(rows || []))
+                );
+            }),
+            new Promise((resolve, reject) => {
+                db.all(
+                    `SELECT * FROM stock_movements WHERE product_id = ? ORDER BY id DESC LIMIT 100`,
+                    [id],
+                    (err, rows) => (err ? reject(err) : resolve(rows || []))
+                );
+            }),
+            new Promise((resolve, reject) => {
+                db.get(
+                    `SELECT COALESCE(SUM(COALESCE(pii.stock_weight, 0)), 0) AS purchased_weight
+                     FROM purchase_invoice_items pii
+                     JOIN purchase_invoices pi ON pi.id = pii.purchase_invoice_id
+                     WHERE pii.product_id = ? AND pi.status != 'cancelled'`,
+                    [id],
+                    (err, row) => (err ? reject(err) : resolve(row || { purchased_weight: 0 }))
+                );
+            }),
+            new Promise((resolve, reject) => {
+                db.get(
+                    `SELECT COALESCE(SUM(COALESCE(sii.stock_weight, 0)), 0) AS sold_weight
+                     FROM sale_invoice_items sii
+                     JOIN sale_invoices si ON si.id = sii.sale_invoice_id
+                     LEFT JOIN stock_batches sb ON sb.id = sii.stock_batch_id
+                     WHERE COALESCE(sii.product_id, sb.product_id) = ? AND si.status != 'cancelled'`,
+                    [id],
+                    (err, row) => (err ? reject(err) : resolve(row || { sold_weight: 0 }))
+                );
+            }),
+        ]);
 
         return {
             product,
             stock_batches: [],
+            purchased_weight: round3(Number(purchasedWeightRow?.purchased_weight || 0)),
+            sold_weight: round3(Number(soldWeightRow?.sold_weight || 0)),
             suppliers: suppliersRows.map((r) => r.supplier_name).filter(Boolean),
             adjustments,
             movements,

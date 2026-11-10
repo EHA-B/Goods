@@ -101,12 +101,7 @@ export default function PurchaseDetailsPage() {
               </div>
             ))}
           </div>
-          {invoice.notes && (
-            <div className="mt-5 border-t border-[var(--border)] pt-4">
-              <p className="text-xs font-bold text-[var(--text-muted)]">الملاحظات</p>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">{invoice.notes}</p>
-            </div>
-          )}
+         
         </Card>
 
         {editHistory.length > 0 && <Card header="سجل تعديلات الفاتورة" description="كل حفظ تعديل موثق في سجل النشاط مع النسخة السابقة والجديدة.">
@@ -117,7 +112,7 @@ export default function PurchaseDetailsPage() {
           <DataTable>
             <DataTableHead>
               <DataTableRow>
-                {["المنتج", "الكمية", invoice.invoice_type === "consignment" ? "سعر التسويق" : "سعر الشراء", "الإجمالي"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
+                {["المنتج", "الكمية", "الوزن القائم", invoice.invoice_type === "consignment" ? "سعر التسويق" : "سعر الشراء", "الإجمالي"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
               </DataTableRow>
             </DataTableHead>
             <DataTableBody>
@@ -125,6 +120,7 @@ export default function PurchaseDetailsPage() {
                 <DataTableRow key={idx}>
                   <DataTableCell className="font-bold text-[var(--text-primary)]">{String(item.product_name ?? "-")}</DataTableCell>
                   <DataTableCell>{String(item.quantity ?? "-")}</DataTableCell>
+                  <DataTableCell>{Number(item.stock_weight) > 0 ? Number(item.stock_weight).toLocaleString("en-US") : "—"}</DataTableCell>
                   <DataTableCell>{money(Number(item.unit_price ?? 0), invoice.currency)}</DataTableCell>
                   <DataTableCell>{money(Number(item.line_total ?? 0), invoice.currency)}</DataTableCell>
                 </DataTableRow>
@@ -218,6 +214,7 @@ export default function PurchaseDetailsPage() {
               القيمة الأساسية: {money(financial_summary.total_base, "SYP")}
             </div>
           )}
+          
         </div>
       </Card>
 

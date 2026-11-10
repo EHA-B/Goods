@@ -26,6 +26,7 @@ export default function InventoryTable({
         <DataTableRow>
           <DataTableHeaderCell>المادة</DataTableHeaderCell>
           <DataTableHeaderCell>الرصيد الحالي</DataTableHeaderCell>
+          <DataTableHeaderCell>الوزن القائم</DataTableHeaderCell>
           <DataTableHeaderCell>التوريد</DataTableHeaderCell>
           <DataTableHeaderCell>قيمة المخزون</DataTableHeaderCell>
           <DataTableHeaderCell>الحالة</DataTableHeaderCell>

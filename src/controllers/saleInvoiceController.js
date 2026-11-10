@@ -13,6 +13,8 @@ const dbmanager = require(path.join(__dirname, '../database/databaseManager'));
 const {
     validateDate,
     normalizeAmount,
+    normalizeWeight,
+    ensureStockWeightColumn,
     calculateInvoiceTotals,
     calculatePaymentState,
     generateInvoiceNumber,
@@ -116,6 +118,7 @@ class SaleInvoiceController {
         const validatedDate = validateDate(invoice_date, 'invoice_date');
 
         const db = await dbmanager.init();
+        await ensureStockWeightColumn(db, 'sale_invoice_items');
 
         try {
             await dbRun(db, 'BEGIN TRANSACTION');
@@ -132,6 +135,7 @@ class SaleInvoiceController {
                 ...item,
                 product_id: Number(item.product_id),
                 quantity: Number(item.quantity ?? 0),
+                stock_weight: normalizeWeight(item.stock_weight ?? item.stock_waight ?? 0),
                 price: Number(item.sale_price ?? item.unit_price ?? item.unitPrice ?? 0),
                 sale_price: Number(item.sale_price ?? item.unit_price ?? item.unitPrice ?? 0),
                 cost_price: 0,
@@ -216,9 +220,9 @@ class SaleInvoiceController {
 
                 await dbRun(db,
                     `INSERT INTO sale_invoice_items
-                       (sale_invoice_id, product_id, stock_batch_id, quantity, unit_price, line_total, cost_price, profit, notes, created_at, updated_at)
-                     VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-                    [invoiceId, item.product_id, item.quantity, item.price, item.lineTotal, costPrice, profit, item.notes ?? null]
+                       (sale_invoice_id, product_id, stock_batch_id, quantity, stock_weight, unit_price, line_total, cost_price, profit, notes, created_at, updated_at)
+                     VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+                    [invoiceId, item.product_id, item.quantity, item.stock_weight, item.price, item.lineTotal, costPrice, profit, item.notes ?? null]
                 );
 
                 const freshProd = await dbGet(db, 'SELECT stock_quantity FROM products WHERE id = ?', [item.product_id]);
@@ -334,6 +338,7 @@ class SaleInvoiceController {
 
         const db = await dbmanager.init();
         await ensureInvoiceEditAuditColumns(db);
+        await ensureStockWeightColumn(db, 'sale_invoice_items');
         try {
             await dbRun(db, 'BEGIN TRANSACTION');
             const oldInvoice = await dbGet(db, 'SELECT * FROM sale_invoices WHERE id = ?', [id]);
@@ -387,6 +392,7 @@ class SaleInvoiceController {
                 ...item,
                 product_id: Number(item.product_id),
                 quantity: Number(item.quantity ?? 0),
+                stock_weight: normalizeWeight(item.stock_weight ?? item.stock_waight ?? 0),
                 price: Number(item.sale_price ?? item.unit_price ?? 0),
                 sale_price: Number(item.sale_price ?? item.unit_price ?? 0),
                 cost_price: 0,
@@ -429,9 +435,9 @@ class SaleInvoiceController {
                 await dbRun(
                     db,
                     `INSERT INTO sale_invoice_items
-                       (sale_invoice_id, product_id, stock_batch_id, quantity, unit_price, line_total, cost_price, profit, notes, created_at, updated_at)
-                     VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-                    [id, item.product_id, item.quantity, item.price, item.lineTotal, costPrice, profit, item.notes ?? null]
+                       (sale_invoice_id, product_id, stock_batch_id, quantity, stock_weight, unit_price, line_total, cost_price, profit, notes, created_at, updated_at)
+                     VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+                    [id, item.product_id, item.quantity, item.stock_weight, item.price, item.lineTotal, costPrice, profit, item.notes ?? null]
                 );
 
                 const freshProd = await dbGet(db, 'SELECT stock_quantity FROM products WHERE id = ?', [item.product_id]);
@@ -467,7 +473,7 @@ class SaleInvoiceController {
                 remaining_amount: remainingAmount,
                 currency: nextCurrency,
                 exchange_rate: nextRate,
-                items: normalizedItems.map((x) => ({ product_id: x.product_id, quantity: x.quantity, sale_price: x.price })),
+                items: normalizedItems.map((x) => ({ product_id: x.product_id, quantity: x.quantity, stock_weight: x.stock_weight, sale_price: x.price })),
             };
             await dbRun(
                 db,
@@ -488,6 +494,7 @@ class SaleInvoiceController {
     async getSaleInvoiceDetails(id) {
         if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID مطلوب' };
         const db = await dbmanager.init();
+        await ensureStockWeightColumn(db, 'sale_invoice_items');
 
         const invoice = await dbGet(db, 'SELECT * FROM sale_invoices WHERE id = ?', [id]);
         if (!invoice) throw { code: 'NOT_FOUND', message: 'فاتورة البيع غير موجودة' };
@@ -496,7 +503,7 @@ class SaleInvoiceController {
             ? await dbGet(db, 'SELECT * FROM customers WHERE id = ?', [invoice.customer_id])
             : null;
 
-        const items = await dbAll(db,
+        const rawItems = await dbAll(db,
             `SELECT sii.*,
                     COALESCE(sii.product_id, sb.product_id) as product_id,
                     NULL as batch_code,
@@ -510,6 +517,11 @@ class SaleInvoiceController {
              ORDER BY sii.id`,
             [id]
         );
+
+        const items = rawItems.map((item) => ({
+            ...item,
+            stock_weight: round3(Number(item.stock_weight ?? 0)),
+        }));
 
         const payments = await dbAll(db,
             `SELECT p.*, c.name as cashbox_name

@@ -1,5 +1,6 @@
 const path = require('path');
 const dbmanager = require(path.join(__dirname, '../database/databaseManager'));
+const { ensureStockWeightColumn } = require('./utils/invoiceUtils');
 
 class StockBatchController {
 
@@ -41,16 +42,43 @@ class StockBatchController {
 
     async getStockSummary() {
         const db = await dbmanager.init();
+        await ensureStockWeightColumn(db, 'purchase_invoice_items');
+        await ensureStockWeightColumn(db, 'sale_invoice_items');
 
-        const products = await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT id, COALESCE(stock_quantity, 0) AS stock_quantity, COALESCE(avg_cost_base, 0) AS avg_cost_base
-                 FROM products
-                 WHERE COALESCE(isActive, 1) = 1`,
-                [],
-                (err, rows) => (err ? reject(err) : resolve(rows || []))
-            );
-        });
+        const [products, purchasedWeightRow, soldWeightRow] = await Promise.all([
+            new Promise((resolve, reject) => {
+                db.all(
+                    `SELECT id, COALESCE(stock_quantity, 0) AS stock_quantity, COALESCE(avg_cost_base, 0) AS avg_cost_base
+                     FROM products
+                     WHERE COALESCE(isActive, 1) = 1`,
+                    [],
+                    (err, rows) => (err ? reject(err) : resolve(rows || []))
+                );
+            }),
+            new Promise((resolve, reject) => {
+                db.get(
+                    `SELECT COALESCE(SUM(COALESCE(pii.stock_weight, 0)), 0) AS total_purchased_weight
+                     FROM purchase_invoice_items pii
+                     JOIN purchase_invoices pi ON pi.id = pii.purchase_invoice_id
+                     JOIN products p ON p.id = pii.product_id
+                     WHERE pi.status != 'cancelled' AND COALESCE(p.isActive, 1) = 1`,
+                    [],
+                    (err, row) => (err ? reject(err) : resolve(row || { total_purchased_weight: 0 }))
+                );
+            }),
+            new Promise((resolve, reject) => {
+                db.get(
+                    `SELECT COALESCE(SUM(COALESCE(sii.stock_weight, 0)), 0) AS total_sold_weight
+                     FROM sale_invoice_items sii
+                     JOIN sale_invoices si ON si.id = sii.sale_invoice_id
+                     LEFT JOIN stock_batches sb ON sb.id = sii.stock_batch_id
+                     JOIN products p ON p.id = COALESCE(sii.product_id, sb.product_id)
+                     WHERE si.status != 'cancelled' AND COALESCE(p.isActive, 1) = 1`,
+                    [],
+                    (err, row) => (err ? reject(err) : resolve(row || { total_sold_weight: 0 }))
+                );
+            }),
+        ]);
 
         const DEFAULT_MIN_LIMIT = 10;
         let total_units = 0;
@@ -75,6 +103,8 @@ class StockBatchController {
         return {
             total_units: Math.round(total_units * 1000) / 1000,
             total_value: Math.round(total_value * 100) / 100,
+            total_purchased_weight: Math.round(Number(purchasedWeightRow?.total_purchased_weight || 0) * 1000) / 1000,
+            total_sold_weight: Math.round(Number(soldWeightRow?.total_sold_weight || 0) * 1000) / 1000,
             low_stock_count,
             out_of_stock_count,
             expiring_soon_count: 0,
@@ -83,6 +113,8 @@ class StockBatchController {
 
     async getInventoryItems(pagination = { page: 1, limit: 10 }) {
         const db = await dbmanager.init();
+        await ensureStockWeightColumn(db, 'purchase_invoice_items');
+        await ensureStockWeightColumn(db, 'sale_invoice_items');
         const page = parseInt(pagination.page) || 1;
         const limit = parseInt(pagination.limit) || 10;
         const offset = (page - 1) * limit;
@@ -104,7 +136,20 @@ class StockBatchController {
                     p.category as product_category,
                     COALESCE(p.stock_quantity, 0) as current_balance,
                     COALESCE(p.avg_cost_base, 0) as avg_cost_base,
-                    GROUP_CONCAT(DISTINCT s.name) as suppliers
+                    GROUP_CONCAT(DISTINCT s.name) as suppliers,
+                    COALESCE((
+                        SELECT SUM(COALESCE(pii2.stock_weight, 0))
+                        FROM purchase_invoice_items pii2
+                        JOIN purchase_invoices pi2 ON pi2.id = pii2.purchase_invoice_id
+                        WHERE pii2.product_id = p.id AND pi2.status != 'cancelled'
+                    ), 0) as purchased_weight,
+                    COALESCE((
+                        SELECT SUM(COALESCE(sii2.stock_weight, 0))
+                        FROM sale_invoice_items sii2
+                        JOIN sale_invoices si2 ON si2.id = sii2.sale_invoice_id
+                        LEFT JOIN stock_batches sb2 ON sb2.id = sii2.stock_batch_id
+                        WHERE COALESCE(sii2.product_id, sb2.product_id) = p.id AND si2.status != 'cancelled'
+                    ), 0) as sold_weight
                  FROM (SELECT * FROM products WHERE COALESCE(isActive, 1) = 1 ORDER BY id DESC LIMIT ? OFFSET ?) p
                  LEFT JOIN purchase_invoice_items pii ON pii.product_id = p.id
                  LEFT JOIN purchase_invoices pi ON pi.id = pii.purchase_invoice_id AND pi.status != 'cancelled'
@@ -124,6 +169,8 @@ class StockBatchController {
             const balance = Math.round((Number(row.current_balance || 0)) * 1000) / 1000;
             const avgCost = Math.round((Number(row.avg_cost_base || 0)) * 100) / 100;
             const totalValue = balance > 0 ? Math.round(balance * avgCost * 100) / 100 : 0;
+            const purchasedWeight = Math.round((Number(row.purchased_weight || 0)) * 1000) / 1000;
+            const soldWeight = Math.round((Number(row.sold_weight || 0)) * 1000) / 1000;
 
             let status = 'متوفر';
             if (balance <= 0) status = 'نافد';
@@ -136,6 +183,8 @@ class StockBatchController {
                 product_category: row.product_category,
                 product_unit: row.product_unit,
                 current_balance: balance,
+                purchased_weight: purchasedWeight,
+                sold_weight: soldWeight,
                 total_value: totalValue,
                 average_purchase_price: avgCost,
                 batch_count: 0,

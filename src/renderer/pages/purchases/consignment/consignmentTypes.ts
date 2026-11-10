@@ -9,6 +9,7 @@ export type ConsignmentInvoiceItemSummary = {
   stock_batch_id: number | null;
   batch_code: string | null;
   received_quantity: number;
+  stock_weight?: number;
   sold_quantity: number;
   remaining_quantity: number;
   total_sales_amount: number;

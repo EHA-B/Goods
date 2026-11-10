@@ -25,6 +25,7 @@ type SaleItemForm = {
   product_id: number;
   productName: string;
   quantity: number;
+  stock_weight: number;
   sale_price: number;
   cost_price: number;
 };
@@ -33,6 +34,7 @@ const emptyItem = (): SaleItemForm => ({
   product_id: 0,
   productName: "",
   quantity: 1,
+  stock_weight: 0,
   sale_price: 0,
   cost_price: 0,
 });
@@ -116,6 +118,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
           product_id: Number(row.product_id ?? 0),
           productName: String(row.product_name ?? ""),
           quantity: Number(row.quantity ?? 1),
+          stock_weight: Number(row.stock_weight ?? 0),
           sale_price: Number(row.unit_price ?? 0),
           cost_price: Number(row.cost_price ?? 0),
         })),
@@ -152,6 +155,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
             product_id: Number(row.product_id ?? 0),
             productName: String(row.productName ?? ""),
             quantity: Number(row.quantity ?? 1),
+            stock_weight: Number(row.stock_weight ?? 0),
             sale_price: Number(row.sale_price ?? 0),
             cost_price: Number(row.cost_price ?? 0),
           }))
@@ -418,7 +422,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
 
   const submit = async () => {
     setError("");
-    if (items.some((item) => !item.product_id || item.quantity <= 0 || item.sale_price < 0)) {
+    if (items.some((item) => !item.product_id || item.quantity <= 0 || item.sale_price < 0 || !Number.isFinite(item.stock_weight) || item.stock_weight < 0)) {
       setError("راجع الأصناف — المنتج والكمية وسعر البيع الصحيح مطلوبة");
       notifyValidation("راجع الأصناف — المنتج والكمية وسعر البيع الصحيح مطلوبة");
       return;
@@ -477,6 +481,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
       items: items.map((item) => ({
         product_id: item.product_id,
         quantity: item.quantity,
+        stock_weight: Number(item.stock_weight || 0),
         sale_price: item.sale_price,
       })),
       initial_payment:
@@ -595,9 +600,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                 <Input type="number" min="0.000001" step="any" value={exchangeRate} onChange={(e) => setExchangeRate(Number(e.target.value))} />
               </FormField>
             )}
-            <FormField label="ملاحظات" htmlFor="notes" className="md:col-span-2 xl:col-span-4">
-              <Textarea id="notes" value={notes} placeholder="ملاحظات عامة..." onChange={(e) => setNotes(e.target.value)} />
-            </FormField>
+           
           </div>
         </FormSection>
 
@@ -650,7 +653,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                   >
                     حذف الصنف
                   </Button>
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                     <FormField label="المنتج" required>
                       <SearchableSelect
                         value={String(item.product_id)}
@@ -709,6 +712,17 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                       })()}
                     </FormField>
 
+                    <FormField label="الوزن القائم">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        value={item.stock_weight}
+                        placeholder="0"
+                        onChange={(e) => updateItem(index, { stock_weight: Number(e.target.value) })}
+                      />
+                    </FormField>
+
                     <FormField label="سعر البيع" required>
                       <Input
                         type="number"
@@ -742,6 +756,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                   <th className="px-4 py-3 text-right">#</th>
                   <th className="px-4 py-3 text-right">المنتج</th>
                   <th className="px-4 py-3 text-right">الكمية</th>
+                  <th className="px-4 py-3 text-right">الوزن القائم</th>
                   <th className="px-4 py-3 text-right">سعر البيع</th>
                   <th className="px-4 py-3 text-right">إجمالي السطر</th>
                 </tr>
@@ -769,6 +784,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                         </div>
                       )}
                     </td>
+                    <td className="px-4 py-3" dir="ltr">{Number(item.stock_weight) > 0 ? money(item.stock_weight) : "—"}</td>
                     <td className="px-4 py-3" dir="ltr">{money(item.sale_price)} {currency}</td>
                     <td className="px-4 py-3 font-bold" dir="ltr">{money(item.quantity * item.sale_price)} {currency}</td>
                   </tr>
@@ -778,6 +794,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                 <tr>
                   <td colSpan={2} className="px-4 py-3 font-bold">الإجمالي</td>
                   <td className="px-4 py-3 font-bold" dir="ltr">{money(items.reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</td>
+                  <td className="px-4 py-3 font-bold" dir="ltr">{money(items.reduce((sum, item) => sum + Number(item.stock_weight || 0), 0))}</td>
                   <td className="px-4 py-3">—</td>
                   <td className="px-4 py-3 font-bold text-[var(--primary)]" dir="ltr">{money(subtotal)} {currency}</td>
                 </tr>
@@ -821,6 +838,9 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                 <FormField label="تاريخ الدفع">
                   <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
                 </FormField>
+                 <FormField label="ملاحظات" htmlFor="notes" className="md:col-span-2 xl:col-span-4">
+              <Textarea id="notes" value={notes} placeholder="ملاحظات عامة..." onChange={(e) => setNotes(e.target.value)} />
+            </FormField>
               </div>
             </FormSection>
           ) : (

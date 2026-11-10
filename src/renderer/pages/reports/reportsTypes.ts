@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 
 export type ReportCategory = "sales" | "purchases" | "inventory" | "finance" | "parties";
 export type ReportOutputFormat = "preview" | "pdf" | "excel";
-export type ReportFilterKey = "dateRange" | "customer" | "supplier" | "product" | "cashbox" | "status" | "groupBy" | "currency";
+export type ReportFilterKey = "dateRange" | "customer" | "supplier" | "product" | "cashbox" | "status" | "groupBy" | "currency" | "reportMode";
 
 export type ReportDefinition = {
   id: string;
@@ -23,6 +23,8 @@ export type ReportFilters = {
   status?: string;
   groupBy?: string;
   currency?: string;
+  /** Detailed sales/purchases reports: full ("detailed") or invoice details only ("compact"). */
+  reportMode?: "detailed" | "compact";
 };
 
 export type ReportColumn = {
@@ -52,6 +54,8 @@ export type ReportResult = {
   summary?: ReportSummaryItem[];
   totalRows?: number;
   sections?: ReportSection[];
+  layout?: string;
+  mode?: "detailed" | "compact";
 };
 
 export type ReportOption = { value: string; label: string };

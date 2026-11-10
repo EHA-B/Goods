@@ -8,6 +8,7 @@
  */
 const path = require("node:path");
 const dbmanager = require(path.join(__dirname, "../database/databaseManager"));
+const { ensureStockWeightColumn } = require("./utils/invoiceUtils");
 
 function all(db, sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -178,9 +179,68 @@ function buildCurrencySummary(rows, labelPrefix) {
   return summary;
 }
 
+/**
+ * Labels shown in each invoice block AFTER the items table (quantities and
+ * financial totals). Everything else (party, type, status, currency...) is
+ * header information shown before the table and is dropped in compact mode.
+ */
+const invoiceFooterSummaryLabels = new Set([
+  "الكمية الكلية",
+  "الكمية المستلمة",
+  "المتبقي بالمخزون",
+  "المجموع الفرعي",
+  "الخصم",
+  "الضريبة",
+  "الإجمالي",
+  "المدفوع",
+  "المتبقي",
+  "ربح الأصناف الأساسي",
+]);
+
+function isInvoiceFooterSummaryLabel(label) {
+  return (
+    invoiceFooterSummaryLabels.has(label) ||
+    label.startsWith("الوزن القائم") ||
+    label.startsWith("تكلفة النقل") ||
+    label.startsWith("تكلفة العتالة")
+  );
+}
+
+/**
+ * Detailed sales/purchases reports support two modes:
+ * - "detailed" (default): report summary cards + full invoice blocks.
+ * - "compact": invoice details only (title, items table and invoice totals),
+ *   without the report summary cards and the per-invoice header information.
+ */
+function applyInvoiceReportMode(report, filters, compactTitle) {
+  const layout = "invoice-details";
+
+  if (filters?.reportMode !== "compact") {
+    return { ...report, layout };
+  }
+
+  return {
+    ...report,
+    layout,
+    mode: "compact",
+    title: compactTitle,
+    summary: [],
+    sections: (report.sections || []).map((section) => ({
+      ...section,
+      summary: (section.summary || []).filter((item) =>
+        isInvoiceFooterSummaryLabel(
+          String(item?.label || ""),
+        ),
+      ),
+    })),
+  };
+}
+
 class ReportController {
   async getOptions() {
     const db = await dbmanager.init();
+    await ensureStockWeightColumn(db, "purchase_invoice_items");
+    await ensureStockWeightColumn(db, "sale_invoice_items");
 
     const [customers, suppliers, products, cashboxes] = await Promise.all([
       all(
@@ -233,11 +293,19 @@ class ReportController {
     }
 
     if (reportId === "sales-details") {
-      return this.generateSalesDetails(filters);
+      return applyInvoiceReportMode(
+        await this.generateSalesDetails(filters),
+        filters,
+        "تقرير المبيعات المختصر",
+      );
     }
 
     if (reportId === "purchases-details") {
-      return this.generatePurchasesDetails(filters);
+      return applyInvoiceReportMode(
+        await this.generatePurchasesDetails(filters),
+        filters,
+        "تقرير المشتريات المختصر",
+      );
     }
 
     return {
@@ -252,6 +320,8 @@ class ReportController {
 
   async generateSalesDetails(filters = {}) {
     const db = await dbmanager.init();
+    await ensureStockWeightColumn(db, "purchase_invoice_items");
+    await ensureStockWeightColumn(db, "sale_invoice_items");
 
     const where = ["1 = 1"];
     const params = [];
@@ -390,6 +460,7 @@ class ReportController {
               p.name AS product_name,
               p.unit AS product_unit,
               sii.quantity,
+              COALESCE(sii.stock_weight, 0) AS stock_weight,
               sii.unit_price,
               sii.line_total,
               sii.cost_price,
@@ -477,6 +548,11 @@ class ReportController {
               format: "number",
             },
             {
+              key: "stock_weight",
+              label: "الوزن القائم",
+              format: "number",
+            },
+            {
               key: "unit_price",
               label: "سعر البيع",
               format: "currency",
@@ -504,6 +580,7 @@ class ReportController {
                 : ""
             }`,
             quantity: number(item.quantity),
+            stock_weight: number(item.stock_weight),
             unit_price: number(item.unit_price),
             line_total: number(item.line_total),
             cost_price_base: number(
@@ -548,6 +625,13 @@ class ReportController {
               label: "الكمية الكلية",
               value: formatNumber(
                 totalQuantity,
+                3,
+              ),
+            },
+            {
+              label: invoice.invoice_type !== undefined ? "الوزن القائم المستلم" : "الوزن القائم الكلي",
+              value: formatNumber(
+                invoiceItems.reduce((sum, item) => sum + number(item.stock_weight), 0),
                 3,
               ),
             },
@@ -635,6 +719,16 @@ class ReportController {
       0,
     );
 
+    const totalStockWeight = sections.reduce(
+      (sum, section) =>
+        sum +
+        section.rows.reduce(
+          (sectionSum, row) => sectionSum + number(row.stock_weight),
+          0,
+        ),
+      0,
+    );
+
     const cancelledCount =
       invoices.filter(
         (invoice) =>
@@ -682,6 +776,10 @@ class ReportController {
           value: totalItems,
         },
         {
+          label: "إجمالي الوزن القائم المباع",
+          value: formatNumber(totalStockWeight, 3),
+        },
+        {
           label: "إجمالي الكمية المباعة",
           value: formatNumber(
             totalQuantity,
@@ -710,6 +808,8 @@ class ReportController {
 
   async generatePurchasesDetails(filters = {}) {
     const db = await dbmanager.init();
+    await ensureStockWeightColumn(db, "purchase_invoice_items");
+    await ensureStockWeightColumn(db, "sale_invoice_items");
 
     const where = ["1 = 1"];
     const params = [];
@@ -846,6 +946,7 @@ class ReportController {
               p.name AS product_name,
               p.unit AS product_unit,
               pii.quantity,
+              COALESCE(pii.stock_weight, 0) AS stock_weight,
               pii.unit_price,
               pii.line_total,
               pii.notes
@@ -923,6 +1024,11 @@ class ReportController {
               format: "number",
             },
             {
+              key: "stock_weight",
+              label: "الوزن القائم",
+              format: "number",
+            },
+            {
               key: "unit_price",
               label: "سعر الشراء",
               format: "currency",
@@ -940,6 +1046,7 @@ class ReportController {
                 : ""
             }`,
             quantity: number(item.quantity),
+            stock_weight: number(item.stock_weight),
             unit_price: number(item.unit_price),
             line_total: number(item.line_total),
             currency,
@@ -993,6 +1100,13 @@ class ReportController {
               label: "الكمية المستلمة",
               value: formatNumber(
                 totalQuantity,
+                3,
+              ),
+            },
+            {
+              label: invoice.invoice_type !== undefined ? "الوزن القائم المستلم" : "الوزن القائم الكلي",
+              value: formatNumber(
+                invoiceItems.reduce((sum, item) => sum + number(item.stock_weight), 0),
                 3,
               ),
             },
@@ -1087,6 +1201,16 @@ class ReportController {
       0,
     );
 
+    const totalStockWeight = sections.reduce(
+      (sum, section) =>
+        sum +
+        section.rows.reduce(
+          (sectionSum, row) => sectionSum + number(row.stock_weight),
+          0,
+        ),
+      0,
+    );
+
     const cancelledCount =
       invoices.filter(
         (invoice) =>
@@ -1129,6 +1253,10 @@ class ReportController {
         {
           label: "عدد بنود الأصناف",
           value: totalItems,
+        },
+        {
+          label: "إجمالي الوزن القائم المستلم",
+          value: formatNumber(totalStockWeight, 3),
         },
         {
           label: "إجمالي الكمية المستلمة",
@@ -1207,6 +1335,8 @@ class ReportController {
 
   async generateConsignmentCommission(filters = {}) {
     const db = await dbmanager.init();
+    await ensureStockWeightColumn(db, "purchase_invoice_items");
+    await ensureStockWeightColumn(db, "sale_invoice_items");
 
     const where = [
       `pi.invoice_type = 'consignment'`,
@@ -1798,6 +1928,8 @@ class ReportController {
 
   async getProfitLossReport(filters = {}) {
       const db = await dbmanager.init();
+    await ensureStockWeightColumn(db, "purchase_invoice_items");
+    await ensureStockWeightColumn(db, "sale_invoice_items");
 
       // ── Date range defaults ──────────────────────────────────────────────
       const today      = new Date().toISOString().split('T')[0];

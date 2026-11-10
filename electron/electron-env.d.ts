@@ -336,6 +336,7 @@ type PurchaseInvoiceItem = {
   product_id: number;
   quantity: number;
   purchase_price?: number;
+  stock_weight?: number;
   estimated_purchase_price?: number;
   batch_code?: string | null;
   received_date?: string;
@@ -406,6 +407,7 @@ type SaleInvoiceItem = {
   stock_batch_id?: number | null;
   quantity: number;
   sale_price: number;
+  stock_weight?: number;
   notes?: string | null;
 };
 
@@ -467,8 +469,8 @@ interface Window {
       payment(id: number): Promise<unknown>;
       transaction(id: number): Promise<unknown>;
       transfer(id: string): Promise<unknown>;
-      customerStatement(id: number): Promise<unknown>;
-      supplierStatement(id: number): Promise<unknown>;
+      customerStatement(id: number, range?: { fromDate?: string; toDate?: string }): Promise<unknown>;
+      supplierStatement(id: number, range?: { fromDate?: string; toDate?: string }): Promise<unknown>;
       cashboxStatement(id: number): Promise<unknown>;
       consignment(id: number): Promise<unknown>;
     };
@@ -647,6 +649,13 @@ interface Window {
       }): Promise<{
         success: boolean;
         filePath?: string;
+        canceled?: boolean;
+      }>;
+      print(input: {
+        reportId: string;
+        filters: Record<string, unknown>;
+      }): Promise<{
+        success: boolean;
         canceled?: boolean;
       }>;
     };

@@ -15,6 +15,7 @@ import {
   FileText,
   Play,
   PackageMinus,
+  Printer,
   ReceiptText,
   Search,
   SlidersHorizontal,
@@ -55,6 +56,7 @@ const initialFilters: ReportFilters = {
   status: "all",
   groupBy: "day",
   currency: "all",
+  reportMode: "detailed",
 };
 
 const emptyOptions: ReportFilterOptions = {
@@ -298,6 +300,21 @@ const invoiceOperationalLabels = new Set([
   "آخر دفعة",
 ]);
 
+function isInvoiceFinancialLabel(label: string) {
+  return (
+    invoiceFinancialLabels.has(label) ||
+    label.startsWith("تكلفة النقل") ||
+    label.startsWith("تكلفة العتالة")
+  );
+}
+
+function isInvoiceOperationalLabel(label: string) {
+  return (
+    invoiceOperationalLabels.has(label) ||
+    label.startsWith("الوزن القائم")
+  );
+}
+
 function isInvoiceStatusSummary(label: string) {
   return (
     label === "الحالة" ||
@@ -345,15 +362,15 @@ function DetailedInvoicePreview({
         {sections.map((section, sectionIndex) => {
           const summary = section.summary ?? [];
           const financial = summary.filter((item) =>
-            invoiceFinancialLabels.has(item.label),
+            isInvoiceFinancialLabel(item.label),
           );
           const operational = summary.filter((item) =>
-            invoiceOperationalLabels.has(item.label),
+            isInvoiceOperationalLabel(item.label),
           );
           const identity = summary.filter(
             (item) =>
-              !invoiceFinancialLabels.has(item.label) &&
-              !invoiceOperationalLabels.has(item.label),
+              !isInvoiceFinancialLabel(item.label) &&
+              !isInvoiceOperationalLabel(item.label),
           );
 
           return (
@@ -934,6 +951,9 @@ export default function ReportsPage() {
       "pdf" | "excel" | null
     >(null);
 
+  const [printing, setPrinting] =
+    useState(false);
+
   useEffect(() => {
     void reportsService
       .loadOptions()
@@ -1033,6 +1053,29 @@ export default function ReportsPage() {
       );
     } finally {
       setExporting(null);
+    }
+  };
+
+  const printReport = async () => {
+    if (!selectedReport) {
+      return;
+    }
+
+    setPrinting(true);
+
+    try {
+      await reportsService.print(
+        selectedReport.id,
+        filters,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "تعذر طباعة التقرير.",
+      );
+    } finally {
+      setPrinting(false);
     }
   };
 
@@ -1481,6 +1524,44 @@ export default function ReportsPage() {
               />
             </label>
           )}
+
+          {has("reportMode") && (
+            <label className="space-y-2 text-sm font-bold text-[var(--text-secondary)]">
+              <span>
+                نوع التقرير
+              </span>
+
+              <Select
+                value={
+                  filters.reportMode ??
+                  "detailed"
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setFilters(
+                    (current) => ({
+                      ...current,
+                      reportMode:
+                        event.target.value === "compact"
+                          ? "compact"
+                          : "detailed",
+                    }),
+                  )
+                }
+                options={[
+                  {
+                    value: "detailed",
+                    label: "تفصيلي (كامل)",
+                  },
+                  {
+                    value: "compact",
+                    label: "مختصر (تفاصيل الفواتير فقط)",
+                  },
+                ]}
+              />
+            </label>
+          )}
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-4">
@@ -1535,6 +1616,22 @@ export default function ReportsPage() {
           >
             تصدير Excel
           </Button>
+
+          <Button
+            variant="secondary"
+            startIcon={
+              <Printer
+                size={16}
+              />
+            }
+            isLoading={printing}
+            loadingText="جاري التحضير للطباعة"
+            onClick={() =>
+              void printReport()
+            }
+          >
+            طباعة A4
+          </Button>
         </div>
       </Card>
 
@@ -1587,22 +1684,40 @@ export default function ReportsPage() {
           </div>
 
           {result && ((result.rows?.length ?? 0) > 0 || (result.sections?.length ?? 0) > 0) ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              startIcon={
-                <Download
-                  size={15}
-                />
-              }
-              onClick={() =>
-                void exportReport(
-                  "excel",
-                )
-              }
-            >
-              تنزيل Excel
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                startIcon={
+                  <Printer
+                    size={15}
+                  />
+                }
+                isLoading={printing}
+                onClick={() =>
+                  void printReport()
+                }
+              >
+                طباعة A4
+              </Button>
+
+              <Button
+                size="sm"
+                variant="secondary"
+                startIcon={
+                  <Download
+                    size={15}
+                  />
+                }
+                onClick={() =>
+                  void exportReport(
+                    "excel",
+                  )
+                }
+              >
+                تنزيل Excel
+              </Button>
+            </div>
           ) : undefined}
         </div>
 

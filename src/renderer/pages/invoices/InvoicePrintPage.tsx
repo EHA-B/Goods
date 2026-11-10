@@ -131,6 +131,7 @@ export default function InvoicePrintPage({ type }: { type: "sale" | "purchase" }
             id: Number(item.id || i),
             productName: String(item.product_name ?? "-"),
             quantity: Number(item.quantity ?? 0),
+            stockWeight: Number(item.stock_weight ?? 0),
             unitPrice: Number(item.unit_price ?? 0),
             lineTotal: Number(item.line_total ?? 0),
           }))}
@@ -159,6 +160,7 @@ export default function InvoicePrintPage({ type }: { type: "sale" | "purchase" }
             id: Number(item.id || i),
             productName: String(item.product_name ?? "-"),
             quantity: Number(item.quantity ?? 0),
+            stockWeight: Number(item.stock_weight ?? 0),
             unitPrice: Number(item.unit_price ?? 0),
             lineTotal: Number(item.line_total ?? 0),
           }))}

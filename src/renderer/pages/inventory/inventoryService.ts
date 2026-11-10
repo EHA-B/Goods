@@ -3,6 +3,8 @@ export type InventoryStatus = "available" | "low" | "out";
 export type InventorySummary = {
   totalUnits: number;
   inventoryValue: number;
+  totalPurchasedWeight: number;
+  totalSoldWeight: number;
   lowStockCount: number;
   outOfStockCount: number;
   expiringBatchesCount: number;
@@ -15,6 +17,8 @@ export type InventoryItem = {
   categoryName: string;
   unit: string;
   totalQuantity: number;
+  purchasedWeight: number;
+  soldWeight: number;
   minimumStock: number;
   batchesCount: number;
   averagePurchasePrice: number;
@@ -93,6 +97,8 @@ function mapInventoryItem(row: RawRecord): InventoryItem {
     categoryName: textValue(row.product_category ?? row.category) || "غير مصنف",
     unit: textValue(row.product_unit ?? row.unit) || "وحدة",
     totalQuantity: numberValue(row.current_balance ?? row.total_quantity ?? row.stock_quantity),
+    purchasedWeight: numberValue(row.purchased_weight),
+    soldWeight: numberValue(row.sold_weight),
     minimumStock: numberValue(row.min_limit ?? row.minimum_stock ?? row.min_stock ?? 10),
     batchesCount: 0,
     averagePurchasePrice: numberValue(row.average_purchase_price ?? row.avg_cost_base),
@@ -144,6 +150,8 @@ export const inventoryService = {
     return {
       totalUnits: numberValue(row.total_units),
       inventoryValue: numberValue(row.total_value),
+      totalPurchasedWeight: numberValue(row.total_purchased_weight),
+      totalSoldWeight: numberValue(row.total_sold_weight),
       lowStockCount: numberValue(row.low_stock_count),
       outOfStockCount: numberValue(row.out_of_stock_count),
       expiringBatchesCount: 0,
@@ -193,6 +201,8 @@ export const inventoryService = {
       categoryName: textValue(product.category) || "غير مصنف",
       unit: textValue(product.unit) || "وحدة",
       totalQuantity,
+      purchasedWeight: numberValue(raw.purchased_weight),
+      soldWeight: numberValue(raw.sold_weight),
       minimumStock,
       batchesCount: 0,
       averagePurchasePrice,

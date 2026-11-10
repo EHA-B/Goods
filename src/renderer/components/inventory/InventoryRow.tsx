@@ -53,6 +53,17 @@ export default function InventoryRow({
       <DataTableCell>
         <div>
           <p className="font-medium text-[var(--text-primary)]">
+            شراء: <span dir="ltr">{item.purchasedWeight.toLocaleString("en-US")}</span>
+          </p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
+            بيع: <span dir="ltr">{item.soldWeight.toLocaleString("en-US")}</span>
+          </p>
+        </div>
+      </DataTableCell>
+
+      <DataTableCell>
+        <div>
+          <p className="font-medium text-[var(--text-primary)]">
             {getSuppliersLabel(item.supplierNames)}
           </p>
           <p className="mt-1 text-xs text-[var(--text-muted)]">

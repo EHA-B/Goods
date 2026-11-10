@@ -1092,3 +1092,114 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
     margin: 14mm;
   }
 }
+/* Ruled Arabic invoice layout, shared by sales and purchases print views. */
+.invoice-print-sheet .invoice-ledger-table {
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: collapse;
+  border: 1.5px solid #30343b;
+  margin-top: 10px;
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+.invoice-ledger-table .invoice-col-total { width: 19%; }
+.invoice-ledger-table .invoice-col-description { width: 31%; }
+.invoice-ledger-table .invoice-col-weight { width: 11%; }
+.invoice-ledger-table .invoice-col-price { width: 15%; }
+.invoice-ledger-table .invoice-col-quantity { width: 9%; }
+.invoice-ledger-table .invoice-col-notes { width: 15%; }
+.invoice-print-sheet .invoice-ledger-table th,
+.invoice-print-sheet .invoice-ledger-table td {
+  border: 1px solid #555b64;
+  padding: 5px 5px;
+  height: 29px;
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+  background: white;
+  color: #20242b;
+}
+.invoice-print-sheet .invoice-ledger-table thead th {
+  background: #eaedf0;
+  color: #20242b;
+  text-align: center !important;
+  font-weight: 800;
+  border-radius: 0;
+  white-space: normal;
+  direction: rtl;
+}
+.invoice-print-sheet .invoice-ledger-table tbody tr:nth-child(even) { background: #fff; }
+.invoice-print-sheet .invoice-ledger-table .invoice-number-cell {
+  text-align: center !important;
+  white-space: normal;
+}
+.invoice-print-sheet .invoice-ledger-table .invoice-product-name { text-align: right; }
+.invoice-print-sheet .invoice-ledger-table .invoice-item-notes { font-weight: 400; }
+.invoice-print-sheet .invoice-ledger-table .invoice-empty-row td { height: 29px; }
+.invoice-print-sheet .invoice-ledger-table tfoot th {
+  background: #f1f2f4;
+  font-weight: 800;
+  border-top: 2px solid #30343b;
+}
+.invoice-print-sheet .invoice-ledger-table tfoot th:last-child { text-align: right; }
+@media print {
+  .invoice-print-sheet .invoice-ledger-table { font-size: 9.5px; }
+  .invoice-print-sheet .invoice-ledger-table th,
+  .invoice-print-sheet .invoice-ledger-table td { padding: 3px 4px; height: 24px; }
+  .invoice-print-sheet .invoice-ledger-table .invoice-empty-row td { height: 24px; }
+  .invoice-print-sheet .invoice-ledger-table thead th,
+  .invoice-print-sheet .invoice-ledger-table tfoot th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* Compact invoice information and signatures; reserve more of the page for items. */
+.invoice-print-sheet .invoice-meta {
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px 9px;
+  margin:9px 0 7px;
+}
+.invoice-print-sheet .invoice-meta > div {
+  min-width:0;
+  padding:5px 8px;
+  gap:7px;
+  border-radius:3px;
+}
+.invoice-print-sheet .invoice-party-card {
+  grid-column:auto;
+}
+.invoice-print-sheet .invoice-meta strong {
+  min-width:0;
+  overflow-wrap:anywhere;
+  font-size:11px;
+}
+.invoice-print-sheet .invoice-party-card strong { font-size:12px; }
+.invoice-print-sheet .invoice-print-header {
+  gap:13px;
+  padding-bottom:9px;
+}
+.invoice-print-sheet .invoice-company-contact { margin-top:5px; }
+.invoice-print-sheet .invoice-title-box { padding:8px 10px; }
+.invoice-print-sheet .invoice-title-box h2 { margin-bottom:4px; font-size:19px; }
+.invoice-print-sheet .invoice-title-box dl { gap:3px; }
+.invoice-print-sheet .invoice-title-box dl div { padding-top:3px; }
+.invoice-print-sheet .invoice-ledger-table { margin-top:5px; }
+.invoice-print-sheet .invoice-bottom-grid {
+  gap:12px;
+  margin-top:9px;
+  grid-template-columns:minmax(0,1fr) minmax(215px,40%);
+}
+.invoice-print-sheet .invoice-notes { min-height:0; padding:6px 8px; }
+.invoice-print-sheet .invoice-footer-message { margin-top:5px; }
+.invoice-print-sheet .invoice-summary > div { padding:3px 8px; }
+.invoice-print-sheet .invoice-total { padding-block:5px!important; }
+.invoice-print-sheet .invoice-print-footer {
+  margin-top:9px;
+  padding-top:5px;
+}
+.invoice-print-sheet .invoice-signatures { gap:10px; }
+.invoice-print-sheet .invoice-signatures div { font-size:9px; }
+.invoice-print-sheet .invoice-signatures i { height:13px; }
+.invoice-print-sheet .invoice-print-footer > p { margin:4px 0 0; font-size:8px; }
+@media print {
+  .invoice-print-sheet .invoice-ledger-table .invoice-empty-row td { height:27px; }
+  .invoice-print-sheet .invoice-ledger-table th,
+  .invoice-print-sheet .invoice-ledger-table td { padding:2px 4px; }
+}

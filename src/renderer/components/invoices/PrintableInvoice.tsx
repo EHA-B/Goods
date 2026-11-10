@@ -51,13 +51,53 @@ export default function PrintableInvoice(props: Props) {
 
     <section className="invoice-meta">
       <div className="invoice-party-card"><span>{props.partyLabel}</span><strong>{props.partyName}</strong></div>
-      <div><span>حالة الفاتورة</span><strong>{props.statusLabel}</strong></div>
+      <div className="invoice-type-card"><span>نوع الفاتورة</span><strong>{props.title}</strong></div>
+      <div className="invoice-status-card"><span>حالة الفاتورة</span><strong>{props.statusLabel}</strong></div>
       {props.company.commercialRegister && <div><span>السجل التجاري</span><strong><bdi>{props.company.commercialRegister}</bdi></strong></div>}
     </section>
 
-    <table className="invoice-items">
-      <thead><tr><th className="invoice-index">م</th><th>اسم المادة</th><th className="invoice-number-cell">الكمية</th><th className="invoice-number-cell">الوزن القائم</th><th className="invoice-number-cell">سعر الوحدة</th><th className="invoice-number-cell">الإجمالي</th></tr></thead>
-      <tbody>{props.items.map((item, index) => <tr key={item.id}><td className="invoice-index">{index + 1}</td><td className="invoice-product-name">{item.productName}</td><td className="invoice-number-cell">{item.quantity.toLocaleString("en-US")}</td><td className="invoice-number-cell">{item.stockWeight && item.stockWeight > 0 ? item.stockWeight.toLocaleString("en-US") : "—"}</td><td className="invoice-number-cell">{money(item.unitPrice, props.currency)}</td><td className="invoice-number-cell invoice-line-total">{money(item.lineTotal, props.currency)}</td></tr>)}</tbody>
+    <table className="invoice-items invoice-ledger-table">
+      <colgroup>
+        <col className="invoice-col-total" />
+        <col className="invoice-col-description" />
+        <col className="invoice-col-weight" />
+        <col className="invoice-col-price" />
+        <col className="invoice-col-quantity" />
+        <col className="invoice-col-notes" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th className="invoice-number-cell">القيمة الإجمالية</th>
+          <th>نوع البضاعة ومواصفاتها</th>
+          <th className="invoice-number-cell">الوزن القائم</th>
+          <th className="invoice-number-cell">السعر الإفرادي</th>
+          <th className="invoice-number-cell">الكمية</th>
+          <th>ملاحظات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {props.items.map((item, index) => (
+          <tr key={`${item.id}-${index}`}>
+            <td className="invoice-number-cell invoice-line-total">{money(item.lineTotal, props.currency)}</td>
+            <td className="invoice-product-name">{item.productName}</td>
+            <td className="invoice-number-cell">{item.stockWeight && item.stockWeight > 0 ? item.stockWeight.toLocaleString("en-US") : "—"}</td>
+            <td className="invoice-number-cell">{money(item.unitPrice, props.currency)}</td>
+            <td className="invoice-number-cell">{item.quantity.toLocaleString("en-US")}</td>
+            <td className="invoice-item-notes">{item.batchCode || ""}</td>
+          </tr>
+        ))}
+        {Array.from({ length: Math.max(0, 14 - props.items.length) }, (_, index) => (
+          <tr className="invoice-empty-row" key={`empty-${index}`} aria-hidden="true">
+            <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+          </tr>
+        ))}
+      </tbody>
+      <tfoot>
+        <tr className="invoice-ledger-total">
+          <th className="invoice-number-cell">{money(props.total, props.currency)}</th>
+          <th colSpan={5}>المجموع</th>
+        </tr>
+      </tfoot>
     </table>
 
     <section className="invoice-bottom-grid">

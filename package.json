@@ -1,7 +1,7 @@
 {
   "name": "stocklite",
   "private": true,
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "StockLite - Smart Inventory & Accounting System",
   "author": "Ehab & Eline",
   "type": "module",

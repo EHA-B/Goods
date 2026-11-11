@@ -58,31 +58,31 @@ export default function PrintableInvoice(props: Props) {
 
     <table className="invoice-items invoice-ledger-table">
       <colgroup>
-        <col className="invoice-col-total" />
         <col className="invoice-col-description" />
+        <col className="invoice-col-quantity" />
         <col className="invoice-col-weight" />
         <col className="invoice-col-price" />
-        <col className="invoice-col-quantity" />
+        <col className="invoice-col-total" />
         <col className="invoice-col-notes" />
       </colgroup>
       <thead>
         <tr>
-          <th className="invoice-number-cell">القيمة الإجمالية</th>
-          <th>نوع البضاعة ومواصفاتها</th>
+          <th>اسم المادة</th>
+          <th className="invoice-number-cell">العدد</th>
           <th className="invoice-number-cell">الوزن القائم</th>
           <th className="invoice-number-cell">السعر الإفرادي</th>
-          <th className="invoice-number-cell">الكمية</th>
+          <th className="invoice-number-cell">القيمة الإجمالية</th>
           <th>ملاحظات</th>
         </tr>
       </thead>
       <tbody>
         {props.items.map((item, index) => (
           <tr key={`${item.id}-${index}`}>
-            <td className="invoice-number-cell invoice-line-total">{money(item.lineTotal, props.currency)}</td>
             <td className="invoice-product-name">{item.productName}</td>
+            <td className="invoice-number-cell">{item.quantity.toLocaleString("en-US")}</td>
             <td className="invoice-number-cell">{item.stockWeight && item.stockWeight > 0 ? item.stockWeight.toLocaleString("en-US") : "—"}</td>
             <td className="invoice-number-cell">{money(item.unitPrice, props.currency)}</td>
-            <td className="invoice-number-cell">{item.quantity.toLocaleString("en-US")}</td>
+            <td className="invoice-number-cell invoice-line-total">{money(item.lineTotal, props.currency)}</td>
             <td className="invoice-item-notes">{item.batchCode || ""}</td>
           </tr>
         ))}
@@ -94,8 +94,9 @@ export default function PrintableInvoice(props: Props) {
       </tbody>
       <tfoot>
         <tr className="invoice-ledger-total">
+          <th colSpan={4}>المجموع</th>
           <th className="invoice-number-cell">{money(props.total, props.currency)}</th>
-          <th colSpan={5}>المجموع</th>
+          <th></th>
         </tr>
       </tfoot>
     </table>

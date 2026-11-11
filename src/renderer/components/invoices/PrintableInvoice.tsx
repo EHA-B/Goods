@@ -52,7 +52,7 @@ export default function PrintableInvoice(props: Props) {
     <section className="invoice-meta">
       <div className="invoice-party-card"><span>{props.partyLabel}</span><strong>{props.partyName}</strong></div>
       <div className="invoice-type-card"><span>نوع الفاتورة</span><strong>{props.title}</strong></div>
-      <div className="invoice-status-card"><span>حالة الفاتورة</span><strong>{props.statusLabel}</strong></div>
+      {/* <div className="invoice-status-card"><span>حالة الفاتورة</span><strong>{props.statusLabel}</strong></div> */}
       {props.company.commercialRegister && <div><span>السجل التجاري</span><strong><bdi>{props.company.commercialRegister}</bdi></strong></div>}
     </section>
 
@@ -86,7 +86,7 @@ export default function PrintableInvoice(props: Props) {
             <td className="invoice-item-notes">{item.batchCode || ""}</td>
           </tr>
         ))}
-        {Array.from({ length: Math.max(0, 14 - props.items.length) }, (_, index) => (
+        {Array.from({ length: Math.max(0, 18 - props.items.length) }, (_, index) => (
           <tr className="invoice-empty-row" key={`empty-${index}`} aria-hidden="true">
             <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
           </tr>
@@ -135,6 +135,6 @@ export default function PrintableInvoice(props: Props) {
       </div>
     </section>
 
-    <footer className="invoice-print-footer"><div className="invoice-signatures"><div><span>توقيع المستلم</span><i /></div><div><span>المحاسب</span><i /></div><div><span>الختم والتوقيع</span><i /></div></div><p>تم إنشاء هذه الفاتورة إلكترونيًا.</p></footer>
+    {/* <footer className="invoice-print-footer"><div className="invoice-signatures"><div><span>توقيع المستلم</span><i /></div><div><span>المحاسب</span><i /></div><div><span>الختم والتوقيع</span><i /></div></div><p>تم إنشاء هذه الفاتورة إلكترونيًا.</p></footer> */}
   </article>;
 }

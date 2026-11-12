@@ -53,7 +53,7 @@ function MainLayout() {
     <InvoiceTabsProvider>
       <div
         dir="rtl"
-        className="flex h-screen overflow-hidden bg-[var(--app-background)]"
+        className="app-layout-root flex h-screen overflow-hidden bg-[var(--app-background)]"
       >
         <Sidebar />
 
@@ -61,12 +61,12 @@ function MainLayout() {
 
         <FirstRunTour />
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="app-layout-main flex min-w-0 flex-1 flex-col">
           {/* Global bar of open (unsaved) sale / purchase invoices */}
           <InvoiceTabsBar />
 
           <main className="min-w-0 flex-1 overflow-y-auto">
-            <div className="mx-auto w-full max-w-[1600px] p-6">
+            <div className="app-layout-content mx-auto w-full max-w-[1600px] p-6">
               <Outlet />
             </div>
           </main>

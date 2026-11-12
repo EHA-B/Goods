@@ -17,7 +17,7 @@ export default function InvoiceTabsBar() {
   return (
     <div
       dir="rtl"
-      className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2"
+      className="no-print flex shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2"
     >
       <div
         role="tablist"

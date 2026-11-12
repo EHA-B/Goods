@@ -29,7 +29,19 @@ export default function HelpArticlePage() {
         description={article.summary}
         actions={
           <div className="help-article-actions flex items-center gap-2">
-            <Button variant="secondary" onClick={() => window.print()}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (window.stockliteApi?.system?.printCurrentPage) {
+                  void window.stockliteApi.system.printCurrentPage({
+                    pageSize: "A4",
+                    deviceName: "HP LaserJet P1005",
+                  });
+                } else {
+                  window.print();
+                }
+              }}
+            >
               <Printer size={17} />
               طباعة المقالة
             </Button>

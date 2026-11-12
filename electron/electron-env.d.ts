@@ -516,7 +516,27 @@ interface Window {
       selectDirectory(): Promise<{ canceled: boolean; path: string | null }>;
       selectSaveFile(): Promise<{ canceled: boolean; path: string | null }>;
       selectOpenFile(): Promise<{ canceled: boolean; path: string | null }>;
-      saveCurrentPageAsPdf(input?: { fileName?: string }): Promise<{ canceled: boolean; path: string | null }>;
+      getPrinters(): Promise<{
+        printers: Array<{
+          name: string;
+          displayName: string;
+          isDefault: boolean;
+          status: number;
+        }>;
+        defaultPrinter: string;
+      }>;
+      printCurrentPage(input?: {
+        pageSize?: "A4" | "A5";
+        deviceName?: string;
+        copies?: number;
+        scaleFactor?: number;
+        silent?: boolean;
+      }): Promise<{ printed: boolean; canceled: boolean }>;
+      saveCurrentPageAsPdf(input?: {
+        fileName?: string;
+        pageSize?: "A4" | "A5";
+        scaleFactor?: number;
+      }): Promise<{ canceled: boolean; path: string | null }>;
     };
     products: {
       list(): Promise<ProductApiRecord[]>;

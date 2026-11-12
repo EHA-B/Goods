@@ -1343,6 +1343,95 @@ ipcMain.handle('api:report:export', async (event, input) => {
   }
 });
 
+const DEFAULT_PRINTER_NAME = 'HP LaserJet P1005';
+
+async function resolvePreferredPrinterDeviceName(webContents, requestedName = DEFAULT_PRINTER_NAME) {
+  const target = String(requestedName || DEFAULT_PRINTER_NAME).trim();
+  try {
+    const printers = (await webContents.getPrintersAsync?.()) || [];
+    if (!Array.isArray(printers) || printers.length === 0) {
+      return undefined;
+    }
+
+    const normalizedTarget = target.toLowerCase();
+    const exactMatch = printers.find(
+      (p) =>
+        String(p?.name || '').toLowerCase() === normalizedTarget ||
+        String(p?.displayName || '').toLowerCase() === normalizedTarget,
+    );
+    if (exactMatch?.name) return exactMatch.name;
+
+    const p1005Match = printers.find((p) => {
+      const hay = `${p?.name || ''} ${p?.displayName || ''} ${p?.description || ''}`.toLowerCase();
+      return (
+        (normalizedTarget && hay.includes(normalizedTarget)) ||
+        hay.includes('p1005') ||
+        (hay.includes('laserjet') && hay.includes('1005'))
+      );
+    });
+    if (p1005Match?.name) return p1005Match.name;
+
+    const isVirtualPrinter = (p) =>
+      /pdf|xps|onenote|fax/i.test(
+        `${p?.name || ''} ${p?.displayName || ''} ${p?.description || ''}`,
+      );
+    const defaultPhysical = printers.find((p) => p?.isDefault && !isVirtualPrinter(p));
+    if (defaultPhysical?.name) return defaultPhysical.name;
+
+    const anyPhysical = printers.find((p) => !isVirtualPrinter(p));
+    if (anyPhysical?.name) return anyPhysical.name;
+
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function printWebContentsWithPreferredPrinter(webContents, options = {}) {
+  const pageSize = String(options?.pageSize || 'A4').toUpperCase() === 'A5' ? 'A5' : 'A4';
+  const copies = Math.max(1, Math.min(99, Math.round(Number(options?.copies) || 1)));
+  const scaleFactor = Math.max(50, Math.min(200, Math.round(Number(options?.scaleFactor) || 100)));
+  const silent = options?.silent !== undefined ? Boolean(options.silent) : true;
+  const deviceName = await resolvePreferredPrinterDeviceName(
+    webContents,
+    options?.deviceName || DEFAULT_PRINTER_NAME,
+  );
+
+  const runPrint = (printerDeviceName, useSilent) =>
+    new Promise((resolve) => {
+      const printOptions = {
+        silent: Boolean(useSilent),
+        printBackground: true,
+        landscape: false,
+        pageSize,
+        copies,
+        scaleFactor,
+        margins: { marginType: 'none' },
+      };
+      if (printerDeviceName) {
+        printOptions.deviceName = printerDeviceName;
+      }
+      webContents.print(printOptions, (printed, failureReason) =>
+        resolve({ printed, failureReason }),
+      );
+    });
+
+  let outcome = await runPrint(deviceName, silent);
+  if (!outcome.printed) {
+    const reason = String(outcome.failureReason || '').toLowerCase();
+    const isCanceled = reason === 'cancelled' || reason === 'canceled';
+    if (!isCanceled) {
+      if (deviceName) {
+        outcome = await runPrint(undefined, silent);
+      }
+      if (!outcome.printed && silent) {
+        outcome = await runPrint(deviceName, false);
+      }
+    }
+  }
+  return outcome;
+}
+
 /** Prints a generated report on A4 paper through the system print dialog. */
 ipcMain.handle('api:report:print', async (event, input) => {
   let printWindow = null;
@@ -1370,17 +1459,9 @@ ipcMain.handle('api:report:print', async (event, input) => {
       `data:text/html;charset=utf-8,${encodeURIComponent(html)}`,
     );
 
-    const outcome = await new Promise((resolve) => {
-      printWindow.webContents.print(
-        {
-          silent: false,
-          printBackground: true,
-          landscape: false,
-          pageSize: 'A4',
-          margins: { marginType: 'default' },
-        },
-        (printed, failureReason) => resolve({ printed, failureReason }),
-      );
+    const outcome = await printWebContentsWithPreferredPrinter(printWindow.webContents, {
+      pageSize: 'A4',
+      deviceName: DEFAULT_PRINTER_NAME,
     });
 
     if (!outcome.printed) {
@@ -2305,6 +2386,61 @@ ipcMain.handle('api:system:setAutoBackupConfig', async (_event, input) => {
 
 
 
+ipcMain.handle('api:system:getPrinters', async (event) => {
+  try {
+    if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return success({ printers: [], defaultPrinter: DEFAULT_PRINTER_NAME });
+    const rawPrinters = (await window.webContents.getPrintersAsync?.()) || [];
+    const printers = rawPrinters
+      .map((p) => ({
+        name: String(p?.name || ''),
+        displayName: String(p?.displayName || p?.name || ''),
+        isDefault: Boolean(p?.isDefault),
+        status: Number(p?.status ?? 0),
+      }))
+      .filter((p) => p.name);
+    const preferred = await resolvePreferredPrinterDeviceName(
+      window.webContents,
+      DEFAULT_PRINTER_NAME,
+    );
+    return success({
+      printers,
+      defaultPrinter: preferred || DEFAULT_PRINTER_NAME,
+    });
+  } catch {
+    return success({ printers: [], defaultPrinter: DEFAULT_PRINTER_NAME });
+  }
+});
+
+ipcMain.handle('api:system:printCurrentPage', async (event, input = {}) => {
+  try {
+    if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return failure('PRINT_FAILED', 'تعذر الوصول إلى نافذة المستند');
+
+    const outcome = await printWebContentsWithPreferredPrinter(window.webContents, {
+      pageSize: input?.pageSize,
+      deviceName: input?.deviceName || DEFAULT_PRINTER_NAME,
+      copies: input?.copies,
+      scaleFactor: input?.scaleFactor,
+      silent: input?.silent !== undefined ? Boolean(input.silent) : true,
+    });
+
+    if (!outcome.printed) {
+      const reason = String(outcome.failureReason || '');
+      if (!reason || reason.toLowerCase() === 'cancelled' || reason.toLowerCase() === 'canceled') {
+        return success({ printed: false, canceled: true });
+      }
+      return failure('PRINT_FAILED', `تعذر الطباعة: ${reason}`);
+    }
+
+    return success({ printed: true, canceled: false });
+  } catch (e) {
+    return failure(e.code || 'PRINT_FAILED', e.message || 'تعذر تنفيذ الطباعة', e.details);
+  }
+});
+
 ipcMain.handle('api:system:saveCurrentPageAsPdf', async (event, input = {}) => {
   try {
     if (!getCurrentUser()) return failure('UNAUTHENTICATED', 'Authentication is required');
@@ -2320,11 +2456,14 @@ ipcMain.handle('api:system:saveCurrentPageAsPdf', async (event, input = {}) => {
     });
     if (result.canceled || !result.filePath) return success({ canceled: true, path: null });
 
+    const pageSize = String(input?.pageSize || 'A4').toUpperCase() === 'A5' ? 'A5' : 'A4';
+    const scale = Math.max(0.5, Math.min(2, (Number(input?.scaleFactor) || 100) / 100));
     const pdf = await window.webContents.printToPDF({
       printBackground: true,
-      pageSize: 'A4',
+      pageSize,
       landscape: false,
-      margins: { top: 0.35, bottom: 0.35, left: 0.35, right: 0.35 },
+      scale,
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
       preferCSSPageSize: true,
     });
     await writeFile(result.filePath, pdf);

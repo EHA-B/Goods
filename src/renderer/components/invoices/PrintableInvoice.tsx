@@ -1,6 +1,7 @@
+import type { CSSProperties } from "react";
 import type { CompanySettings } from "../../pages/settings/settingsService";
 
-type PrintItem = { id: number; productName: string; batchCode?: string; quantity: number; stockWeight?: number; unitPrice: number; lineTotal: number };
+type PrintItem = { id: number; productName: string; unit?: string; batchCode?: string; quantity: number; stockWeight?: number; unitPrice: number; lineTotal: number };
 type Props = {
   company: CompanySettings;
   title: string;
@@ -25,11 +26,14 @@ type Props = {
     value: number;
   }>;
   notes?: string;
+  paperSize?: "A4" | "A5";
+  style?: CSSProperties;
 };
 const money = (value: number, currency = "SYP") =>
   `${value.toLocaleString("en-US")} ${currency === "SYP" ? "ل.س" : currency}`;
 export default function PrintableInvoice(props: Props) {
-  return <article className="invoice-print-sheet" dir="rtl">
+  const paperClass = props.paperSize === "A5" ? "invoice-print-sheet--a5" : "invoice-print-sheet--a4";
+  return <article className={`invoice-print-sheet ${paperClass}`} dir="rtl" style={props.style}>
     <header className="invoice-print-header">
       <div className="invoice-company-block">
         <div className="invoice-company-identity">
@@ -51,9 +55,9 @@ export default function PrintableInvoice(props: Props) {
 
     <section className="invoice-meta">
       <div className="invoice-party-card"><span>{props.partyLabel}</span><strong>{props.partyName}</strong></div>
-      <div className="invoice-type-card"><span>نوع الفاتورة</span><strong>{props.title}</strong></div>
+      {/* <div className="invoice-type-card"><span>نوع الفاتورة</span><strong>{props.title}</strong></div> */}
       {/* <div className="invoice-status-card"><span>حالة الفاتورة</span><strong>{props.statusLabel}</strong></div> */}
-      {props.company.commercialRegister && <div><span>السجل التجاري</span><strong><bdi>{props.company.commercialRegister}</bdi></strong></div>}
+      {/* {props.company.commercialRegister && <div><span>السجل التجاري</span><strong><bdi>{props.company.commercialRegister}</bdi></strong></div>} */}
     </section>
 
     <table className="invoice-items invoice-ledger-table">
@@ -68,8 +72,8 @@ export default function PrintableInvoice(props: Props) {
       <thead>
         <tr>
           <th>اسم المادة</th>
+          <th className="invoice-number-cell">الكمية</th>
           <th className="invoice-number-cell">العدد</th>
-          <th className="invoice-number-cell">الوزن القائم</th>
           <th className="invoice-number-cell">السعر الإفرادي</th>
           <th className="invoice-number-cell">القيمة الإجمالية</th>
           <th>ملاحظات</th>
@@ -79,7 +83,7 @@ export default function PrintableInvoice(props: Props) {
         {props.items.map((item, index) => (
           <tr key={`${item.id}-${index}`}>
             <td className="invoice-product-name">{item.productName}</td>
-            <td className="invoice-number-cell">{item.quantity.toLocaleString("en-US")}</td>
+            <td className="invoice-number-cell">({item.unit ? ` ${item.unit}` : ""}) {item.quantity.toLocaleString("en-US")}</td>
             <td className="invoice-number-cell">{item.stockWeight && item.stockWeight > 0 ? item.stockWeight.toLocaleString("en-US") : "—"}</td>
             <td className="invoice-number-cell">{money(item.unitPrice, props.currency)}</td>
             <td className="invoice-number-cell invoice-line-total">{money(item.lineTotal, props.currency)}</td>

@@ -176,7 +176,21 @@ const stockliteApi = {
       invokeApi("api:system:selectSaveFile"),
     selectOpenFile: () =>
       invokeApi("api:system:selectOpenFile"),
-    saveCurrentPageAsPdf: (input?: { fileName?: string }) =>
+    getPrinters: () =>
+      invokeApi("api:system:getPrinters"),
+    printCurrentPage: (input?: {
+      pageSize?: "A4" | "A5";
+      deviceName?: string;
+      copies?: number;
+      scaleFactor?: number;
+      silent?: boolean;
+    }) =>
+      invokeApi("api:system:printCurrentPage", input),
+    saveCurrentPageAsPdf: (input?: {
+      fileName?: string;
+      pageSize?: "A4" | "A5";
+      scaleFactor?: number;
+    }) =>
       invokeApi("api:system:saveCurrentPageAsPdf", input),
   },
   license: {

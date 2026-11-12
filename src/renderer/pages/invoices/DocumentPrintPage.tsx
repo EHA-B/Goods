@@ -483,8 +483,24 @@ export default function DocumentPrintPage({
     );
   }
 
-  const print = () =>
-    window.print();
+  const print = async () => {
+    try {
+      if (window.stockliteApi?.system?.printCurrentPage) {
+        await window.stockliteApi.system.printCurrentPage({
+          pageSize: "A4",
+          deviceName: "HP LaserJet P1005",
+        });
+      } else {
+        window.print();
+      }
+    } catch (error: unknown) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "تعذر تنفيذ الطباعة",
+      );
+    }
+  };
 
   const savePdf = async () => {
     try {
@@ -517,16 +533,16 @@ export default function DocumentPrintPage({
               <BackButton />
 
               <Button
-                variant="secondary"
                 startIcon={
                   <Printer size={17} />
                 }
-                onClick={print}
+                onClick={() => void print()}
               >
                 طباعة
               </Button>
 
               <Button
+                variant="secondary"
                 startIcon={
                   <FileDown size={17} />
                 }
@@ -872,7 +888,7 @@ function Payment({
           </>
         )}
 
-        <div>
+        {/* <div>
           <span>الحالة</span>
 
           <strong>
@@ -881,7 +897,7 @@ function Payment({
                 "active",
             )}
           </strong>
-        </div>
+        </div> */}
       </section>
 
       <p className="mt-8">
@@ -955,7 +971,7 @@ function Transaction({
           </strong>
         </div>
 
-        <div>
+        {/* <div>
           <span>الحالة</span>
 
           <strong>
@@ -963,7 +979,7 @@ function Transaction({
               d.status,
             )}
           </strong>
-        </div>
+        </div> */}
       </section>
 
       <p className="mt-8">
@@ -1114,15 +1130,15 @@ function Statement({
             d.party.name,
           ],
 
-          [
-            "الهاتف",
-            d.party.phone,
-          ],
+          // [
+          //   "الهاتف",
+          //   d.party.phone,
+          // ],
 
-          [
-            "العنوان",
-            d.party.address,
-          ],
+          // [
+          //   "العنوان",
+          //   d.party.address,
+          // ],
 
           [
             "الرصيد الحالي",
@@ -1151,7 +1167,7 @@ function Statement({
             <th>الإجمالي</th>
             <th>المدفوع</th>
             <th>المتبقي</th>
-            <th>الحالة</th>
+            {/* <th>الحالة</th> */}
           </tr>
         </thead>
 
@@ -1194,11 +1210,11 @@ function Statement({
                   )}
                 </td>
 
-                <td>
+                {/* <td>
                   {getInvoiceStatus(
                     invoice.status,
                   )}
-                </td>
+                </td> */}
               </tr>
             ),
           )}
@@ -1217,7 +1233,7 @@ function Statement({
             <th>النوع</th>
             <th>الصندوق</th>
             <th>المبلغ</th>
-            <th>الحالة</th>
+            {/* <th>الحالة</th> */}
           </tr>
         </thead>
 
@@ -1260,11 +1276,11 @@ function Statement({
                   )}
                 </td>
 
-                <td>
+                {/* <td>
                   {getPaymentStatusLabel(
                     payment.status,
                   )}
-                </td>
+                </td> */}
               </tr>
             ),
           )}
@@ -1433,12 +1449,12 @@ function Consignment({
             ),
           ],
 
-          [
-            "الحالة",
-            getConsignmentStatusLabel(
-              settlement.status,
-            ),
-          ],
+          // [
+          //   "الحالة",
+          //   getConsignmentStatusLabel(
+          //     settlement.status,
+          //   ),
+          // ],
 
           [
             "نوع التسوية",

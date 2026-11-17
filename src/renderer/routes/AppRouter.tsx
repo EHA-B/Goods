@@ -105,6 +105,8 @@ function AppRouter() {
                     <Route path={PATHS.PRINT_TRANSFER} element={<DocumentPrintPage kind="transfer" />} />
                     <Route path={PATHS.PRINT_CUSTOMER_STATEMENT} element={<DocumentPrintPage kind="customer" />} />
                     <Route path={PATHS.PRINT_SUPPLIER_STATEMENT} element={<DocumentPrintPage kind="supplier" />} />
+                    <Route path={PATHS.PRINT_CUSTOMERS_BALANCES} element={<DocumentPrintPage kind="customers_balances" />} />
+                    <Route path={PATHS.PRINT_SUPPLIERS_BALANCES} element={<DocumentPrintPage kind="suppliers_balances" />} />
                     <Route path={PATHS.PRINT_CASHBOX_STATEMENT} element={<DocumentPrintPage kind="cashbox" />} />
                     <Route path={PATHS.PRINT_CONSIGNMENT} element={<DocumentPrintPage kind="consignment" />} />
                     <Route path={PATHS.PURCHASE_CONSIGNMENT} element={<ConsignmentOverviewPage />} />

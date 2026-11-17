@@ -10,11 +10,31 @@ import {
 import { Link, Navigate, useParams } from "react-router-dom";
 
 import { Button, Card, PageHeader } from "../../components/ui";
+import PrintSettingsToolbar, {
+  DEFAULT_PRINTER,
+  usePrintSettings,
+} from "../../components/invoices/PrintSettingsToolbar";
 import { getHelpArticle, getHelpCategory } from "./helpContent";
 
 export default function HelpArticlePage() {
   const { articleSlug } = useParams();
   const article = getHelpArticle(articleSlug);
+  const {
+    printers,
+    selectedPrinter,
+    paperSize,
+    copies,
+    scaleFactor,
+    topMarginMm,
+    sideMarginMm,
+    setCopies,
+    handlePaperSizeChange,
+    handlePrinterChange,
+    handleScaleChange,
+    handleTopMarginChange,
+    handleSideMarginChange,
+    resetPrintAdjustments,
+  } = usePrintSettings();
 
   if (!article) {
     return <Navigate to="/help" replace />;
@@ -24,37 +44,59 @@ export default function HelpArticlePage() {
 
   return (
     <div className="help-article-print-area">
-      <PageHeader
-        title={article.title}
-        description={article.summary}
-        actions={
-          <div className="help-article-actions flex items-center gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => {
-                if (window.stockliteApi?.system?.printCurrentPage) {
-                  void window.stockliteApi.system.printCurrentPage({
-                    pageSize: "A4",
-                    deviceName: "HP LaserJet P1005",
-                  });
-                } else {
-                  window.print();
-                }
-              }}
-            >
-              <Printer size={17} />
-              طباعة المقالة
-            </Button>
-            <Link
-              to="/help"
-              className="inline-flex h-10 items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--surface)] px-4 text-sm font-bold text-[var(--text-primary)] hover:border-[var(--primary)] hover:text-[var(--primary)]"
-            >
-              <ArrowRight size={17} />
-              رجوع للدليل
-            </Link>
-          </div>
-        }
-      />
+      <div className="help-article-actions mb-5 space-y-3">
+        <PageHeader
+          title={article.title}
+          description={article.summary}
+          actions={
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (window.stockliteApi?.system?.printCurrentPage) {
+                    void window.stockliteApi.system.printCurrentPage({
+                      pageSize: paperSize,
+                      deviceName: selectedPrinter || DEFAULT_PRINTER,
+                      copies,
+                      scaleFactor,
+                      silent: true,
+                    });
+                  } else {
+                    window.print();
+                  }
+                }}
+              >
+                <Printer size={17} />
+                طباعة المقالة
+              </Button>
+              <Link
+                to="/help"
+                className="inline-flex h-10 items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--surface)] px-4 text-sm font-bold text-[var(--text-primary)] hover:border-[var(--primary)] hover:text-[var(--primary)]"
+              >
+                <ArrowRight size={17} />
+                رجوع للدليل
+              </Link>
+            </div>
+          }
+        />
+
+        <PrintSettingsToolbar
+          printers={printers}
+          selectedPrinter={selectedPrinter}
+          paperSize={paperSize}
+          copies={copies}
+          scaleFactor={scaleFactor}
+          topMarginMm={topMarginMm}
+          sideMarginMm={sideMarginMm}
+          onPrinterChange={handlePrinterChange}
+          onPaperSizeChange={handlePaperSizeChange}
+          onCopiesChange={setCopies}
+          onScaleChange={handleScaleChange}
+          onTopMarginChange={handleTopMarginChange}
+          onSideMarginChange={handleSideMarginChange}
+          onReset={resetPrintAdjustments}
+        />
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
         <article className="space-y-5">

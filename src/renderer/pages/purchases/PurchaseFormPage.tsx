@@ -51,6 +51,8 @@ type PurchaseItemForm = {
 
   // السعر المتوقع لفواتير الأمانة فقط
   estimated_purchase_price: number;
+
+  notes: string;
 };
 
 /**
@@ -76,6 +78,7 @@ const emptyItem = (): PurchaseItemForm => ({
   stock_weight: 0,
   purchase_price: 0,
   estimated_purchase_price: 0,
+  notes: "",
 });
 
 const money = (value: number) =>
@@ -200,14 +203,14 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
     if (!isEdit || !lookups) return;
     purchasesService.getDetails(editingId).then((data) => {
       const draft = consumeInvoiceDraft<any>(draftKey);
-      const source = draft ?? { supplierId: Number(data.invoice.supplier_id), invoiceNumber: data.invoice.invoice_number, invoiceDate: data.invoice.invoice_date, invoiceType: data.invoice.invoice_type, discount: Number(data.invoice.discount_amount ?? data.invoice.discount ?? 0), transportCost: Number((data.invoice as any).transport_cost ?? 0), transportCostBearer: ((data.invoice as any).transport_cost_bearer === "supplier" ? "supplier" : "company"), emptyingCost: Number((data.invoice as any).emptying_cost ?? 0), emptyingCostBearer: ((data.invoice as any).emptying_cost_bearer === "supplier" ? "supplier" : "company"), notes: data.invoice.notes ?? "", currency: data.invoice.currency ?? "SYP", exchangeRate: Number(data.invoice.exchange_rate ?? 1), items: data.items.map((row: any) => ({ product_id: Number(row.product_id), productName: String(row.product_name ?? ""), quantity: Number(row.quantity ?? 1), stock_weight: Number(row.stock_weight ?? 0), purchase_price: Number(row.unit_price ?? 0), estimated_purchase_price: Number(row.estimated_purchase_price ?? row.unit_price ?? 0) })) };
-      setSupplierId(source.supplierId); setInvoiceNumber(source.invoiceNumber); setInvoiceDate(source.invoiceDate); setInvoiceType(source.invoiceType); setDiscount(source.discount); setTransportCost(source.transportCost ?? 0); setTransportCostBearer(source.transportCostBearer ?? "company"); setEmptyingCost(source.emptyingCost ?? 0); setEmptyingCostBearer(source.emptyingCostBearer ?? "company"); setNotes(source.notes); setCurrency(source.currency); setExchangeRate(source.exchangeRate); setItems(source.items); setPaymentAmount(0); setExistingPaidAmount(Number(data.invoice.paid_amount ?? 0)); setRestoredDraft(Boolean(draft)); setDraftInitialized(true);
+      const source = draft ?? { supplierId: Number(data.invoice.supplier_id), invoiceNumber: data.invoice.invoice_number, invoiceDate: data.invoice.invoice_date, invoiceType: data.invoice.invoice_type, discount: Number(data.invoice.discount_amount ?? data.invoice.discount ?? 0), transportCost: Number((data.invoice as any).transport_cost ?? 0), transportCostBearer: ((data.invoice as any).transport_cost_bearer === "supplier" ? "supplier" : "company"), emptyingCost: Number((data.invoice as any).emptying_cost ?? 0), emptyingCostBearer: ((data.invoice as any).emptying_cost_bearer === "supplier" ? "supplier" : "company"), notes: data.invoice.notes ?? "", currency: data.invoice.currency ?? "SYP", exchangeRate: Number(data.invoice.exchange_rate ?? 1), items: data.items.map((row: any) => ({ product_id: Number(row.product_id), productName: String(row.product_name ?? ""), quantity: Number(row.quantity ?? 1), stock_weight: Number(row.stock_weight ?? 0), purchase_price: Number(row.unit_price ?? 0), estimated_purchase_price: Number(row.estimated_purchase_price ?? row.unit_price ?? 0), notes: String(row.notes ?? "") })) };
+      setSupplierId(source.supplierId); setInvoiceNumber(source.invoiceNumber); setInvoiceDate(source.invoiceDate); setInvoiceType(source.invoiceType); setDiscount(source.discount); setTransportCost(source.transportCost ?? 0); setTransportCostBearer(source.transportCostBearer ?? "company"); setEmptyingCost(source.emptyingCost ?? 0); setEmptyingCostBearer(source.emptyingCostBearer ?? "company"); setNotes(source.notes); setCurrency(source.currency); setExchangeRate(source.exchangeRate); setItems(Array.isArray(source.items) ? source.items.map((row: any) => ({ ...emptyItem(), ...row, stock_weight: Number(row.stock_weight ?? 0), notes: String(row.notes ?? "") })) : [emptyItem()]); setPaymentAmount(0); setExistingPaidAmount(Number(data.invoice.paid_amount ?? 0)); setRestoredDraft(Boolean(draft)); setDraftInitialized(true);
     }).catch((err: Error) => setError(getArabicErrorMessage(err, "تعذر تحميل الفاتورة للتعديل")));
   }, [isEdit, editingId, lookups, draftKey]);
 
   useEffect(() => {
     if (isEdit || draftInitialized) return; const draft = isTab ? loadInvoiceDraft<any>(draftKey) : consumeInvoiceDraft<any>(draftKey); if (!draft) { setDraftInitialized(true); return; }
-    setSupplierId(draft.supplierId ?? 0); setInvoiceNumber(draft.invoiceNumber ?? ""); setInvoiceDate(draft.invoiceDate ?? invoiceDate); setInvoiceType(draft.invoiceType ?? "standard"); setDiscount(draft.discount ?? 0); setTransportCost(draft.transportCost ?? 0); setTransportCostBearer(draft.transportCostBearer ?? "company"); setEmptyingCost(draft.emptyingCost ?? 0); setEmptyingCostBearer(draft.emptyingCostBearer ?? "company"); setNotes(draft.notes ?? ""); setItems(Array.isArray(draft.items) && draft.items.length > 0 ? draft.items.map((row: any) => ({ ...emptyItem(), ...row, stock_weight: Number(row.stock_weight ?? 0) })) : [emptyItem()]); setPaymentAmount(draft.paymentAmount ?? 0); setPaymentCashboxId(draft.paymentCashboxId ?? 0); setPaymentDate(draft.paymentDate ?? paymentDate); setPaymentExchangeRate(draft.paymentExchangeRate ?? ""); setCurrency(draft.currency ?? "SYP"); setExchangeRate(draft.exchangeRate ?? 1); setRestoredDraft(!isTab); setDraftInitialized(true);
+    setSupplierId(draft.supplierId ?? 0); setInvoiceNumber(draft.invoiceNumber ?? ""); setInvoiceDate(draft.invoiceDate ?? invoiceDate); setInvoiceType(draft.invoiceType ?? "standard"); setDiscount(draft.discount ?? 0); setTransportCost(draft.transportCost ?? 0); setTransportCostBearer(draft.transportCostBearer ?? "company"); setEmptyingCost(draft.emptyingCost ?? 0); setEmptyingCostBearer(draft.emptyingCostBearer ?? "company"); setNotes(draft.notes ?? ""); setItems(Array.isArray(draft.items) && draft.items.length > 0 ? draft.items.map((row: any) => ({ ...emptyItem(), ...row, stock_weight: Number(row.stock_weight ?? 0), notes: String(row.notes ?? "") })) : [emptyItem()]); setPaymentAmount(draft.paymentAmount ?? 0); setPaymentCashboxId(draft.paymentCashboxId ?? 0); setPaymentDate(draft.paymentDate ?? paymentDate); setPaymentExchangeRate(draft.paymentExchangeRate ?? ""); setCurrency(draft.currency ?? "SYP"); setExchangeRate(draft.exchangeRate ?? 1); setRestoredDraft(!isTab); setDraftInitialized(true);
   }, [isEdit, draftKey, draftInitialized]);
 
   useEffect(() => {
@@ -815,6 +818,8 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
             isConsignment
               ? item.estimated_purchase_price
               : undefined,
+
+          notes: item.notes?.trim() || null,
         })),
 
         /**
@@ -1138,6 +1143,7 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                     <FormField
                       label="المنتج"
                       required
+                      messageClassName="hidden"
                     >
                       <div className="flex gap-2">
                         <div className="min-w-0 flex-1">
@@ -1195,7 +1201,7 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                             )
                           }
                         >
-                          منتج جديد
+                           جديد
                         </Button>
                       </div>
                     </FormField>
@@ -1203,6 +1209,7 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                     <FormField
                       label="الكمية"
                       required
+                      messageClassName="hidden"
                     >
                       <Input
                         type="number"
@@ -1219,7 +1226,7 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                       />
                     </FormField>
 
-                    <FormField label="الوزن القائم">
+                    <FormField label="الوزن القائم" messageClassName="hidden">
                       <Input
                         type="number"
                         min="0"
@@ -1235,7 +1242,7 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                     </FormField>
 
                     {isConsignment ? (
-                      <FormField label="سعر تسويق المنتج" required>
+                      <FormField label="سعر تسويق المنتج" required messageClassName="hidden">
                         <Input
                           type="number"
                           min="0"
@@ -1259,6 +1266,7 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                       <FormField
                         label="سعر الشراء"
                         required
+                        messageClassName="hidden"
                       >
                         <Input
                           type="number"
@@ -1280,12 +1288,32 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                       </FormField>
                     )}
 
-                    <FormField label="إجمالي السطر">
+                    <FormField label="إجمالي السطر" messageClassName="hidden">
                       <Input
                         readOnly
                         value={money(lineTotal)}
                       />
                     </FormField>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-3 border-t border-[var(--border)]/60 pt-3">
+                    <label
+                      htmlFor={`purchase-item-notes-${index}`}
+                      className="shrink-0 text-xs font-bold text-[var(--text-secondary)]"
+                    >
+                      ملاحظات الصنف
+                    </label>
+                    <Input
+                      id={`purchase-item-notes-${index}`}
+                      inputSize="sm"
+                      value={item.notes}
+                      placeholder="أضف ملاحظة على هذا الصنف (اختياري)..."
+                      onChange={(e) =>
+                        updateItem(index, {
+                          notes: e.target.value,
+                        })
+                      }
+                    />
                   </div>
                 </div>
               );
@@ -1409,6 +1437,7 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                   <th className="px-4 py-3 text-center">الوزن القائم</th>
                   <th className="px-4 py-3 text-center">{isConsignment ? "سعر التسويق" : "سعر الشراء"}</th>
                   <th className="px-4 py-3 text-center">إجمالي السطر</th>
+                  <th className="px-4 py-3 text-center">ملاحظات</th>
                 </tr>
               </thead>
               <tbody>
@@ -1422,6 +1451,7 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                       <td className="px-4 py-3 text-center align-middle" dir="ltr">{Number(item.stock_weight) > 0 ? money(item.stock_weight) : "—"}</td>
                       <td className="px-4 py-3 text-center align-middle" dir="ltr">{money(price)} {currency}</td>
                       <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{money(item.quantity * price)} {currency}</td>
+                      <td className="px-4 py-3 text-center align-middle text-[var(--text-secondary)]">{item.notes?.trim() || "—"}</td>
                     </tr>
                   );
                 })}
@@ -1433,17 +1463,20 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                   <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{money(items.reduce((sum, item) => sum + Number(item.stock_weight || 0), 0))}</td>
                   <td className="px-4 py-3 text-center align-middle">—</td>
                   <td className="px-4 py-3 text-center align-middle font-bold text-[var(--primary)]" dir="ltr">{money(isConsignment ? estimatedSubtotal : standardSubtotal)} {currency}</td>
+                  <td className="px-4 py-3 text-center align-middle">—</td>
                 </tr>
                 {transportCost > 0 && (
                   <tr className="border-t border-[var(--border)]">
                     <td colSpan={5} className="px-4 py-3 text-center align-middle font-medium">تكلفة النقل — {transportCostBearer === "company" ? "علينا" : "على المورد"}</td>
                     <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{transportCostBearer === "supplier" ? "− " : "+ "}{money(transportCost)} {currency}</td>
+                    <td />
                   </tr>
                 )}
                 {emptyingCost > 0 && (
                   <tr className="border-t border-[var(--border)]">
                     <td colSpan={5} className="px-4 py-3 text-center align-middle font-medium">تكلفة العتالة — {emptyingCostBearer === "company" ? "علينا" : "على المورد"}</td>
                     <td className="px-4 py-3 text-center align-middle font-bold" dir="ltr">{emptyingCostBearer === "supplier" ? "− " : "+ "}{money(emptyingCost)} {currency}</td>
+                    <td />
                   </tr>
                 )}
                 {(transportCost > 0 || emptyingCost > 0) && (
@@ -1452,6 +1485,7 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
                     <td className="px-4 py-3 text-center align-middle text-base font-bold text-[var(--primary)]" dir="ltr">
                       {money((isConsignment ? estimatedSubtotal : standardSubtotal) + transportCost * (transportCostBearer === "company" ? 1 : -1) + emptyingCost * (emptyingCostBearer === "company" ? 1 : -1))} {currency}
                     </td>
+                    <td />
                   </tr>
                 )}
               </tfoot>

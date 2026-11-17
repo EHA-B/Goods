@@ -1,10 +1,20 @@
 import type { ReportFilterOptions, ReportFilters, ReportOutputFormat, ReportResult } from "./reportsTypes";
 
+export type ReportPrintOptions = {
+  pageSize?: "A4" | "A5";
+  deviceName?: string;
+  copies?: number;
+  scaleFactor?: number;
+  topMarginMm?: number;
+  sideMarginMm?: number;
+  silent?: boolean;
+};
+
 type ReportsApi = {
   options?: () => Promise<ReportFilterOptions>;
   generate?: (input: { reportId: string; filters: ReportFilters }) => Promise<ReportResult>;
-  export?: (input: { reportId: string; filters: ReportFilters; format: Exclude<ReportOutputFormat, "preview"> }) => Promise<{ success: boolean; filePath?: string; canceled?: boolean }>;
-  print?: (input: { reportId: string; filters: ReportFilters }) => Promise<{ success: boolean; canceled?: boolean }>;
+  export?: (input: { reportId: string; filters: ReportFilters; format: Exclude<ReportOutputFormat, "preview">; printOptions?: ReportPrintOptions }) => Promise<{ success: boolean; filePath?: string; canceled?: boolean }>;
+  print?: (input: { reportId: string; filters: ReportFilters; printOptions?: ReportPrintOptions }) => Promise<{ success: boolean; canceled?: boolean }>;
 };
 
 function api(): ReportsApi | undefined {
@@ -32,16 +42,16 @@ export const reportsService = {
     return generate({ reportId, filters });
   },
 
-  async export(reportId: string, filters: ReportFilters, format: "pdf" | "excel") {
+  async export(reportId: string, filters: ReportFilters, format: "pdf" | "excel", printOptions?: ReportPrintOptions) {
     const exporter = api()?.export;
     if (!exporter) throw new Error("تصدير التقارير غير مربوط بالباك بعد.");
-    return exporter({ reportId, filters, format });
+    return exporter({ reportId, filters, format, printOptions });
   },
 
-  /** Prints the report on A4 paper via the system print dialog. */
-  async print(reportId: string, filters: ReportFilters) {
+  /** Prints the report using the selected printer and paper settings. */
+  async print(reportId: string, filters: ReportFilters, printOptions?: ReportPrintOptions) {
     const printer = api()?.print;
     if (!printer) throw new Error("طباعة التقارير غير مربوطة بالباك بعد.");
-    return printer({ reportId, filters });
+    return printer({ reportId, filters, printOptions });
   },
 };

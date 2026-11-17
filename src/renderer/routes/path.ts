@@ -75,6 +75,8 @@ export const PATHS = {
     PRINT_TRANSFER: "/print/transfers/:groupId",
     PRINT_CUSTOMER_STATEMENT: "/print/customers/:customerId/statement",
     PRINT_SUPPLIER_STATEMENT: "/print/suppliers/:supplierId/statement",
+    PRINT_CUSTOMERS_BALANCES: "/print/customers/balances",
+    PRINT_SUPPLIERS_BALANCES: "/print/suppliers/balances",
     PRINT_CASHBOX_STATEMENT: "/print/cashboxes/:id/statement",
     PRINT_CONSIGNMENT: "/print/consignment/:purchaseId",
 } as const;

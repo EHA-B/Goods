@@ -666,6 +666,15 @@ interface Window {
         reportId: string;
         filters: Record<string, unknown>;
         format: "pdf" | "excel";
+        printOptions?: {
+          pageSize?: "A4" | "A5";
+          deviceName?: string;
+          copies?: number;
+          scaleFactor?: number;
+          topMarginMm?: number;
+          sideMarginMm?: number;
+          silent?: boolean;
+        };
       }): Promise<{
         success: boolean;
         filePath?: string;
@@ -674,6 +683,15 @@ interface Window {
       print(input: {
         reportId: string;
         filters: Record<string, unknown>;
+        printOptions?: {
+          pageSize?: "A4" | "A5";
+          deviceName?: string;
+          copies?: number;
+          scaleFactor?: number;
+          topMarginMm?: number;
+          sideMarginMm?: number;
+          silent?: boolean;
+        };
       }): Promise<{
         success: boolean;
         canceled?: boolean;

@@ -284,7 +284,7 @@ export default function InvoicePrintPage({ type }: { type: "sale" | "purchase" }
   return (
     <div className="invoice-print-page">
       <div className="no-print mb-5 space-y-3">
-        <style>{`@page { size: ${paperSize} portrait; margin: 0mm; }`}</style>
+        <style>{`@page { size: ${paperSize === "A5" ? "148mm 210mm" : "210mm 297mm"}; margin: 0mm; }`}</style>
         <PageHeader
           title="معاينة الفاتورة"
           description="تحكم بإعدادات الطابعة والورق والهوامش مباشرة ثم اطبع الفاتورة بنقرة واحدة."
@@ -446,6 +446,7 @@ export default function InvoicePrintPage({ type }: { type: "sale" | "purchase" }
             id: Number(item.id || i),
             productName: String(item.product_name ?? "-"),
             unit: item.product_unit ? String(item.product_unit) : item.unit ? String(item.unit) : undefined,
+            notes: item.notes ? String(item.notes) : undefined,
             quantity: Number(item.quantity ?? 0),
             stockWeight: Number(item.stock_weight ?? 0),
             unitPrice: Number(item.unit_price ?? 0),
@@ -478,6 +479,7 @@ export default function InvoicePrintPage({ type }: { type: "sale" | "purchase" }
             id: Number(item.id || i),
             productName: String(item.product_name ?? "-"),
             unit: item.product_unit ? String(item.product_unit) : item.unit ? String(item.unit) : undefined,
+            notes: item.notes ? String(item.notes) : undefined,
             quantity: Number(item.quantity ?? 0),
             stockWeight: Number(item.stock_weight ?? 0),
             unitPrice: Number(item.unit_price ?? 0),

@@ -136,7 +136,11 @@ function calculateInvoiceTotals(items, discountAmount = 0) {
         }
 
         const lineTotal = Math.round(qty * price * 100) / 100;
-        return { ...item, quantity: qty, stock_weight: stockWeight, price, lineTotal };
+        const cleanNotes =
+            item.notes !== undefined && item.notes !== null && String(item.notes).trim() !== ''
+                ? String(item.notes).trim()
+                : null;
+        return { ...item, quantity: qty, stock_weight: stockWeight, price, lineTotal, notes: cleanNotes };
     });
 
     const subtotal = normalizedItems.reduce((sum, item) => sum + item.lineTotal, 0);

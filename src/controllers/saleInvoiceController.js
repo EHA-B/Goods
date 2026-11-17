@@ -473,7 +473,7 @@ class SaleInvoiceController {
                 remaining_amount: remainingAmount,
                 currency: nextCurrency,
                 exchange_rate: nextRate,
-                items: normalizedItems.map((x) => ({ product_id: x.product_id, quantity: x.quantity, stock_weight: x.stock_weight, sale_price: x.price })),
+                items: normalizedItems.map((x) => ({ product_id: x.product_id, quantity: x.quantity, stock_weight: x.stock_weight, sale_price: x.price, notes: x.notes ?? null })),
             };
             await dbRun(
                 db,

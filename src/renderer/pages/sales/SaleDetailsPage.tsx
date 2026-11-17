@@ -116,7 +116,7 @@ export default function SaleDetailsPage() {
           <DataTable>
             <DataTableHead>
               <DataTableRow>
-                {["المنتج", "الكمية", "الوزن القائم", "سعر البيع", "التكلفة", "الإجمالي", "الربح"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
+                {["المنتج", "الكمية", "الوزن القائم", "سعر البيع", "التكلفة", "الإجمالي", "الربح", "ملاحظات"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
               </DataTableRow>
             </DataTableHead>
             <DataTableBody>
@@ -129,6 +129,7 @@ export default function SaleDetailsPage() {
                   <DataTableCell>{money(Number(item.cost_price ?? 0), "SYP")}</DataTableCell>
                   <DataTableCell>{money(Number(item.line_total ?? 0), invoice.currency)}</DataTableCell>
                   <DataTableCell>{money(Number(item.profit ?? 0), "SYP")}</DataTableCell>
+                  <DataTableCell>{item.notes ? String(item.notes) : "—"}</DataTableCell>
                 </DataTableRow>
               ))}
             </DataTableBody>

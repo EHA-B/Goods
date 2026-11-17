@@ -373,12 +373,16 @@ function renderGenericReportSections(sections) {
   }).join('');
 }
 
-function renderReportHtml(report) {
+function renderReportHtml(report, printOptions = {}) {
   const columns = Array.isArray(report?.columns) ? report.columns : [];
   const rows = Array.isArray(report?.rows) ? report.rows : [];
   const summary = Array.isArray(report?.summary) ? report.summary : [];
   const sections = Array.isArray(report?.sections) ? report.sections : [];
   const detailedInvoices = isDetailedInvoiceReport(report);
+  const pageSize = String(printOptions?.pageSize || 'A4').toUpperCase() === 'A5' ? 'A5' : 'A4';
+  const topMarginMm = Number.isFinite(Number(printOptions?.topMarginMm)) ? Number(printOptions.topMarginMm) : (pageSize === 'A5' ? 3 : 6);
+  const sideMarginMm = Number.isFinite(Number(printOptions?.sideMarginMm)) ? Number(printOptions.sideMarginMm) : (pageSize === 'A5' ? 4.5 : 6);
+  const scaleFactor = Number.isFinite(Number(printOptions?.scaleFactor)) ? Math.max(50, Math.min(150, Number(printOptions.scaleFactor))) : 100;
 
   const summaryHtml = renderReportSummaryCards(summary);
 
@@ -421,12 +425,14 @@ function renderReportHtml(report) {
   <title>${escapeReportHtml(report?.title || 'تقرير')}</title>
   <style>
     * { box-sizing: border-box; }
+    @page { size: ${pageSize === 'A5' ? '148mm 210mm' : '210mm 297mm'}; margin: 0mm; }
 
     html, body { direction: rtl; }
 
     body {
       margin: 0;
-      padding: 0;
+      padding: ${topMarginMm}mm ${sideMarginMm}mm;
+      zoom: ${scaleFactor}%;
       font-family: Tahoma, Arial, sans-serif;
       color: #17211f;
       background: #ffffff;
@@ -1310,7 +1316,9 @@ ipcMain.handle('api:report:export', async (event, input) => {
       },
     });
 
-    const html = renderReportHtml(report);
+    const printOptions = input?.printOptions || {};
+    const pageSize = String(printOptions?.pageSize || 'A4').toUpperCase() === 'A5' ? 'A5' : 'A4';
+    const html = renderReportHtml(report, printOptions);
     await exportWindow.loadURL(
       `data:text/html;charset=utf-8,${encodeURIComponent(html)}`,
     );
@@ -1318,12 +1326,12 @@ ipcMain.handle('api:report:export', async (event, input) => {
     const pdf = await exportWindow.webContents.printToPDF({
       printBackground: true,
       landscape: false,
-      pageSize: 'A4',
+      pageSize,
       margins: {
-        top: 0.28,
-        bottom: 0.28,
-        left: 0.28,
-        right: 0.28,
+        top: 0,
+        bottom: 0,
+        left: 0,
+        right: 0,
       },
       preferCSSPageSize: true,
     });
@@ -1454,14 +1462,18 @@ ipcMain.handle('api:report:print', async (event, input) => {
       },
     });
 
-    const html = renderReportHtml(report);
+    const printOptions = input?.printOptions || {};
+    const html = renderReportHtml(report, printOptions);
     await printWindow.loadURL(
       `data:text/html;charset=utf-8,${encodeURIComponent(html)}`,
     );
 
     const outcome = await printWebContentsWithPreferredPrinter(printWindow.webContents, {
-      pageSize: 'A4',
-      deviceName: DEFAULT_PRINTER_NAME,
+      pageSize: printOptions?.pageSize || 'A4',
+      deviceName: printOptions?.deviceName || DEFAULT_PRINTER_NAME,
+      copies: printOptions?.copies,
+      scaleFactor: printOptions?.scaleFactor,
+      silent: printOptions?.silent !== undefined ? Boolean(printOptions.silent) : true,
     });
 
     if (!outcome.printed) {

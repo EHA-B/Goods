@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import type { CompanySettings } from "../../pages/settings/settingsService";
 
-type PrintItem = { id: number; productName: string; unit?: string; batchCode?: string; quantity: number; stockWeight?: number; unitPrice: number; lineTotal: number };
+type PrintItem = { id: number; productName: string; unit?: string; batchCode?: string; notes?: string; quantity: number; stockWeight?: number; unitPrice: number; lineTotal: number };
 type Props = {
   company: CompanySettings;
   title: string;
@@ -87,7 +87,7 @@ export default function PrintableInvoice(props: Props) {
             <td className="invoice-number-cell">{item.stockWeight && item.stockWeight > 0 ? item.stockWeight.toLocaleString("en-US") : "—"}</td>
             <td className="invoice-number-cell">{money(item.unitPrice, props.currency)}</td>
             <td className="invoice-number-cell invoice-line-total">{money(item.lineTotal, props.currency)}</td>
-            <td className="invoice-item-notes">{item.batchCode || ""}</td>
+            <td className="invoice-item-notes">{item.notes || item.batchCode || ""}</td>
           </tr>
         ))}
         {Array.from({ length: Math.max(0, 18 - props.items.length) }, (_, index) => (
@@ -113,21 +113,21 @@ export default function PrintableInvoice(props: Props) {
       <div className="invoice-summary">
         <div><span>المجموع الفرعي</span><strong>{money(props.subtotal, props.currency)}</strong></div>
         <div><span>الخصم</span><strong>{money(props.discount, props.currency)}</strong></div>
-        {props.extraAmount && (
+        {/* {props.extraAmount && (
           <div>
             <span>{props.extraAmount.label}</span>
             <strong>{money(props.extraAmount.value, props.currency)}</strong>
           </div>
-        )}
-        {props.extraAmounts
+        )} */}
+        {/* {props.extraAmounts
           ?.filter((item) => Math.abs(Number(item.value)) > 0)
           .map((item) => (
             <div key={item.label}>
               <span>{item.label}</span>
               <strong>{money(Number(item.value), props.currency)}</strong>
             </div>
-          ))}
-        <div><span>الضريبة</span><strong>{money(props.tax, props.currency)}</strong></div>
+          ))} */}
+        {/* <div><span>الضريبة</span><strong>{money(props.tax, props.currency)}</strong></div> */}
         <div className="invoice-total"><span>الإجمالي النهائي</span><strong>{money(props.total, props.currency)}</strong></div>
         <div><span>المبلغ المدفوع</span><strong>{money(props.paidAmount, props.currency)}</strong></div>
         <div className="invoice-remaining"><span>المبلغ المتبقي</span><strong>{money(Math.max(0, props.total - props.paidAmount), props.currency)}</strong></div>

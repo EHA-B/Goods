@@ -6,6 +6,7 @@ import {
 import {
   AlertCircle,
   Plus,
+  Printer,
   RefreshCw,
   Users,
 } from "lucide-react";
@@ -224,18 +225,34 @@ export default function CustomersPage() {
         title="العملاء"
         description="إدارة بيانات العملاء وأرصدة حساباتهم داخل النظام."
         actions={
-          <Button
-            startIcon={
-              <Plus size={17} />
-            }
-            onClick={() =>
-              navigate(
-                PATHS.CUSTOMER_NEW,
-              )
-            }
-          >
-            إضافة عميل
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              startIcon={
+                <Printer size={17} />
+              }
+              onClick={() =>
+                navigate(
+                  PATHS.PRINT_CUSTOMERS_BALANCES,
+                )
+              }
+            >
+              سجل أرصدة العملاء (طباعة / PDF)
+            </Button>
+
+            <Button
+              startIcon={
+                <Plus size={17} />
+              }
+              onClick={() =>
+                navigate(
+                  PATHS.CUSTOMER_NEW,
+                )
+              }
+            >
+              إضافة عميل
+            </Button>
+          </div>
         }
       />
 

@@ -6,6 +6,7 @@ import {
 import {
   AlertCircle,
   Plus,
+  Printer,
   RefreshCw,
   Truck,
 } from "lucide-react";
@@ -225,18 +226,34 @@ export default function SuppliersPage() {
         title="الموردون"
         description="إدارة بيانات الموردين وأرصدة حساباتهم داخل النظام."
         actions={
-          <Button
-            startIcon={
-              <Plus size={17} />
-            }
-            onClick={() =>
-              navigate(
-                PATHS.SUPPLIER_NEW,
-              )
-            }
-          >
-            إضافة مورد
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              startIcon={
+                <Printer size={17} />
+              }
+              onClick={() =>
+                navigate(
+                  PATHS.PRINT_SUPPLIERS_BALANCES,
+                )
+              }
+            >
+              سجل أرصدة الموردين (طباعة / PDF)
+            </Button>
+
+            <Button
+              startIcon={
+                <Plus size={17} />
+              }
+              onClick={() =>
+                navigate(
+                  PATHS.SUPPLIER_NEW,
+                )
+              }
+            >
+              إضافة مورد
+            </Button>
+          </div>
         }
       />
 

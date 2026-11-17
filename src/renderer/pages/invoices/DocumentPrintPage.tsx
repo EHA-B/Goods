@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, FileDown, Printer, RotateCcw } from "lucide-react";
+import { CalendarDays, FileDown, LoaderCircle, Printer, RotateCcw } from "lucide-react";
 import { useParams } from "react-router-dom";
 
 import {
@@ -9,13 +9,15 @@ import {
   EmptyState,
   Input,
   PageHeader,
+  Select,
 } from "../../components/ui";
-
-import {
-  getPaymentStatusLabel,
-  getPurchaseStatusLabel,
-  getSaleStatusLabel,
-} from "../../lib/statusTranslations";
+import PrintSettingsToolbar, {
+  DEFAULT_PRINTER,
+  usePrintSettings,
+} from "../../components/invoices/PrintSettingsToolbar";
+import { getArabicErrorMessage } from "../../lib/errorNormalizer";
+import { notifyError, notifySuccess } from "../../lib/notifications";
+import { PATHS } from "../../routes/path";
 
 import {
   defaultCompanySettings,
@@ -30,7 +32,9 @@ type Kind =
   | "customer"
   | "supplier"
   | "cashbox"
-  | "consignment";
+  | "consignment"
+  | "customers_balances"
+  | "suppliers_balances";
 
 type PaymentDocument = {
   id: number;
@@ -170,13 +174,18 @@ type ConsignmentDocument = {
   items: ConsignmentItem[];
 };
 
+type PartyBalancesDocument = {
+  parties: PartyApiRecord[];
+};
+
 type DocumentData =
   | PaymentDocument
   | TransactionDocument
   | TransferDocument
   | StatementDocument
   | CashboxDocument
-  | ConsignmentDocument;
+  | ConsignmentDocument
+  | PartyBalancesDocument;
 
 const n = (value: unknown) =>
   Number(value ?? 0);
@@ -198,30 +207,6 @@ const money = (
   `${fmt(value)} ${
     currency === "SYP" ? "ل.س" : currency
   }`;
-
-function getTransactionStatusLabel(
-  status?: string | null,
-) {
-  switch (status) {
-    case "active":
-      return "فعالة";
-
-    case "completed":
-      return "مكتملة";
-
-    case "cancelled":
-      return "ملغاة";
-
-    case "reversed":
-      return "معكوسة";
-
-    case "pending":
-      return "قيد الانتظار";
-
-    default:
-      return status ? "غير محددة" : "—";
-  }
-}
 
 function getDirectionLabel(
   direction?: string | null,
@@ -265,28 +250,6 @@ function getReferenceTypeLabel(
 
     default:
       return type ? "حركة مالية" : "—";
-  }
-}
-
-function getConsignmentStatusLabel(
-  status?: string | null,
-) {
-  switch (status) {
-    case "pending":
-      return "قيد التسوية";
-
-    case "completed":
-    case "settled":
-      return "تمت التسوية";
-
-    case "reversed":
-      return "معكوسة";
-
-    case "cancelled":
-      return "ملغاة";
-
-    default:
-      return status ? "غير محددة" : "—";
   }
 }
 
@@ -342,6 +305,9 @@ export default function DocumentPrintPage({
   const [error, setError] =
     useState("");
 
+  const [isPrinting, setIsPrinting] =
+    useState(false);
+
   const [savingPdf, setSavingPdf] =
     useState(false);
 
@@ -352,9 +318,36 @@ export default function DocumentPrintPage({
   const [toDate, setToDate] =
     useState("");
 
+  /** Optional sort & filter for full customer/supplier balance sheets. */
+  const [balanceSort, setBalanceSort] = useState<"name" | "id" | "balance">("name");
+  const [balanceFilter, setBalanceFilter] = useState<"all" | "non_zero" | "debit" | "credit">("all");
+
+  const {
+    printers,
+    selectedPrinter,
+    paperSize,
+    copies,
+    scaleFactor,
+    topMarginMm,
+    sideMarginMm,
+    setCopies,
+    handlePaperSizeChange,
+    handlePrinterChange,
+    handleScaleChange,
+    handleTopMarginChange,
+    handleSideMarginChange,
+    resetPrintAdjustments,
+    sheetStyle,
+    paperClass,
+  } = usePrintSettings();
+
   const isStatement =
     kind === "customer" ||
     kind === "supplier";
+
+  const isBalancesSheet =
+    kind === "customers_balances" ||
+    kind === "suppliers_balances";
 
   useEffect(() => {
     let cancelled = false;
@@ -411,6 +404,14 @@ export default function DocumentPrintPage({
             api.consignment(
               Number(documentId),
             ),
+
+          customers_balances: async () => ({
+            parties: await window.stockliteApi.customers.list(),
+          }),
+
+          suppliers_balances: async () => ({
+            parties: await window.stockliteApi.suppliers.list(),
+          }),
         };
 
         const loader = loaders[kind];
@@ -430,11 +431,11 @@ export default function DocumentPrintPage({
 
           setCompany(companyData);
         }
-      } catch (error: unknown) {
+      } catch (err: unknown) {
         if (!cancelled) {
           setError(
-            error instanceof Error
-              ? error.message
+            err instanceof Error
+              ? err.message
               : "تعذر تجهيز المستند",
           );
         }
@@ -462,6 +463,10 @@ export default function DocumentPrintPage({
           "كشف حركة صندوق",
         consignment:
           "تسوية أمانة",
+        customers_balances:
+          "سجل أرصدة حسابات العملاء",
+        suppliers_balances:
+          "سجل أرصدة حسابات الموردين",
       })[kind],
     [kind],
   );
@@ -483,68 +488,97 @@ export default function DocumentPrintPage({
     );
   }
 
+  const resetScrollBeforePrint = () => {
+    window.scrollTo(0, 0);
+    document.querySelector("main")?.scrollTo(0, 0);
+  };
+
   const print = async () => {
     try {
+      setIsPrinting(true);
+      resetScrollBeforePrint();
       if (window.stockliteApi?.system?.printCurrentPage) {
-        await window.stockliteApi.system.printCurrentPage({
-          pageSize: "A4",
-          deviceName: "HP LaserJet P1005",
+        const result = await window.stockliteApi.system.printCurrentPage({
+          pageSize: paperSize,
+          deviceName: selectedPrinter || DEFAULT_PRINTER,
+          copies,
+          scaleFactor,
+          silent: true,
         });
+        if (result?.printed) {
+          notifySuccess("تم إرسال المستند إلى الطابعة بنجاح");
+        }
       } else {
         window.print();
       }
-    } catch (error: unknown) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "تعذر تنفيذ الطباعة",
-      );
+    } catch (err: unknown) {
+      notifyError(getArabicErrorMessage(err, "تعذر تنفيذ الطباعة"));
+    } finally {
+      setIsPrinting(false);
     }
   };
 
   const savePdf = async () => {
     try {
       setSavingPdf(true);
+      resetScrollBeforePrint();
 
-      await window.stockliteApi.system.saveCurrentPageAsPdf(
-        {
-          fileName: `${title} ${raw}`,
-        },
-      );
-    } catch (error: unknown) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "تعذر حفظ ملف PDF",
-      );
+      const suffix = raw
+        ? ` ${raw}`
+        : ` ${new Date().toISOString().slice(0, 10)}`;
+
+      await window.stockliteApi.system.saveCurrentPageAsPdf({
+        fileName: `${title}${suffix}`,
+        pageSize: paperSize,
+        scaleFactor,
+      });
+    } catch (err: unknown) {
+      notifyError(getArabicErrorMessage(err, "تعذر حفظ ملف PDF"));
     } finally {
       setSavingPdf(false);
     }
   };
 
+  const backTo =
+    kind === "customers_balances"
+      ? PATHS.CUSTOMERS
+      : kind === "suppliers_balances"
+        ? PATHS.SUPPLIERS
+        : undefined;
+
   return (
-    <div className="space-y-5">
-      <div className="no-print">
+    <div className="invoice-print-page space-y-5">
+      <div className="no-print space-y-3">
+        <style>{`@page { size: ${paperSize === "A5" ? "148mm 210mm" : "210mm 297mm"}; margin: 0mm; }`}</style>
         <PageHeader
           title={title}
-          description="مستند موحّد A4 وRTL من البيانات الفعلية للنظام."
+          description="تحكم بإعدادات الطابعة والورق والهوامش مباشرة ثم اطبع المستند أو احفظه بصيغة PDF."
           actions={
-            <div className="flex gap-2">
-              <BackButton />
+            <div className="flex flex-wrap items-center gap-2">
+              <BackButton to={backTo} />
 
               <Button
                 startIcon={
-                  <Printer size={17} />
+                  isPrinting ? (
+                    <LoaderCircle size={17} className="animate-spin" />
+                  ) : (
+                    <Printer size={17} />
+                  )
                 }
+                disabled={isPrinting}
                 onClick={() => void print()}
               >
-                طباعة
+                {isPrinting ? "جاري الطباعة..." : "طباعة مباشرة"}
               </Button>
 
               <Button
                 variant="secondary"
                 startIcon={
-                  <FileDown size={17} />
+                  savingPdf ? (
+                    <LoaderCircle size={17} className="animate-spin" />
+                  ) : (
+                    <FileDown size={17} />
+                  )
                 }
                 disabled={savingPdf}
                 onClick={() =>
@@ -557,6 +591,23 @@ export default function DocumentPrintPage({
               </Button>
             </div>
           }
+        />
+
+        <PrintSettingsToolbar
+          printers={printers}
+          selectedPrinter={selectedPrinter}
+          paperSize={paperSize}
+          copies={copies}
+          scaleFactor={scaleFactor}
+          topMarginMm={topMarginMm}
+          sideMarginMm={sideMarginMm}
+          onPrinterChange={handlePrinterChange}
+          onPaperSizeChange={handlePaperSizeChange}
+          onCopiesChange={setCopies}
+          onScaleChange={handleScaleChange}
+          onTopMarginChange={handleTopMarginChange}
+          onSideMarginChange={handleSideMarginChange}
+          onReset={resetPrintAdjustments}
         />
 
         {isStatement && (
@@ -616,11 +667,58 @@ export default function DocumentPrintPage({
             </div>
           </Card>
         )}
+
+        {isBalancesSheet && (
+          <Card
+            header="خيارات عرض وترتيب السجل"
+            description="يُعرض السجل بالترتيب في جدولين متجاورين في نفس الصفحة لاختصار المساحة."
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-2 text-sm font-bold text-[var(--text-secondary)]">
+                <span>الترتيب حسب</span>
+                <Select
+                  value={balanceSort}
+                  onChange={(e) =>
+                    setBalanceSort(e.target.value as "name" | "id" | "balance")
+                  }
+                  options={[
+                    { value: "name", label: "الاسم (أبجديًا)" },
+                    { value: "id", label: "رقم السجل (التسلسلي)" },
+                    { value: "balance", label: "قيمة الرصيد (من الأعلى للأقل)" },
+                  ]}
+                />
+              </label>
+
+              <label className="space-y-2 text-sm font-bold text-[var(--text-secondary)]">
+                <span>تصفية الحسابات</span>
+                <Select
+                  value={balanceFilter}
+                  onChange={(e) =>
+                    setBalanceFilter(
+                      e.target.value as "all" | "non_zero" | "debit" | "credit",
+                    )
+                  }
+                  options={[
+                    { value: "all", label: "جميع الحسابات" },
+                    { value: "non_zero", label: "الحسابات ذات الرصيد فقط (غير المتوازنة)" },
+                    { value: "debit", label: "حالة الرصيد: عليه فقط" },
+                    { value: "credit", label: "حالة الرصيد: له فقط" },
+                  ]}
+                />
+              </label>
+            </div>
+          </Card>
+        )}
       </div>
 
       <article
-        className="invoice-print-sheet"
+        className={`invoice-print-sheet ${paperClass}${
+          isStatement || isBalancesSheet || kind === "cashbox" || kind === "consignment"
+            ? " invoice-print-sheet--flow"
+            : ""
+        }`}
         dir="rtl"
+        style={sheetStyle}
       >
         <header className="invoice-print-header">
           <div className="invoice-company-block">
@@ -735,6 +833,18 @@ export default function DocumentPrintPage({
           />
         )}
 
+        {(kind === "customers_balances" ||
+          kind === "suppliers_balances") && (
+          <PartyBalancesSheet
+            d={data as PartyBalancesDocument}
+            partyType={
+              kind === "customers_balances" ? "customer" : "supplier"
+            }
+            sortBy={balanceSort}
+            filterBy={balanceFilter}
+          />
+        )}
+
         <footer className="invoice-print-footer">
           <div className="invoice-signatures">
             <div>
@@ -790,6 +900,160 @@ const Meta = ({
     ))}
   </section>
 );
+
+function getPartyBalanceState(
+  balance: number,
+  partyType: "customer" | "supplier",
+): { code: "debit" | "credit" | "balanced"; label: "عليه" | "له" | "متوازن" } {
+  if (Math.abs(balance) < 0.005) {
+    return { code: "balanced", label: "متوازن" };
+  }
+  if (partyType === "customer") {
+    // Customer: positive balance means customer owes us ("عليه"), negative means credit to customer ("له")
+    return balance > 0
+      ? { code: "debit", label: "عليه" }
+      : { code: "credit", label: "له" };
+  }
+  // Supplier: positive balance means payable to supplier ("له"), negative means advance on supplier ("عليه")
+  return balance > 0
+    ? { code: "credit", label: "له" }
+    : { code: "debit", label: "عليه" };
+}
+
+function PartyBalancesSheet({
+  d,
+  partyType,
+  sortBy,
+  filterBy,
+}: {
+  d: PartyBalancesDocument;
+  partyType: "customer" | "supplier";
+  sortBy: "name" | "id" | "balance";
+  filterBy: "all" | "non_zero" | "debit" | "credit";
+}) {
+  const rows = useMemo(() => {
+    const rawList = Array.isArray(d.parties) ? d.parties : [];
+
+    const mapped = rawList.map((party) => {
+      const numericBalance = Number(party.balance ?? 0);
+      const state = getPartyBalanceState(numericBalance, partyType);
+      return {
+        id: Number(party.id),
+        name: String(party.name ?? "—"),
+        balance: numericBalance,
+        absBalance: Math.abs(numericBalance),
+        stateCode: state.code,
+        stateLabel: state.label,
+      };
+    });
+
+    const filtered = mapped.filter((row) => {
+      if (filterBy === "non_zero") return row.stateCode !== "balanced";
+      if (filterBy === "debit") return row.stateCode === "debit";
+      if (filterBy === "credit") return row.stateCode === "credit";
+      return true;
+    });
+
+    return [...filtered].sort((a, b) => {
+      if (sortBy === "id") return a.id - b.id;
+      if (sortBy === "balance") return b.absBalance - a.absBalance || a.name.localeCompare(b.name, "ar");
+      return a.name.localeCompare(b.name, "ar");
+    });
+  }, [d.parties, partyType, sortBy, filterBy]);
+
+  // Split ordered rows sequentially into 2 side-by-side tables on the same page
+  const half = Math.ceil(rows.length / 2);
+  const rightRows = rows.slice(0, half);
+  const leftRows = rows.slice(half);
+
+  const totalDebit = rows
+    .filter((r) => r.stateCode === "debit")
+    .reduce((sum, r) => sum + r.absBalance, 0);
+
+  const totalCredit = rows
+    .filter((r) => r.stateCode === "credit")
+    .reduce((sum, r) => sum + r.absBalance, 0);
+
+  const renderTable = (
+    slice: typeof rows,
+    startIndex: number,
+  ) => (
+    <table className="invoice-items invoice-ledger-table party-balances-compact-table">
+      <colgroup>
+        <col style={{ width: "10%" }} />
+        <col style={{ width: "44%" }} />
+        <col style={{ width: "28%" }} />
+        <col style={{ width: "18%" }} />
+      </colgroup>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>الاسم</th>
+          <th className="invoice-number-cell">الرصيد</th>
+          <th>الحالة</th>
+        </tr>
+      </thead>
+      <tbody>
+        {slice.length > 0 ? (
+          slice.map((row, idx) => (
+            <tr key={row.id}>
+              <td className="invoice-number-cell">{startIndex + idx + 1}</td>
+              <td className="invoice-product-name">{row.name}</td>
+              <td className="invoice-number-cell invoice-line-total">
+                {fmt(row.absBalance)} ل.س
+              </td>
+              <td style={{ textAlign: "center", fontWeight: 700 }}>
+                {row.stateLabel}
+              </td>
+            </tr>
+          ))
+        ) : (
+          <tr>
+            <td colSpan={4} style={{ textAlign: "center" }}>
+              —
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+
+  return (
+    <>
+      <Meta
+        items={[
+          [
+            partyType === "customer" ? "إجمالي عدد العملاء" : "إجمالي عدد الموردين",
+            rows.length.toLocaleString("en-US"),
+          ],
+          [
+            "إجمالي الأرصدة ",
+            `${fmt(totalDebit)} ل.س`,
+          ],
+          [
+            "إجمالي الأرصدة ",
+            `${fmt(totalCredit)} ل.س`,
+          ],
+          [
+            "صافي الفرق",
+            `${fmt(Math.abs(totalDebit - totalCredit))} ل.س (${
+              Math.abs(totalDebit - totalCredit) < 0.005
+                ? "متوازن"
+                : totalDebit > totalCredit
+                  ? "لنا"
+                  : "علينا"
+            })`,
+          ],
+        ]}
+      />
+
+      <div className="party-balances-two-col-grid">
+        <div>{renderTable(rightRows, 0)}</div>
+        <div>{renderTable(leftRows, half)}</div>
+      </div>
+    </>
+  );
+}
 
 function Payment({
   d,
@@ -887,17 +1151,6 @@ function Payment({
             </div>
           </>
         )}
-
-        {/* <div>
-          <span>الحالة</span>
-
-          <strong>
-            {getPaymentStatusLabel(
-              d.status ||
-                "active",
-            )}
-          </strong>
-        </div> */}
       </section>
 
       <p className="mt-8">
@@ -970,16 +1223,6 @@ function Transaction({
             )}
           </strong>
         </div>
-
-        {/* <div>
-          <span>الحالة</span>
-
-          <strong>
-            {getTransactionStatusLabel(
-              d.status,
-            )}
-          </strong>
-        </div> */}
       </section>
 
       <p className="mt-8">
@@ -1102,16 +1345,10 @@ function Transfer({
 
 function Statement({
   d,
-  kind,
 }: {
   d: StatementDocument;
   kind: "customer" | "supplier";
 }) {
-  const getInvoiceStatus =
-    kind === "customer"
-      ? getSaleStatusLabel
-      : getPurchaseStatusLabel;
-
   const periodLabel =
     d.from_date && d.to_date
       ? `من ${d.from_date} إلى ${d.to_date}`
@@ -1129,16 +1366,6 @@ function Statement({
             "الاسم",
             d.party.name,
           ],
-
-          // [
-          //   "الهاتف",
-          //   d.party.phone,
-          // ],
-
-          // [
-          //   "العنوان",
-          //   d.party.address,
-          // ],
 
           [
             "الرصيد الحالي",
@@ -1167,7 +1394,6 @@ function Statement({
             <th>الإجمالي</th>
             <th>المدفوع</th>
             <th>المتبقي</th>
-            {/* <th>الحالة</th> */}
           </tr>
         </thead>
 
@@ -1209,12 +1435,6 @@ function Statement({
                       "SYP",
                   )}
                 </td>
-
-                {/* <td>
-                  {getInvoiceStatus(
-                    invoice.status,
-                  )}
-                </td> */}
               </tr>
             ),
           )}
@@ -1233,7 +1453,6 @@ function Statement({
             <th>النوع</th>
             <th>الصندوق</th>
             <th>المبلغ</th>
-            {/* <th>الحالة</th> */}
           </tr>
         </thead>
 
@@ -1275,12 +1494,6 @@ function Statement({
                       "SYP",
                   )}
                 </td>
-
-                {/* <td>
-                  {getPaymentStatusLabel(
-                    payment.status,
-                  )}
-                </td> */}
               </tr>
             ),
           )}
@@ -1423,11 +1636,6 @@ function Consignment({
       <Meta
         items={[
           [
-            "رقم التسوية",
-            settlement.id,
-          ],
-
-          [
             "الفاتورة",
             settlement.invoice_number,
           ],
@@ -1438,28 +1646,9 @@ function Consignment({
           ],
 
           [
-            "الصندوق",
-            settlement.cashbox_name,
-          ],
-
-          [
             "التاريخ",
             date(
               settlement.settlement_date,
-            ),
-          ],
-
-          // [
-          //   "الحالة",
-          //   getConsignmentStatusLabel(
-          //     settlement.status,
-          //   ),
-          // ],
-
-          [
-            "نوع التسوية",
-            getRemainingPolicyLabel(
-              settlement.remaining_stock_policy,
             ),
           ],
         ]}

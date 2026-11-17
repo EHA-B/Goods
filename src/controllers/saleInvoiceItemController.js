@@ -11,6 +11,10 @@ class SaleInvoiceItemController {
             throw err;
         }
         const stockWeight = normalizeWeight(input.stock_weight ?? input.stock_waight ?? 0);
+        const cleanNotes =
+            input.notes !== undefined && input.notes !== null && String(input.notes).trim() !== ''
+                ? String(input.notes).trim()
+                : null;
         const db = await dbmanager.init();
         await ensureStockWeightColumn(db, 'sale_invoice_items');
         const sql = `
@@ -28,7 +32,7 @@ class SaleInvoiceItemController {
                 input.line_total ?? null,
                 input.cost_price ?? null,
                 input.profit ?? null,
-                input.notes ?? null
+                cleanNotes
             ], function (err) {
                 if (err) return reject(err);
                 resolve(this.lastID);
@@ -89,7 +93,15 @@ class SaleInvoiceItemController {
         for (const key of Object.keys(mapping)) {
             if (input && Object.prototype.hasOwnProperty.call(input, key)) {
                 sets.push(`${mapping[key]} = ?`);
-                params.push(input[key] ?? null);
+                if (key === 'notes') {
+                    const cleanNotes =
+                        input.notes !== undefined && input.notes !== null && String(input.notes).trim() !== ''
+                            ? String(input.notes).trim()
+                            : null;
+                    params.push(cleanNotes);
+                } else {
+                    params.push(input[key] ?? null);
+                }
             }
         }
 

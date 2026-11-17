@@ -1231,16 +1231,16 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-meta span { font-size: 9.5px; font-weight: 700; }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-meta strong { font-size: 10.5px; }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-party-card strong { font-size: 11px; }
-.invoice-print-sheet.invoice-print-sheet--a5 .invoice-ledger-table { margin-top: 3px; font-size: 10px; line-height: 1.15; }
-.invoice-print-sheet.invoice-print-sheet--a5 .invoice-ledger-table thead th { font-size: 9.5px; height: 20px; padding: 2px 3px; white-space: nowrap; }
+.invoice-print-sheet.invoice-print-sheet--a5 .invoice-ledger-table { margin-top: 4px; font-size: 11px; line-height: 1.25; }
+.invoice-print-sheet.invoice-print-sheet--a5 .invoice-ledger-table thead th { font-size: 10.5px; height: 28px; padding: 3px 4px; white-space: nowrap; }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-ledger-table th,
-.invoice-print-sheet.invoice-print-sheet--a5 .invoice-ledger-table td { padding: 1.5px 4px; height: 19.5px; }
-.invoice-print-sheet.invoice-print-sheet--a5 .invoice-ledger-table .invoice-empty-row td { height: 19.5px; }
-.invoice-print-sheet.invoice-print-sheet--a5 .invoice-ledger-table tfoot th { font-size: 10.5px; height: 21px; padding: 2px 4px; }
+.invoice-print-sheet.invoice-print-sheet--a5 .invoice-ledger-table td { padding: 3px 5px; height: 26.5px; }
+.invoice-print-sheet.invoice-print-sheet--a5 .invoice-ledger-table .invoice-empty-row td { height: 26.5px; }
+.invoice-print-sheet.invoice-print-sheet--a5 .invoice-ledger-table tfoot th { font-size: 11px; height: 28px; padding: 3px 5px; }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-bottom-grid {
   grid-template-columns: minmax(0, 1fr) minmax(195px, 46%);
   gap: 8px;
-  margin-top: 5px;
+  margin-top: 6px;
 }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-notes { padding: 4px 7px; min-height: 0; }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-notes strong { font-size: 10px; margin-bottom: 2px; }
@@ -1358,3 +1358,108 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
 .invoice-print-sheet .invoice-ledger-table .invoice-col-total { width: 20%; }
 .invoice-print-sheet .invoice-ledger-table .invoice-col-price { width: 18%; }
 .invoice-print-sheet .invoice-ledger-table .invoice-col-notes { width: 12%; }
+
+/* Fixed physical page heights so the sheet matches the printer paper exactly.
+   A4 = 210mm x 297mm, A5 = 148mm x 210mm. */
+.invoice-print-sheet:not(.invoice-print-sheet--flow) {
+  display: flex;
+  flex-direction: column;
+}
+.invoice-print-sheet:not(.invoice-print-sheet--flow) .invoice-ledger-table {
+  flex: 1 1 auto;
+}
+.invoice-print-sheet.invoice-print-sheet--a4 {
+  width: 210mm;
+  max-width: 210mm;
+  height: 297mm;
+  overflow: hidden;
+}
+.invoice-print-sheet.invoice-print-sheet--a5 {
+  width: 148mm;
+  max-width: 148mm;
+  height: 210mm;
+  overflow: hidden;
+}
+/* Multi-page documents (statements, balance records…) keep the page height
+   as a minimum and are allowed to flow onto following pages. */
+.invoice-print-sheet.invoice-print-sheet--flow.invoice-print-sheet--a4 {
+  display: block;
+  height: auto;
+  min-height: 297mm;
+  overflow: visible;
+}
+.invoice-print-sheet.invoice-print-sheet--flow.invoice-print-sheet--a5 {
+  display: block;
+  height: auto;
+  min-height: 210mm;
+  overflow: visible;
+}
+@media print {
+  .invoice-print-sheet:not(.invoice-print-sheet--flow) {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .invoice-print-sheet:not(.invoice-print-sheet--flow) .invoice-ledger-table {
+    flex: 1 1 auto !important;
+  }
+  .invoice-print-sheet.invoice-print-sheet--a4 {
+    width: 210mm !important;
+    max-width: 210mm !important;
+    height: 297mm !important;
+    overflow: hidden !important;
+  }
+  .invoice-print-sheet.invoice-print-sheet--a5 {
+    width: 148mm !important;
+    max-width: 148mm !important;
+    height: 210mm !important;
+    overflow: hidden !important;
+  }
+  .invoice-print-sheet.invoice-print-sheet--flow.invoice-print-sheet--a4 {
+    display: block !important;
+    height: auto !important;
+    min-height: 297mm !important;
+    overflow: visible !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+  .invoice-print-sheet.invoice-print-sheet--flow.invoice-print-sheet--a5 {
+    display: block !important;
+    height: auto !important;
+    min-height: 210mm !important;
+    overflow: visible !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+}
+
+/* Two-column side-by-side layout for customer/supplier full balance records */
+.invoice-print-sheet .party-balances-two-col-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
+  margin-top: 8px;
+}
+.invoice-print-sheet .party-balances-compact-table {
+  margin-top: 0;
+  font-size: 11px;
+  line-height: 1.3;
+}
+.invoice-print-sheet .party-balances-compact-table th,
+.invoice-print-sheet .party-balances-compact-table td {
+  padding: 3.5px 5px;
+  height: 24px;
+}
+.invoice-print-sheet.invoice-print-sheet--a5 .party-balances-two-col-grid {
+  gap: 6px;
+  margin-top: 4px;
+}
+.invoice-print-sheet.invoice-print-sheet--a5 .party-balances-compact-table {
+  font-size: 9px;
+}
+.invoice-print-sheet.invoice-print-sheet--a5 .party-balances-compact-table th,
+.invoice-print-sheet.invoice-print-sheet--a5 .party-balances-compact-table td {
+  padding: 1.5px 3.5px;
+  height: 18px;
+}
+

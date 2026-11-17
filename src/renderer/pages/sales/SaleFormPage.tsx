@@ -28,6 +28,7 @@ type SaleItemForm = {
   stock_weight: number;
   sale_price: number;
   cost_price: number;
+  notes: string;
 };
 
 const emptyItem = (): SaleItemForm => ({
@@ -37,6 +38,7 @@ const emptyItem = (): SaleItemForm => ({
   stock_weight: 0,
   sale_price: 0,
   cost_price: 0,
+  notes: "",
 });
 
 const money = (value: number) => Number(value || 0).toLocaleString("en-US");
@@ -121,6 +123,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
           stock_weight: Number(row.stock_weight ?? 0),
           sale_price: Number(row.unit_price ?? 0),
           cost_price: Number(row.cost_price ?? 0),
+          notes: String(row.notes ?? ""),
         })),
       };
       setCustomerId(source.customerId);
@@ -130,7 +133,16 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
       setNotes(source.notes);
       setCurrency(source.currency);
       setExchangeRate(source.exchangeRate);
-      setItems(source.items);
+      setItems(
+        Array.isArray(source.items)
+          ? source.items.map((row: any) => ({
+              ...emptyItem(),
+              ...row,
+              stock_weight: Number(row.stock_weight ?? 0),
+              notes: String(row.notes ?? ""),
+            }))
+          : [emptyItem()],
+      );
       setPaymentAmount(0);
       setExistingPaidAmount(Number(data.invoice.paid_amount ?? 0));
       setRestoredDraft(Boolean(draft));
@@ -158,6 +170,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
             stock_weight: Number(row.stock_weight ?? 0),
             sale_price: Number(row.sale_price ?? 0),
             cost_price: Number(row.cost_price ?? 0),
+            notes: String(row.notes ?? ""),
           }))
         : [emptyItem()],
     );
@@ -483,6 +496,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
         quantity: item.quantity,
         stock_weight: Number(item.stock_weight || 0),
         sale_price: item.sale_price,
+        notes: item.notes?.trim() || null,
       })),
       initial_payment:
         !isEdit && paymentAmount > 0 && paymentCashboxId
@@ -654,7 +668,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                     حذف الصنف
                   </Button>
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-                    <FormField label="المنتج" required>
+                    <FormField label="المنتج" required messageClassName="hidden">
                       <SearchableSelect
                         value={String(item.product_id)}
                         placeholder="اختر المنتج"
@@ -679,7 +693,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                       />
                     </FormField>
 
-                    <FormField label="المتوفر بالمخزون">
+                    <FormField label="المتوفر بالمخزون" messageClassName="hidden">
                       <Input
                         readOnly
                         value={
@@ -690,7 +704,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                       />
                     </FormField>
 
-                    <FormField label="الكمية" required>
+                    <FormField label="الكمية" required messageClassName="hidden">
                       <Input
                         type="number"
                         min="0.001"
@@ -712,7 +726,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                       })()}
                     </FormField>
 
-                    <FormField label="الوزن القائم">
+                    <FormField label="الوزن القائم" messageClassName="hidden">
                       <Input
                         type="number"
                         min="0"
@@ -723,7 +737,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                       />
                     </FormField>
 
-                    <FormField label="سعر البيع" required>
+                    <FormField label="سعر البيع" required messageClassName="hidden">
                       <Input
                         type="number"
                         min="0"
@@ -733,7 +747,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                       />
                     </FormField>
 
-                    <FormField label="إجمالي السطر">
+                    <FormField label="إجمالي السطر" messageClassName="hidden">
                       <Input readOnly value={money(item.quantity * item.sale_price)} />
                       {item.product_id > 0 && effectiveCostPrice > 0 && (
                         <p className="mt-1 text-xs text-[var(--text-muted)]">
@@ -741,6 +755,22 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                         </p>
                       )}
                     </FormField>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-3 border-t border-[var(--border)]/60 pt-3">
+                    <label
+                      htmlFor={`sale-item-notes-${index}`}
+                      className="shrink-0 text-xs font-bold text-[var(--text-secondary)]"
+                    >
+                      ملاحظات الصنف
+                    </label>
+                    <Input
+                      id={`sale-item-notes-${index}`}
+                      inputSize="sm"
+                      value={item.notes}
+                      placeholder="أضف ملاحظة على هذا الصنف (اختياري)..."
+                      onChange={(e) => updateItem(index, { notes: e.target.value })}
+                    />
                   </div>
                 </div>
               );
@@ -759,6 +789,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                   <th className="px-4 py-3 text-right">الوزن القائم</th>
                   <th className="px-4 py-3 text-right">سعر البيع</th>
                   <th className="px-4 py-3 text-right">إجمالي السطر</th>
+                  <th className="px-4 py-3 text-right">ملاحظات</th>
                 </tr>
               </thead>
               <tbody>
@@ -787,6 +818,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                     <td className="px-4 py-3" dir="ltr">{Number(item.stock_weight) > 0 ? money(item.stock_weight) : "—"}</td>
                     <td className="px-4 py-3" dir="ltr">{money(item.sale_price)} {currency}</td>
                     <td className="px-4 py-3 font-bold" dir="ltr">{money(item.quantity * item.sale_price)} {currency}</td>
+                    <td className="px-4 py-3 text-[var(--text-secondary)]">{item.notes?.trim() || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -797,6 +829,7 @@ export default function SaleFormPage({ tabId }: { tabId?: string } = {}) {
                   <td className="px-4 py-3 font-bold" dir="ltr">{money(items.reduce((sum, item) => sum + Number(item.stock_weight || 0), 0))}</td>
                   <td className="px-4 py-3">—</td>
                   <td className="px-4 py-3 font-bold text-[var(--primary)]" dir="ltr">{money(subtotal)} {currency}</td>
+                  <td className="px-4 py-3">—</td>
                 </tr>
               </tfoot>
             </table>

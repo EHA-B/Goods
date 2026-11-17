@@ -35,6 +35,10 @@ import {
 } from "../../components/ui";
 import { reportsCatalog } from "./reportsCatalog";
 import { reportsService } from "./reportsService";
+import PrintSettingsToolbar, {
+  DEFAULT_PRINTER,
+  usePrintSettings,
+} from "../../components/invoices/PrintSettingsToolbar";
 import type {
   ReportColumn,
   ReportDefinition,
@@ -954,6 +958,36 @@ export default function ReportsPage() {
   const [printing, setPrinting] =
     useState(false);
 
+  const {
+    printers,
+    selectedPrinter,
+    paperSize,
+    copies,
+    scaleFactor,
+    topMarginMm,
+    sideMarginMm,
+    setCopies,
+    handlePaperSizeChange,
+    handlePrinterChange,
+    handleScaleChange,
+    handleTopMarginChange,
+    handleSideMarginChange,
+    resetPrintAdjustments,
+  } = usePrintSettings();
+
+  const currentPrintOptions = useMemo(
+    () => ({
+      pageSize: paperSize,
+      deviceName: selectedPrinter || DEFAULT_PRINTER,
+      copies,
+      scaleFactor,
+      topMarginMm,
+      sideMarginMm,
+      silent: true,
+    }),
+    [paperSize, selectedPrinter, copies, scaleFactor, topMarginMm, sideMarginMm],
+  );
+
   useEffect(() => {
     void reportsService
       .loadOptions()
@@ -1031,6 +1065,7 @@ export default function ReportsPage() {
           selectedReport.id,
           filters,
           format,
+          currentPrintOptions,
         );
 
       if (
@@ -1067,6 +1102,7 @@ export default function ReportsPage() {
       await reportsService.print(
         selectedReport.id,
         filters,
+        currentPrintOptions,
       );
     } catch (error) {
       toast.error(
@@ -1630,8 +1666,27 @@ export default function ReportsPage() {
               void printReport()
             }
           >
-            طباعة A4
+            طباعة مباشرة
           </Button>
+        </div>
+
+        <div className="mt-4">
+          <PrintSettingsToolbar
+            printers={printers}
+            selectedPrinter={selectedPrinter}
+            paperSize={paperSize}
+            copies={copies}
+            scaleFactor={scaleFactor}
+            topMarginMm={topMarginMm}
+            sideMarginMm={sideMarginMm}
+            onPrinterChange={handlePrinterChange}
+            onPaperSizeChange={handlePaperSizeChange}
+            onCopiesChange={setCopies}
+            onScaleChange={handleScaleChange}
+            onTopMarginChange={handleTopMarginChange}
+            onSideMarginChange={handleSideMarginChange}
+            onReset={resetPrintAdjustments}
+          />
         </div>
       </Card>
 
@@ -1698,7 +1753,7 @@ export default function ReportsPage() {
                   void printReport()
                 }
               >
-                طباعة A4
+                طباعة مباشرة
               </Button>
 
               <Button

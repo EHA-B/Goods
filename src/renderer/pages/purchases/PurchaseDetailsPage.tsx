@@ -112,7 +112,7 @@ export default function PurchaseDetailsPage() {
           <DataTable>
             <DataTableHead>
               <DataTableRow>
-                {["المنتج", "الكمية", "الوزن القائم", invoice.invoice_type === "consignment" ? "سعر التسويق" : "سعر الشراء", "الإجمالي"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
+                {["المنتج", "الكمية", "الوزن القائم", invoice.invoice_type === "consignment" ? "سعر التسويق" : "سعر الشراء", "الإجمالي", "ملاحظات"].map((h) => <DataTableHeaderCell key={h}>{h}</DataTableHeaderCell>)}
               </DataTableRow>
             </DataTableHead>
             <DataTableBody>
@@ -123,6 +123,7 @@ export default function PurchaseDetailsPage() {
                   <DataTableCell>{Number(item.stock_weight) > 0 ? Number(item.stock_weight).toLocaleString("en-US") : "—"}</DataTableCell>
                   <DataTableCell>{money(Number(item.unit_price ?? 0), invoice.currency)}</DataTableCell>
                   <DataTableCell>{money(Number(item.line_total ?? 0), invoice.currency)}</DataTableCell>
+                  <DataTableCell>{item.notes ? String(item.notes) : "—"}</DataTableCell>
                 </DataTableRow>
               ))}
             </DataTableBody>

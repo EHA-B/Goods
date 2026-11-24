@@ -5,6 +5,7 @@ export type Supplier = {
   email: string;
   address: string;
   balance: number;
+  initialBalance: number;
   notes: string;
   isActive: boolean;
   createdAt: string;
@@ -66,6 +67,7 @@ export type SupplierInput = {
   email?: string;
   address?: string;
   balance?: number;
+  initialBalance?: number;
   notes?: string;
   isActive?: boolean;
 };
@@ -77,6 +79,7 @@ type SupplierApiRow = {
   email: string | null;
   address: string | null;
   balance: number | string | null;
+  initial_balance?: number | string | null;
   notes: string | null;
   isActive: boolean | number;
   created_at: string | null;
@@ -100,6 +103,7 @@ function mapSupplier(row: SupplierApiRow): Supplier {
     email: row.email ?? "",
     address: row.address ?? "",
     balance: Number(row.balance ?? 0),
+    initialBalance: Number(row.initial_balance ?? 0),
     notes: row.notes ?? "",
     isActive: Boolean(row.isActive),
     createdAt: row.created_at ?? "",
@@ -107,16 +111,29 @@ function mapSupplier(row: SupplierApiRow): Supplier {
   };
 }
 
-function normalizeInput(input: SupplierInput): SupplierInput {
-  return {
+function normalizeInput(input: SupplierInput) {
+  const payload: {
+    name: string;
+    phone: string;
+    email: string;
+    address: string;
+    initial_balance: number;
+    balance?: number;
+    notes: string;
+    isActive: boolean;
+  } = {
     name: input.name.trim(),
     phone: input.phone?.trim() ?? "",
     email: input.email?.trim() ?? "",
     address: input.address?.trim() ?? "",
-    balance: Number(input.balance ?? 0),
+    initial_balance: Number(input.initialBalance ?? input.balance ?? 0),
     notes: input.notes?.trim() ?? "",
     isActive: input.isActive ?? true,
   };
+  if (input.balance !== undefined) {
+    payload.balance = Number(input.balance);
+  }
+  return payload;
 }
 
 export const suppliersService = {

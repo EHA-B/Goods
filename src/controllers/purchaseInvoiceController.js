@@ -132,9 +132,9 @@ function normalizeManualConsignmentSales(input, purchaseItems = []) {
 
     const resolvedItems = purchaseItems.map((piItem) => {
         const match =
-            byPurchaseItemId.get(Number(piItem.id)) ??
-            byProductId.get(Number(piItem.product_id)) ??
-            null;
+            byPurchaseItemId.size > 0
+                ? (byPurchaseItemId.get(Number(piItem.id)) ?? null)
+                : (byProductId.get(Number(piItem.product_id)) ?? null);
         const receivedQty = round3(Number(piItem.quantity ?? 0));
         const soldQty = match ? match.sold_quantity : 0;
         const salesAmt = match ? match.sales_amount : 0;
@@ -292,17 +292,20 @@ class PurchaseInvoiceController {
                 };
             });
 
-            // 3. Validate products and prevent ambiguous duplicate product rows.
-            const seenProductIds = new Set();
+            // 3. Validate products (duplicate product rows with different prices are allowed)
+            const productCache = new Map();
             for (let i = 0; i < mappedItems.length; i++) {
                 const productId = Number(mappedItems[i].product_id);
-                if (seenProductIds.has(productId)) {
-                    throw { code: 'DUPLICATE_PURCHASE_PRODUCT', message: `المنتج في السطر ${i + 1} مكرر. اجمع الكمية في سطر واحد.` };
+                if (!productId) {
+                    throw { code: 'PRODUCT_NOT_FOUND', message: `المنتج في السطر ${i + 1} مطلوب` };
                 }
-                seenProductIds.add(productId);
-                const product = await dbGet(db, 'SELECT id, name, isActive FROM products WHERE id = ?', [productId]);
-                if (!product) throw { code: 'PRODUCT_NOT_FOUND', message: `المنتج في السطر ${i + 1} غير موجود` };
-                if (!product.isActive) throw { code: 'INACTIVE_PRODUCT', message: `المنتج ${product.name} غير نشط` };
+                let product = productCache.get(productId);
+                if (!product) {
+                    product = await dbGet(db, 'SELECT id, name, isActive FROM products WHERE id = ?', [productId]);
+                    if (!product) throw { code: 'PRODUCT_NOT_FOUND', message: `المنتج في السطر ${i + 1} غير موجود` };
+                    if (!product.isActive) throw { code: 'INACTIVE_PRODUCT', message: `المنتج ${product.name} غير نشط` };
+                    productCache.set(productId, product);
+                }
             }
 
             // 4. Calculate totals (validates items)
@@ -555,16 +558,19 @@ class PurchaseInvoiceController {
                 };
             });
 
-            const seenProductIds = new Set();
+            const productCache = new Map();
             for (let i = 0; i < mappedItems.length; i++) {
                 const productId = Number(mappedItems[i].product_id);
-                if (seenProductIds.has(productId)) {
-                    throw { code: 'DUPLICATE_PURCHASE_PRODUCT', message: `المنتج في السطر ${i + 1} مكرر. اجمع الكمية في سطر واحد.` };
+                if (!productId) {
+                    throw { code: 'PRODUCT_NOT_FOUND', message: `المنتج في السطر ${i + 1} مطلوب` };
                 }
-                seenProductIds.add(productId);
-                const product = await dbGet(db, 'SELECT id, name, isActive FROM products WHERE id = ?', [productId]);
-                if (!product) throw { code: 'PRODUCT_NOT_FOUND', message: `المنتج في السطر ${i + 1} غير موجود` };
-                if (!product.isActive) throw { code: 'INACTIVE_PRODUCT', message: `المنتج ${product.name} غير نشط` };
+                let product = productCache.get(productId);
+                if (!product) {
+                    product = await dbGet(db, 'SELECT id, name, isActive FROM products WHERE id = ?', [productId]);
+                    if (!product) throw { code: 'PRODUCT_NOT_FOUND', message: `المنتج في السطر ${i + 1} غير موجود` };
+                    if (!product.isActive) throw { code: 'INACTIVE_PRODUCT', message: `المنتج ${product.name} غير نشط` };
+                    productCache.set(productId, product);
+                }
             }
 
             const { normalizedItems, subtotal: newItemsSubtotal, totalAmount: newItemsTotal } = calculateInvoiceTotals(mappedItems, 0);
@@ -709,13 +715,16 @@ class PurchaseInvoiceController {
                 };
             });
 
-            const seen = new Set();
+            const productCache = new Map();
             for (let i = 0; i < mappedItems.length; i++) {
                 const item = mappedItems[i];
-                if (seen.has(item.product_id)) throw { code: 'DUPLICATE_PURCHASE_PRODUCT', message: `المنتج في السطر ${i + 1} مكرر` };
-                seen.add(item.product_id);
-                const product = await dbGet(db, 'SELECT * FROM products WHERE id = ?', [item.product_id]);
-                if (!product || !product.isActive) throw { code: 'PRODUCT_NOT_FOUND', message: `الصنف رقم ${i + 1} غير موجود أو غير نشط` };
+                if (!item.product_id) throw { code: 'PRODUCT_NOT_FOUND', message: `الصنف رقم ${i + 1} مطلوب` };
+                let product = productCache.get(item.product_id);
+                if (!product) {
+                    product = await dbGet(db, 'SELECT * FROM products WHERE id = ?', [item.product_id]);
+                    if (!product || !product.isActive) throw { code: 'PRODUCT_NOT_FOUND', message: `الصنف رقم ${i + 1} غير موجود أو غير نشط` };
+                    productCache.set(item.product_id, product);
+                }
             }
 
             const { normalizedItems, subtotal, discountAmount, totalAmount: itemsTotal } = calculateInvoiceTotals(mappedItems, discount_amount);
@@ -755,24 +764,36 @@ class PurchaseInvoiceController {
                 }
             }
 
-            // Apply stock adjustments per product
+            // Compute weighted-average unit price (base currency) per product across all new rows
+            const newProductTotals = new Map();
+            for (const newItem of normalizedItems) {
+                const pid = Number(newItem.product_id);
+                const qty = round3(Number(newItem.quantity ?? 0));
+                const unitPriceBase = toBaseAmount(newItem.purchase_price, nextRate);
+                const entry = newProductTotals.get(pid) ?? { qty: 0, valueBase: 0 };
+                entry.qty = round3(entry.qty + qty);
+                entry.valueBase += qty * unitPriceBase;
+                newProductTotals.set(pid, entry);
+            }
+
+            // Apply stock adjustments once per product
             for (const [pid, delta] of deltaByProduct.entries()) {
                 if (delta < -0.0005) {
                     await removeProductUnifiedStock(db, pid, Math.abs(delta));
                 }
             }
-            for (let i = 0; i < normalizedItems.length; i++) {
-                const newItem = normalizedItems[i];
-                const pid = Number(newItem.product_id);
+            for (const [pid, totals] of newProductTotals.entries()) {
                 const delta = deltaByProduct.get(pid) ?? 0;
-                const unitPriceBase = toBaseAmount(newItem.purchase_price, nextRate);
+                const weightedUnitPriceBase = totals.qty > 0
+                    ? normalizeAmount(totals.valueBase / totals.qty)
+                    : 0;
                 if (delta > 0.0005) {
-                    await addProductUnifiedStock(db, pid, delta, unitPriceBase);
-                } else if (unitPriceBase > 0) {
+                    await addProductUnifiedStock(db, pid, delta, weightedUnitPriceBase);
+                } else if (weightedUnitPriceBase > 0) {
                     await dbRun(
                         db,
                         `UPDATE products SET avg_cost_base = ?, updated_at = datetime('now') WHERE id = ?`,
-                        [unitPriceBase, pid]
+                        [weightedUnitPriceBase, pid]
                     );
                 }
             }
@@ -788,12 +809,19 @@ class PurchaseInvoiceController {
             await dbRun(db, `DELETE FROM stock_movements WHERE reference_type = 'purchase_invoice' AND reference_id = ? AND movement_type = 'purchase_in'`, [id]);
             await dbRun(db, 'DELETE FROM purchase_invoice_items WHERE purchase_invoice_id = ?', [id]);
 
+            const runningStockByProduct = new Map();
+            for (const [pid, totals] of newProductTotals.entries()) {
+                const currentProd = await dbGet(db, 'SELECT stock_quantity FROM products WHERE id = ?', [pid]);
+                const finalQty = round3(Number(currentProd?.stock_quantity ?? totals.qty));
+                runningStockByProduct.set(pid, round3(Math.max(0, finalQty - totals.qty)));
+            }
+
             for (let i = 0; i < normalizedItems.length; i++) {
                 const item = normalizedItems[i];
                 const estPrice = mappedItems[i]?.estimated_purchase_price ?? null;
-                const currentProd = await dbGet(db, 'SELECT stock_quantity FROM products WHERE id = ?', [item.product_id]);
-                const qtyAfter = round3(Number(currentProd?.stock_quantity ?? item.quantity));
-                const qtyBefore = round3(Math.max(0, qtyAfter - item.quantity));
+                const qtyBefore = runningStockByProduct.get(item.product_id) ?? 0;
+                const qtyAfter = round3(qtyBefore + item.quantity);
+                runningStockByProduct.set(item.product_id, qtyAfter);
 
                 await dbRun(
                     db,
@@ -1212,7 +1240,11 @@ class PurchaseInvoiceController {
         const items = purchaseItems.map((row) => {
             const receivedQty = round3(Number(row.received_quantity ?? 0));
             const savedItem = isCompletedSettlement
-                ? (settlementItemsByPiItem.get(Number(row.purchase_invoice_item_id)) ?? settlementItemsByProduct.get(Number(row.product_id)) ?? null)
+                ? (
+                    settlementItemsByPiItem.size > 0
+                        ? (settlementItemsByPiItem.get(Number(row.purchase_invoice_item_id)) ?? null)
+                        : (settlementItemsByProduct.get(Number(row.product_id)) ?? null)
+                )
                 : null;
             const soldQty = savedItem ? round3(Number(savedItem.sold_quantity ?? 0)) : 0;
             const salesAmt = savedItem ? normalizeAmount(Number(savedItem.sales_amount ?? 0)) : 0;

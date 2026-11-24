@@ -33,6 +33,7 @@ import * as addPurchaseExtraCostsMigration from './migrations/20260827000000_add
 import * as addPurchaseExtraCostResponsibilityMigration from './migrations/20260831000000_add_purchase_extra_cost_responsibility';
 import * as unifiedStockAndManualConsignmentMigration from './migrations/20261104180000_unified_stock_and_manual_consignment';
 import * as addStockWeightToInvoiceItemsMigration from './migrations/20261105210000_add_stock_weight_to_invoice_items';
+import * as addInitialBalanceToPartiesMigration from './migrations/20261124000000_add_initial_balance_to_parties';
 
 let knexInstance: Knex | null = null;
 
@@ -67,6 +68,7 @@ class MigrationSource {
       '20260831000000_add_purchase_extra_cost_responsibility.ts',
       '20261104180000_unified_stock_and_manual_consignment.ts',
       '20261105210000_add_stock_weight_to_invoice_items.ts',
+      '20261124000000_add_initial_balance_to_parties.ts',
     ]);
   }
   getMigrationName(migration: string) {
@@ -156,6 +158,9 @@ class MigrationSource {
     }
     if (migration === '20261105210000_add_stock_weight_to_invoice_items.ts') {
       return addStockWeightToInvoiceItemsMigration;
+    }
+    if (migration === '20261124000000_add_initial_balance_to_parties.ts') {
+      return addInitialBalanceToPartiesMigration;
     }
     throw new Error(`Migration ${migration} not found`);
   }

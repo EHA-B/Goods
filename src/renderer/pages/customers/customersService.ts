@@ -5,6 +5,7 @@ export type Customer = {
   email: string;
   address: string;
   balance: number;
+  initialBalance: number;
   notes: string;
   isActive: boolean;
   createdAt: string;
@@ -17,6 +18,7 @@ export type CustomerInput = {
   email?: string;
   address?: string;
   balance?: number;
+  initialBalance?: number;
   notes?: string;
   isActive?: boolean;
 };
@@ -28,6 +30,7 @@ type CustomerApiRow = {
   email: string | null;
   address: string | null;
   balance: number | string | null;
+  initial_balance?: number | string | null;
   notes: string | null;
   isActive: boolean | number;
   created_at: string | null;
@@ -51,6 +54,7 @@ function mapCustomer(row: CustomerApiRow): Customer {
     email: row.email ?? "",
     address: row.address ?? "",
     balance: Number(row.balance ?? 0),
+    initialBalance: Number(row.initial_balance ?? 0),
     notes: row.notes ?? "",
     isActive: Boolean(row.isActive),
     createdAt: row.created_at ?? "",
@@ -58,16 +62,29 @@ function mapCustomer(row: CustomerApiRow): Customer {
   };
 }
 
-function normalizeInput(input: CustomerInput): CustomerInput {
-  return {
+function normalizeInput(input: CustomerInput) {
+  const payload: {
+    name: string;
+    phone: string;
+    email: string;
+    address: string;
+    initial_balance: number;
+    balance?: number;
+    notes: string;
+    isActive: boolean;
+  } = {
     name: input.name.trim(),
     phone: input.phone?.trim() ?? "",
     email: input.email?.trim() ?? "",
     address: input.address?.trim() ?? "",
-    balance: Number(input.balance ?? 0),
+    initial_balance: Number(input.initialBalance ?? input.balance ?? 0),
     notes: input.notes?.trim() ?? "",
     isActive: input.isActive ?? true,
   };
+  if (input.balance !== undefined) {
+    payload.balance = Number(input.balance);
+  }
+  return payload;
 }
 
 export const customersService = {

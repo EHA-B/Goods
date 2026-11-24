@@ -7,8 +7,8 @@ import { BackButton, Button, Card, FormField, Input, LoadingSpinner, NumberInput
 import { PATHS } from "../../routes/path";
 import { customersService, getCustomerErrorMessage, type CustomerInput } from "./customersService";
 
-type FormState = { name: string; phone: string; email: string; address: string; balance: string; notes: string; isActive: boolean };
-const emptyForm: FormState = { name: "", phone: "", email: "", address: "", balance: "0", notes: "", isActive: true };
+type FormState = { name: string; phone: string; email: string; address: string; initialBalance: string; notes: string; isActive: boolean };
+const emptyForm: FormState = { name: "", phone: "", email: "", address: "", initialBalance: "0", notes: "", isActive: true };
 
 export default function CustomerFormPage() {
   useArrowFieldNavigation();
@@ -28,7 +28,7 @@ export default function CustomerFormPage() {
       try {
         setIsLoading(true);
         const customer = await customersService.get(id as number);
-        if (!cancelled) setForm({ name: customer.name, phone: customer.phone, email: customer.email, address: customer.address, balance: String(customer.balance), notes: customer.notes, isActive: customer.isActive });
+        if (!cancelled) setForm({ name: customer.name, phone: customer.phone, email: customer.email, address: customer.address, initialBalance: String(customer.initialBalance), notes: customer.notes, isActive: customer.isActive });
       } catch (loadError) {
         if (!cancelled) setError(getCustomerErrorMessage(loadError));
       } finally {
@@ -44,9 +44,9 @@ export default function CustomerFormPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form.name.trim()) return setError("اسم العميل مطلوب.");
-    const balance = Number(form.balance || 0);
-    if (!Number.isFinite(balance)) return setError("الرصيد الافتتاحي غير صالح.");
-    const input: CustomerInput = { name: form.name, phone: form.phone, email: form.email, address: form.address, balance, notes: form.notes, isActive: form.isActive };
+    const initialBalance = Number(form.initialBalance || 0);
+    if (!Number.isFinite(initialBalance)) return setError("الرصيد الافتتاحي غير صالح.");
+    const input: CustomerInput = { name: form.name, phone: form.phone, email: form.email, address: form.address, initialBalance, notes: form.notes, isActive: form.isActive };
     try {
       setIsSaving(true);
       const customer = isEditing && id ? await customersService.update(id, input) : await customersService.create(input);
@@ -69,7 +69,7 @@ export default function CustomerFormPage() {
         <FormField label="رقم الهاتف" htmlFor="customer-phone"><Input id="customer-phone" dir="ltr" value={form.phone} placeholder="09xxxxxxxx" onChange={(e) => update("phone", e.target.value)} /></FormField>
         <FormField label="البريد الإلكتروني" htmlFor="customer-email"><Input id="customer-email" dir="ltr" type="email" value={form.email} placeholder="customer@example.com" onChange={(e) => update("email", e.target.value)} /></FormField>
         <FormField label="العنوان" htmlFor="customer-address"><Input id="customer-address" value={form.address} placeholder="المدينة، الحي، الشارع" onChange={(e) => update("address", e.target.value)} /></FormField>
-        <FormField label="الرصيد الافتتاحي" htmlFor="customer-balance" hint="الموجب يعني أن على العميل مبلغًا، والسالب يعني أن له مبلغًا."><NumberInput id="customer-balance" value={form.balance} suffix="ل.س" onChange={(e) => update("balance", e.target.value)} /></FormField>
+        <FormField label="الرصيد الافتتاحي" htmlFor="customer-balance" hint={isEditing ? "الموجب يعني أن على العميل مبلغًا، والسالب يعني أن له مبلغًا. تعديل الرصيد الافتتاحي يُحدّث الرصيد الحالي تلقائيًا بمقدار الفرق." : "الموجب يعني أن على العميل مبلغًا، والسالب يعني أن له مبلغًا."}><NumberInput id="customer-balance" value={form.initialBalance} suffix="ل.س" onChange={(e) => update("initialBalance", e.target.value)} /></FormField>
         <div
           className={[
             "flex items-center justify-between self-end rounded-[var(--radius-sm)] border px-4 py-3 transition-colors",

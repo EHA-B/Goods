@@ -62,7 +62,8 @@ async function ensureStockWeightColumn(db, tableName) {
         tableSet = new Set();
         ensuredColumnsCache.set(db, tableSet);
     }
-    if (tableSet.has(tableName)) return;
+    const cacheKey = `${tableName}:stock_weight`;
+    if (tableSet.has(cacheKey)) return;
 
     const columns = await dbAll(db, `PRAGMA table_info(${tableName})`);
     if (columns.length > 0) {
@@ -70,7 +71,94 @@ async function ensureStockWeightColumn(db, tableName) {
         if (!hasColumn) {
             await dbRun(db, `ALTER TABLE ${tableName} ADD COLUMN stock_weight DECIMAL(15, 3) NOT NULL DEFAULT 0`);
         }
-        tableSet.add(tableName);
+        tableSet.add(cacheKey);
+    }
+}
+
+/**
+ * Ensure `initial_balance` column exists on `customers` or `suppliers` at runtime.
+ * @param {object} db
+ * @param {'customers'|'suppliers'} tableName
+ */
+async function ensurePartyInitialBalanceColumn(db, tableName) {
+    if (!db || (tableName !== 'customers' && tableName !== 'suppliers')) return;
+    let tableSet = ensuredColumnsCache.get(db);
+    if (!tableSet) {
+        tableSet = new Set();
+        ensuredColumnsCache.set(db, tableSet);
+    }
+    const cacheKey = `${tableName}:initial_balance`;
+    if (tableSet.has(cacheKey)) return;
+
+    const columns = await dbAll(db, `PRAGMA table_info(${tableName})`);
+    if (columns.length > 0) {
+        const hasColumn = columns.some((col) => String(col.name) === 'initial_balance');
+        if (!hasColumn) {
+            await dbRun(db, `ALTER TABLE ${tableName} ADD COLUMN initial_balance DECIMAL(15, 2) NOT NULL DEFAULT 0`);
+            if (tableName === 'customers') {
+                await dbRun(
+                    db,
+                    `UPDATE customers
+                     SET initial_balance = ROUND(
+                       COALESCE(balance, 0)
+                       - COALESCE((
+                           SELECT SUM(COALESCE(si.total, 0) * COALESCE(NULLIF(si.exchange_rate, 0), 1))
+                           FROM sale_invoices si
+                           WHERE si.customer_id = customers.id
+                             AND LOWER(COALESCE(si.status, '')) NOT IN ('cancelled', 'draft')
+                         ), 0)
+                       + COALESCE((
+                           SELECT SUM(COALESCE(p.amount_base, p.amount * COALESCE(NULLIF(p.exchange_rate, 0), 1), 0))
+                           FROM payments p
+                           WHERE (p.party_type = 'customer' OR (p.party_type IS NULL AND p.payment_type = 'sale'))
+                             AND p.party_id = customers.id
+                             AND LOWER(COALESCE(p.status, 'active')) = 'active'
+                             AND p.payment_type IN ('sale', 'general_receipt')
+                         ), 0)
+                       - COALESCE((
+                           SELECT SUM(COALESCE(p.amount_base, p.amount * COALESCE(NULLIF(p.exchange_rate, 0), 1), 0))
+                           FROM payments p
+                           WHERE p.party_type = 'customer'
+                             AND p.party_id = customers.id
+                             AND LOWER(COALESCE(p.status, 'active')) = 'active'
+                             AND p.payment_type = 'general_payment'
+                         ), 0)
+                     , 2)`
+                );
+            } else {
+                await dbRun(
+                    db,
+                    `UPDATE suppliers
+                     SET initial_balance = ROUND(
+                       COALESCE(balance, 0)
+                       - COALESCE((
+                           SELECT SUM(COALESCE(pi.total, 0) * COALESCE(NULLIF(pi.exchange_rate, 0), 1))
+                           FROM purchase_invoices pi
+                           WHERE pi.supplier_id = suppliers.id
+                             AND LOWER(COALESCE(pi.status, '')) NOT IN ('cancelled', 'draft')
+                             AND COALESCE(pi.invoice_type, 'standard') <> 'consignment'
+                         ), 0)
+                       + COALESCE((
+                           SELECT SUM(COALESCE(p.amount_base, p.amount * COALESCE(NULLIF(p.exchange_rate, 0), 1), 0))
+                           FROM payments p
+                           WHERE (p.party_type = 'supplier' OR (p.party_type IS NULL AND p.payment_type = 'purchase'))
+                             AND p.party_id = suppliers.id
+                             AND LOWER(COALESCE(p.status, 'active')) = 'active'
+                             AND p.payment_type IN ('purchase', 'general_payment')
+                         ), 0)
+                       - COALESCE((
+                           SELECT SUM(COALESCE(p.amount_base, p.amount * COALESCE(NULLIF(p.exchange_rate, 0), 1), 0))
+                           FROM payments p
+                           WHERE p.party_type = 'supplier'
+                             AND p.party_id = suppliers.id
+                             AND LOWER(COALESCE(p.status, 'active')) = 'active'
+                             AND p.payment_type = 'general_receipt'
+                         ), 0)
+                     , 2)`
+                );
+            }
+        }
+        tableSet.add(cacheKey);
     }
 }
 
@@ -273,6 +361,7 @@ module.exports = {
     normalizeAmount,
     normalizeWeight,
     ensureStockWeightColumn,
+    ensurePartyInitialBalanceColumn,
     validateDate,
     calculateInvoiceTotals,
     calculatePaymentState,

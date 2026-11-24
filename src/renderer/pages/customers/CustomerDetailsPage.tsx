@@ -448,7 +448,7 @@ export default function CustomerDetailsPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <div className="flex items-start justify-between">
             <div>
@@ -480,6 +480,39 @@ export default function CustomerDetailsPage() {
             <WalletCards
               size={21}
               className="text-[var(--primary)]"
+            />
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs text-[var(--text-muted)]">
+                الرصيد الافتتاحي
+              </p>
+
+              <p
+                dir="ltr"
+                className="mt-2 text-right text-xl font-bold text-[var(--text-primary)]"
+              >
+                {money(
+                  customer.initialBalance,
+                  "SYP",
+                )}
+              </p>
+
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                {customer.initialBalance > 0
+                  ? "رصيد افتتاحي على العميل (عليه)"
+                  : customer.initialBalance < 0
+                    ? "رصيد افتتاحي للعميل (له)"
+                    : "لا يوجد رصيد افتتاحي"}
+              </p>
+            </div>
+
+            <WalletCards
+              size={21}
+              className="text-[var(--text-muted)]"
             />
           </div>
         </Card>

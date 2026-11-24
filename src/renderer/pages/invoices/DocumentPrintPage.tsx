@@ -86,6 +86,7 @@ type StatementParty = {
   name?: string | null;
   phone?: string | null;
   address?: string | null;
+  initial_balance?: number | string | null;
 };
 
 type StatementInvoice = {
@@ -113,6 +114,7 @@ type StatementPayment = {
 type StatementDocument = {
   party: StatementParty;
   balance?: number | string | null;
+  initial_balance?: number | string | null;
   invoices: StatementInvoice[];
   payments: StatementPayment[];
   statement_type?: "customer" | "supplier" | string;
@@ -1350,6 +1352,7 @@ function Transfer({
 
 function Statement({
   d,
+  kind,
 }: {
   d: StatementDocument;
   kind: "customer" | "supplier";
@@ -1363,6 +1366,13 @@ function Statement({
           ? `حتى ${d.to_date}`
           : "كل الفترات";
 
+  const initialBalance = n(
+    d.initial_balance ?? d.party?.initial_balance ?? 0,
+  );
+  const currentBalance = n(d.balance);
+  const initialState = getPartyBalanceState(initialBalance, kind);
+  const currentState = getPartyBalanceState(currentBalance, kind);
+
   return (
     <>
       <Meta
@@ -1373,11 +1383,19 @@ function Statement({
           ],
 
           [
-            "الرصيد الحالي",
-            money(
-              d.balance,
+            "الرصيد الافتتاحي",
+            `${money(
+              Math.abs(initialBalance),
               "SYP",
-            ),
+            )} (${initialState.label})`,
+          ],
+
+          [
+            "الرصيد الحالي",
+            `${money(
+              Math.abs(currentBalance),
+              "SYP",
+            )} (${currentState.label})`,
           ],
 
           [
@@ -1457,59 +1475,71 @@ function Statement({
             <th>التاريخ</th>
             <th>النوع</th>
             <th>الصندوق</th>
-            <th>المبلغ</th>
+            <th>مبلغ مدفوع</th>
+            <th>مبلغ مقبوض</th>
             <th>البيان / ملاحظات</th>
           </tr>
         </thead>
 
         <tbody>
           {d.payments.map(
-            (payment) => (
-              <tr key={payment.id}>
-                <td>
-                  {payment.id}
-                </td>
+            (payment) => {
+              const isReceived =
+                payment.payment_type === "sale" ||
+                payment.payment_type === "general_receipt" ||
+                payment.payment_type === "purchase_reversal";
+              const formattedAmount = money(
+                payment.amount,
+                payment.currency || "SYP",
+              );
 
-                <td>
-                  {date(
-                    payment.payment_date,
-                  )}
-                </td>
+              return (
+                <tr key={payment.id}>
+                  <td>
+                    {payment.id}
+                  </td>
 
-                <td>
-                  {payment.payment_type === "sale"
-                    ? "دفعة بيع"
-                    : payment.payment_type === "purchase"
-                      ? "دفعة شراء"
-                      : payment.payment_type === "general_receipt"
-                        ? "سند قبض"
-                        : payment.payment_type === "general_payment"
-                          ? "سند دفع / سحب"
-                          : payment.payment_type === "sale_reversal"
-                            ? "عكس دفعة بيع"
-                            : payment.payment_type === "purchase_reversal"
-                              ? "عكس دفعة شراء"
-                              : payment.payment_type || "—"}
-                </td>
+                  <td>
+                    {date(
+                      payment.payment_date,
+                    )}
+                  </td>
 
-                <td>
-                  {payment.cashbox_name ||
-                    "—"}
-                </td>
+                  <td>
+                    {payment.payment_type === "sale"
+                      ? "دفعة بيع"
+                      : payment.payment_type === "purchase"
+                        ? "دفعة شراء"
+                        : payment.payment_type === "general_receipt"
+                          ? "سند قبض"
+                          : payment.payment_type === "general_payment"
+                            ? "سند دفع / سحب"
+                            : payment.payment_type === "sale_reversal"
+                              ? "عكس دفعة بيع"
+                              : payment.payment_type === "purchase_reversal"
+                                ? "عكس دفعة شراء"
+                                : payment.payment_type || "—"}
+                  </td>
 
-                <td>
-                  {money(
-                    payment.amount,
-                    payment.currency ||
-                      "SYP",
-                  )}
-                </td>
+                  <td>
+                    {payment.cashbox_name ||
+                      "—"}
+                  </td>
 
-                <td>
-                  {payment.notes || "—"}
-                </td>
-              </tr>
-            ),
+                  <td>
+                    {!isReceived ? formattedAmount : "—"}
+                  </td>
+
+                  <td>
+                    {isReceived ? formattedAmount : "—"}
+                  </td>
+
+                  <td>
+                    {payment.notes || "—"}
+                  </td>
+                </tr>
+              );
+            },
           )}
         </tbody>
       </table>

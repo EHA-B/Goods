@@ -32,7 +32,8 @@ export default function CustomersTable({ customers, onView, onEdit, onDelete }: 
           <DataTableHeaderCell>العميل</DataTableHeaderCell>
           <DataTableHeaderCell>الهاتف</DataTableHeaderCell>
           <DataTableHeaderCell>العنوان</DataTableHeaderCell>
-          <DataTableHeaderCell>الرصيد</DataTableHeaderCell>
+          <DataTableHeaderCell>الرصيد الافتتاحي</DataTableHeaderCell>
+          <DataTableHeaderCell>الرصيد الحالي</DataTableHeaderCell>
           <DataTableHeaderCell>الحالة</DataTableHeaderCell>
           <DataTableHeaderCell>الإجراءات</DataTableHeaderCell>
         </DataTableRow>
@@ -65,19 +66,39 @@ export default function CustomersTable({ customers, onView, onEdit, onDelete }: 
             </DataTableCell>
 
             <DataTableCell>
-              {customer.balance === 0 ? (
-                <span className="font-bold text-[var(--text-muted)]">متوازن</span>
-              ) : customer.balance > 0 ? (
+              {customer.initialBalance === 0 ? (
+                <span className="font-bold text-[var(--text-muted)]">0 ل.س</span>
+              ) : customer.initialBalance > 0 ? (
                 <div>
                   <p className="font-bold text-[var(--danger)]">
-                    {formatBalance(customer.balance)}
+                    {formatBalance(customer.initialBalance)} ل.س
                   </p>
                   <p className="mt-1 text-xs text-[var(--text-muted)]">عليه</p>
                 </div>
               ) : (
                 <div>
                   <p className="font-bold text-[var(--success)]">
-                    {formatBalance(customer.balance)}
+                    {formatBalance(customer.initialBalance)} ل.س
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">له</p>
+                </div>
+              )}
+            </DataTableCell>
+
+            <DataTableCell>
+              {customer.balance === 0 ? (
+                <span className="font-bold text-[var(--text-muted)]">متوازن</span>
+              ) : customer.balance > 0 ? (
+                <div>
+                  <p className="font-bold text-[var(--danger)]">
+                    {formatBalance(customer.balance)} ل.س
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">عليه</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="font-bold text-[var(--success)]">
+                    {formatBalance(customer.balance)} ل.س
                   </p>
                   <p className="mt-1 text-xs text-[var(--text-muted)]">له</p>
                 </div>

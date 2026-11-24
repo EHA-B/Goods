@@ -1,5 +1,6 @@
 const path = require('path');
 const dbmanager = require(path.join(__dirname, '../database/databaseManager'));
+const { ensurePartyInitialBalanceColumn } = require('./utils/invoiceUtils');
 
 class SupplierController {
 
@@ -10,6 +11,7 @@ class SupplierController {
             throw err;
         }
         const db = await dbmanager.init();
+        await ensurePartyInitialBalanceColumn(db, 'suppliers');
 
         const trimmedName = String(input.name).trim();
         const existingSupplier = await new Promise((resolve, reject) => {
@@ -28,9 +30,14 @@ class SupplierController {
             throw err;
         }
 
+        const initialBalance = Number(input.initial_balance ?? input.balance ?? 0);
+        const balance = input.balance !== undefined && input.balance !== null
+            ? Number(input.balance)
+            : initialBalance;
+
         const sql = `
-            INSERT INTO suppliers (name, phone, email, address, balance, notes, isActive, created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?, datetime('now'), datetime('now'))
+            INSERT INTO suppliers (name, phone, email, address, balance, initial_balance, notes, isActive, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))
         `;
         const id = await new Promise((resolve, reject) => {
             db.run(sql, [
@@ -38,7 +45,8 @@ class SupplierController {
                 input.phone ?? null,
                 input.email ?? null,
                 input.address ?? null,
-                input.balance ?? null,
+                Number.isFinite(balance) ? balance : 0,
+                Number.isFinite(initialBalance) ? initialBalance : 0,
                 input.notes ?? null,
                 input.isActive ?? null
             ], function (err) {
@@ -52,6 +60,7 @@ class SupplierController {
     async getSupplier(id) {
         if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
         const db = await dbmanager.init();
+        await ensurePartyInitialBalanceColumn(db, 'suppliers');
         return await new Promise((resolve, reject) => {
             db.get(
                 `SELECT * FROM suppliers WHERE id = ?`,
@@ -67,6 +76,7 @@ class SupplierController {
 
     async getAllSuppliers() {
         const db = await dbmanager.init();
+        await ensurePartyInitialBalanceColumn(db, 'suppliers');
         return await new Promise((resolve, reject) => {
             db.all(
                 `SELECT * FROM suppliers`,
@@ -81,6 +91,8 @@ class SupplierController {
 
     async updateSupplier(id, input) {
         if (!id) throw { code: 'VALIDATION_ERROR', message: 'ID is required' };
+        const db = await dbmanager.init();
+        await ensurePartyInitialBalanceColumn(db, 'suppliers');
 
         const mapping = {
             name: 'name',
@@ -88,13 +100,45 @@ class SupplierController {
             email: 'email',
             address: 'address',
             balance: 'balance',
+            initial_balance: 'initial_balance',
             notes: 'notes',
             isActive: 'isActive'
         };
         const sets = [];
         const params = [];
 
+        const hasInitialBalance = Boolean(input && Object.prototype.hasOwnProperty.call(input, 'initial_balance'));
+        const hasBalance = Boolean(input && Object.prototype.hasOwnProperty.call(input, 'balance'));
+
+        if (hasInitialBalance && !hasBalance) {
+            const existing = await new Promise((resolve, reject) => {
+                db.get(`SELECT balance, initial_balance FROM suppliers WHERE id = ?`, [id], (err, row) => {
+                    if (err) return reject(err);
+                    resolve(row);
+                });
+            });
+            if (!existing) throw { code: 'NOT_FOUND', message: 'Supplier not found' };
+
+            const nextInitial = Number(input.initial_balance ?? 0);
+            if (!Number.isFinite(nextInitial)) {
+                const err = new Error('الرصيد الافتتاحي غير صالح');
+                err.code = 'VALIDATION_ERROR';
+                throw err;
+            }
+            const prevInitial = Number(existing.initial_balance ?? 0);
+            const prevBalance = Number(existing.balance ?? 0);
+            const nextBalance = Math.round((prevBalance + (nextInitial - prevInitial)) * 100) / 100;
+
+            sets.push('initial_balance = ?');
+            params.push(nextInitial);
+            sets.push('balance = ?');
+            params.push(nextBalance);
+        }
+
         for (const key of Object.keys(mapping)) {
+            if (hasInitialBalance && !hasBalance && (key === 'initial_balance' || key === 'balance')) {
+                continue;
+            }
             if (input && Object.prototype.hasOwnProperty.call(input, key)) {
                 sets.push(`${mapping[key]} = ?`);
                 params.push(input[key] ?? null);
@@ -110,9 +154,8 @@ class SupplierController {
         if (input && Object.prototype.hasOwnProperty.call(input, 'name')) {
             const trimmedName = String(input.name).trim();
             if (trimmedName) {
-                const db2 = await dbmanager.init();
                 const duplicate = await new Promise((resolve, reject) => {
-                    db2.get(
+                    db.get(
                         `SELECT id FROM suppliers WHERE LOWER(TRIM(name)) = LOWER(?) AND id <> ?`,
                         [trimmedName, id],
                         (err, row) => {
@@ -133,7 +176,6 @@ class SupplierController {
         const sql = `UPDATE suppliers SET ${sets.join(', ')} WHERE id = ?`;
         params.push(id);
 
-        const db = await dbmanager.init();
         const info = await new Promise((resolve, reject) => {
             db.run(sql, params, function (err) {
                 if (err) return reject(err);

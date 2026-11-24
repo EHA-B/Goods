@@ -704,23 +704,6 @@ export default function PurchaseFormPage({ tabId }: { tabId?: string } = {}) {
       return;
     }
 
-    const productIds = items
-      .map((item) => item.product_id)
-      .filter(Boolean);
-
-    if (
-      new Set(productIds).size !==
-      productIds.length
-    ) {
-      setError(
-        "لا يمكن تكرار المنتج في أكثر من سطر. اجمع الكمية في سطر واحد",
-      );
-      notifyValidation(
-        "لا يمكن تكرار المنتج في أكثر من سطر. اجمع الكمية في سطر واحد",
-      );
-      return;
-    }
-
     const invalidItem = items.some((item) => {
       if (!item.product_id || !Number.isFinite(item.stock_weight ?? 0) || Number(item.stock_weight ?? 0) < 0) {
         return true;

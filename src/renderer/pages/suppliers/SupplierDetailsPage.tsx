@@ -371,7 +371,7 @@ export default function SupplierDetailsPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -415,6 +415,44 @@ export default function SupplierDetailsPage() {
                   : "bg-green-50 text-green-600"
               }`}
             >
+              <WalletCards size={21} />
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold text-[var(--text-muted)]">
+                الرصيد الافتتاحي
+              </p>
+
+              <p
+                dir="ltr"
+                className={`mt-2 text-right text-2xl font-bold ${
+                  supplier.initialBalance > 0
+                    ? "text-red-600"
+                    : supplier.initialBalance < 0
+                      ? "text-green-600"
+                      : "text-[var(--text-primary)]"
+                }`}
+              >
+                {money(
+                  supplier.initialBalance,
+                  "SYP",
+                )}
+              </p>
+
+              <p className="mt-1 text-xs font-medium text-[var(--text-muted)]">
+                {supplier.initialBalance > 0
+                  ? "رصيد افتتاحي للمورد (له)"
+                  : supplier.initialBalance < 0
+                    ? "رصيد افتتاحي على المورد (عليه)"
+                    : "لا يوجد رصيد افتتاحي"}
+              </p>
+            </div>
+
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--surface-subtle)] text-[var(--text-muted)]">
               <WalletCards size={21} />
             </div>
           </div>

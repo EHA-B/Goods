@@ -28,7 +28,7 @@ type FormState = {
   phone: string;
   email: string;
   address: string;
-  balance: string;
+  initialBalance: string;
   notes: string;
   isActive: boolean;
 };
@@ -38,7 +38,7 @@ const emptyForm: FormState = {
   phone: "",
   email: "",
   address: "",
-  balance: "0",
+  initialBalance: "0",
   notes: "",
   isActive: true,
 };
@@ -72,7 +72,7 @@ export default function SupplierFormPage() {
           phone: supplier.phone,
           email: supplier.email,
           address: supplier.address,
-          balance: String(supplier.balance),
+          initialBalance: String(supplier.initialBalance),
           notes: supplier.notes,
           isActive: supplier.isActive,
         });
@@ -101,8 +101,8 @@ export default function SupplierFormPage() {
       setError("اسم المورد مطلوب."); notifyValidation("اسم المورد مطلوب."); return;
     }
 
-    const balance = Number(form.balance || 0);
-    if (!Number.isFinite(balance)) {
+    const initialBalance = Number(form.initialBalance || 0);
+    if (!Number.isFinite(initialBalance)) {
       setError("الرصيد الافتتاحي غير صالح."); notifyValidation("الرصيد الافتتاحي غير صالح."); return;
     }
 
@@ -111,7 +111,7 @@ export default function SupplierFormPage() {
       phone: form.phone,
       email: form.email,
       address: form.address,
-      balance,
+      initialBalance,
       notes: form.notes,
       isActive: form.isActive,
     };
@@ -202,13 +202,17 @@ export default function SupplierFormPage() {
           <FormField
             label="الرصيد الافتتاحي"
             htmlFor="supplier-balance"
-            hint="الموجب يعني أن للمورد مبلغًا، والسالب يعني وجود دفعة مقدمة لدينا."
+            hint={
+              isEditing
+                ? "الموجب يعني أن للمورد مبلغًا، والسالب يعني دفعة مقدمة لدينا. تعديل الرصيد الافتتاحي يُحدّث الرصيد الحالي تلقائيًا بمقدار الفرق."
+                : "الموجب يعني أن للمورد مبلغًا، والسالب يعني وجود دفعة مقدمة لدينا."
+            }
           >
             <NumberInput
               id="supplier-balance"
-              value={form.balance}
+              value={form.initialBalance}
               suffix="ل.س"
-              onChange={(event) => update("balance", event.target.value)}
+              onChange={(event) => update("initialBalance", event.target.value)}
             />
           </FormField>
 

@@ -1,5 +1,6 @@
 const path = require('path');
 const dbmanager = require(path.join(__dirname, '../database/databaseManager'));
+const { ensurePartyInitialBalanceColumn } = require('./utils/invoiceUtils');
 
 const get = (db, sql, params=[]) => new Promise((resolve,reject)=>db.get(sql,params,(e,r)=>e?reject(e):resolve(r)));
 const all = (db, sql, params=[]) => new Promise((resolve,reject)=>db.all(sql,params,(e,r)=>e?reject(e):resolve(r||[])));
@@ -58,6 +59,7 @@ class PrintController {
 
   async getCustomerStatement(id, range = {}) {
     const db = await dbmanager.init();
+    await ensurePartyInitialBalanceColumn(db, 'customers');
     const party = await get(db, `SELECT * FROM customers WHERE id=?`, [id]);
     if (!party) throw Object.assign(new Error('Customer not found'), {code:'NOT_FOUND'});
     const { fromDate, toDate } = normalizeStatementRange(range);
@@ -67,11 +69,21 @@ class PrintController {
       total * COALESCE(exchange_rate,1) amount_base FROM sale_invoices WHERE customer_id=?${invoiceRange.sql} ORDER BY invoice_date,id`, [id, ...invoiceRange.params]);
     const payments = await all(db, `SELECT p.*, c.name cashbox_name FROM payments p LEFT JOIN cashboxes c ON c.id=p.cashbox_id
       WHERE (p.party_type = 'customer' OR (p.party_type IS NULL AND p.payment_type IN ('sale','sale_reversal'))) AND p.party_id=?${paymentRange.sql} ORDER BY p.payment_date,p.id`, [id, ...paymentRange.params]);
-    return { party, invoices, payments, balance: Number(party.balance||0), statement_type:'customer', from_date: fromDate, to_date: toDate };
+    return {
+      party,
+      invoices,
+      payments,
+      balance: Number(party.balance || 0),
+      initial_balance: Number(party.initial_balance || 0),
+      statement_type: 'customer',
+      from_date: fromDate,
+      to_date: toDate,
+    };
   }
 
   async getSupplierStatement(id, range = {}) {
     const db = await dbmanager.init();
+    await ensurePartyInitialBalanceColumn(db, 'suppliers');
     const party = await get(db, `SELECT * FROM suppliers WHERE id=?`, [id]);
     if (!party) throw Object.assign(new Error('Supplier not found'), {code:'NOT_FOUND'});
     const { fromDate, toDate } = normalizeStatementRange(range);
@@ -81,7 +93,16 @@ class PrintController {
       total * COALESCE(exchange_rate,1) amount_base FROM purchase_invoices WHERE supplier_id=?${invoiceRange.sql} ORDER BY invoice_date,id`, [id, ...invoiceRange.params]);
     const payments = await all(db, `SELECT p.*, c.name cashbox_name FROM payments p LEFT JOIN cashboxes c ON c.id=p.cashbox_id
       WHERE (p.party_type = 'supplier' OR (p.party_type IS NULL AND p.payment_type IN ('purchase','purchase_reversal'))) AND p.party_id=?${paymentRange.sql} ORDER BY p.payment_date,p.id`, [id, ...paymentRange.params]);
-    return { party, invoices, payments, balance: Number(party.balance||0), statement_type:'supplier', from_date: fromDate, to_date: toDate };
+    return {
+      party,
+      invoices,
+      payments,
+      balance: Number(party.balance || 0),
+      initial_balance: Number(party.initial_balance || 0),
+      statement_type: 'supplier',
+      from_date: fromDate,
+      to_date: toDate,
+    };
   }
 
   async getCashboxStatement(id) {

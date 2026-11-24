@@ -53,6 +53,7 @@ type PartyApiRecord = {
   email: string | null;
   address: string | null;
   balance: number | string | null;
+  initial_balance?: number | string | null;
   notes: string | null;
   isActive: number | boolean;
   created_at: string | null;
@@ -65,6 +66,7 @@ type PartyApiInput = {
   email?: string | null;
   address?: string | null;
   balance?: number;
+  initial_balance?: number;
   notes?: string | null;
   isActive?: boolean;
 };

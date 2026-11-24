@@ -107,6 +107,7 @@ type StatementPayment = {
   amount?: number | string | null;
   currency?: string | null;
   status?: string | null;
+  notes?: string | null;
 };
 
 type StatementDocument = {
@@ -737,10 +738,10 @@ export default function DocumentPrintPage({
                     "اسم الشركة"}
                 </h1>
 
-                <p className="invoice-company-subtitle">
+                {/* <p className="invoice-company-subtitle">
                   {company.address ||
                     "نظام المبيعات والمخزون"}
-                </p>
+                </p> */}
               </div>
             </div>
 
@@ -1075,11 +1076,15 @@ function Payment({
               ? "سند قبض"
               : d.payment_type === "purchase"
                 ? "سند دفع"
-                : d.payment_type === "sale_reversal"
-                  ? "إيصال عكس دفعة بيع"
-                  : d.payment_type === "purchase_reversal"
-                    ? "إيصال عكس دفعة شراء"
-                    : "سند مالي",
+                : d.payment_type === "general_receipt"
+                  ? "سند قبض عام"
+                  : d.payment_type === "general_payment"
+                    ? "سند دفع عام"
+                    : d.payment_type === "sale_reversal"
+                      ? "إيصال عكس دفعة بيع"
+                      : d.payment_type === "purchase_reversal"
+                        ? "إيصال عكس دفعة شراء"
+                        : "سند مالي",
           ],
 
           [
@@ -1442,7 +1447,7 @@ function Statement({
       </table>
 
       <h3 className="mt-7 mb-3 font-bold">
-        الدفعات
+        الدفعات والسندات
       </h3>
 
       <table className="invoice-items">
@@ -1453,6 +1458,7 @@ function Statement({
             <th>النوع</th>
             <th>الصندوق</th>
             <th>المبلغ</th>
+            <th>البيان / ملاحظات</th>
           </tr>
         </thead>
 
@@ -1475,11 +1481,15 @@ function Statement({
                     ? "دفعة بيع"
                     : payment.payment_type === "purchase"
                       ? "دفعة شراء"
-                      : payment.payment_type === "sale_reversal"
-                        ? "عكس دفعة بيع"
-                        : payment.payment_type === "purchase_reversal"
-                          ? "عكس دفعة شراء"
-                          : payment.payment_type || "—"}
+                      : payment.payment_type === "general_receipt"
+                        ? "سند قبض"
+                        : payment.payment_type === "general_payment"
+                          ? "سند دفع / سحب"
+                          : payment.payment_type === "sale_reversal"
+                            ? "عكس دفعة بيع"
+                            : payment.payment_type === "purchase_reversal"
+                              ? "عكس دفعة شراء"
+                              : payment.payment_type || "—"}
                 </td>
 
                 <td>
@@ -1493,6 +1503,10 @@ function Statement({
                     payment.currency ||
                       "SYP",
                   )}
+                </td>
+
+                <td>
+                  {payment.notes || "—"}
                 </td>
               </tr>
             ),

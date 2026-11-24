@@ -25,14 +25,14 @@ class PrintController {
   async getPaymentDocument(id) {
     const db = await dbmanager.init();
     const payment = await get(db, `SELECT p.*, c.name cashbox_name,
-      CASE WHEN p.payment_type IN ('sale','sale_reversal') THEN cu.name ELSE s.name END party_name,
-      CASE WHEN p.payment_type IN ('sale','sale_reversal') THEN si.invoice_number ELSE pi.invoice_number END invoice_number
+      COALESCE(cu.name, s.name) party_name,
+      COALESCE(si.invoice_number, pi.invoice_number) invoice_number
       FROM payments p
       LEFT JOIN cashboxes c ON c.id=p.cashbox_id
       LEFT JOIN sale_invoices si ON p.payment_type IN ('sale','sale_reversal') AND si.id=p.invoice_id
       LEFT JOIN purchase_invoices pi ON p.payment_type IN ('purchase','purchase_reversal') AND pi.id=p.invoice_id
-      LEFT JOIN customers cu ON p.payment_type IN ('sale','sale_reversal') AND cu.id=p.party_id
-      LEFT JOIN suppliers s ON p.payment_type IN ('purchase','purchase_reversal') AND s.id=p.party_id
+      LEFT JOIN customers cu ON (p.party_type = 'customer' OR (p.party_type IS NULL AND p.payment_type IN ('sale','sale_reversal'))) AND cu.id=p.party_id
+      LEFT JOIN suppliers s ON (p.party_type = 'supplier' OR (p.party_type IS NULL AND p.payment_type IN ('purchase','purchase_reversal'))) AND s.id=p.party_id
       WHERE p.id=?`, [id]);
     if (!payment) throw Object.assign(new Error('Payment not found'), {code:'NOT_FOUND'});
     return payment;
@@ -66,7 +66,7 @@ class PrintController {
     const invoices = await all(db, `SELECT id, invoice_number, invoice_date, total, paid_amount, remaining_amount, status, currency, exchange_rate,
       total * COALESCE(exchange_rate,1) amount_base FROM sale_invoices WHERE customer_id=?${invoiceRange.sql} ORDER BY invoice_date,id`, [id, ...invoiceRange.params]);
     const payments = await all(db, `SELECT p.*, c.name cashbox_name FROM payments p LEFT JOIN cashboxes c ON c.id=p.cashbox_id
-      WHERE p.payment_type IN ('sale','sale_reversal') AND p.party_id=?${paymentRange.sql} ORDER BY p.payment_date,p.id`, [id, ...paymentRange.params]);
+      WHERE (p.party_type = 'customer' OR (p.party_type IS NULL AND p.payment_type IN ('sale','sale_reversal'))) AND p.party_id=?${paymentRange.sql} ORDER BY p.payment_date,p.id`, [id, ...paymentRange.params]);
     return { party, invoices, payments, balance: Number(party.balance||0), statement_type:'customer', from_date: fromDate, to_date: toDate };
   }
 
@@ -80,7 +80,7 @@ class PrintController {
     const invoices = await all(db, `SELECT id, invoice_number, invoice_date, total, paid_amount, remaining_amount, status, currency, exchange_rate,
       total * COALESCE(exchange_rate,1) amount_base FROM purchase_invoices WHERE supplier_id=?${invoiceRange.sql} ORDER BY invoice_date,id`, [id, ...invoiceRange.params]);
     const payments = await all(db, `SELECT p.*, c.name cashbox_name FROM payments p LEFT JOIN cashboxes c ON c.id=p.cashbox_id
-      WHERE p.payment_type IN ('purchase','purchase_reversal') AND p.party_id=?${paymentRange.sql} ORDER BY p.payment_date,p.id`, [id, ...paymentRange.params]);
+      WHERE (p.party_type = 'supplier' OR (p.party_type IS NULL AND p.payment_type IN ('purchase','purchase_reversal'))) AND p.party_id=?${paymentRange.sql} ORDER BY p.payment_date,p.id`, [id, ...paymentRange.params]);
     return { party, invoices, payments, balance: Number(party.balance||0), statement_type:'supplier', from_date: fromDate, to_date: toDate };
   }
 

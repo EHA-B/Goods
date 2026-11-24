@@ -1279,8 +1279,15 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
     background: #fff !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    page-break-after: avoid !important;
-    break-after: avoid !important;
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+  .invoice-print-sheet:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+  .invoice-print-sheet + .invoice-print-sheet {
+    margin-top: 0 !important;
   }
   .invoice-print-sheet.invoice-print-sheet--a5 {
     width: 148mm !important;
@@ -1359,6 +1366,15 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
 .invoice-print-sheet .invoice-ledger-table .invoice-col-price { width: 18%; }
 .invoice-print-sheet .invoice-ledger-table .invoice-col-notes { width: 12%; }
 
+.invoice-print-sheet + .invoice-print-sheet {
+  margin-top: 24px;
+}
+.invoice-print-sheet .invoice-ledger-subtotal th {
+  background: #eaecf0 !important;
+  color: #1d2939 !important;
+  font-weight: 700;
+}
+
 /* Fixed physical page heights so the sheet matches the printer paper exactly.
    A4 = 210mm x 297mm, A5 = 148mm x 210mm. */
 .invoice-print-sheet:not(.invoice-print-sheet--flow) {
@@ -1421,6 +1437,8 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
     overflow: visible !important;
     page-break-inside: auto !important;
     break-inside: auto !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
   .invoice-print-sheet.invoice-print-sheet--flow.invoice-print-sheet--a5 {
     display: block !important;
@@ -1429,6 +1447,8 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
     overflow: visible !important;
     page-break-inside: auto !important;
     break-inside: auto !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 }
 

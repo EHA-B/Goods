@@ -74,8 +74,8 @@ function paginateItems(items: PrintItem[], maxIntermediate: number, maxLast: num
 
 export default function PrintableInvoice(props: Props) {
   const paperClass = props.paperSize === "A5" ? "invoice-print-sheet--a5" : "invoice-print-sheet--a4";
-  const maxLast = 18;
-  const maxIntermediate = props.paperSize === "A5" ? 22 : 24;
+  const maxLast = 16;
+  const maxIntermediate = props.paperSize === "A5" ? 20 : 22;
 
   const pages = paginateItems(props.items, maxIntermediate, maxLast);
   const totalPages = pages.length;

@@ -1157,25 +1157,25 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
   grid-column:auto;
 }
 .invoice-print-sheet .invoice-meta span {
-  font-size:13.5px;
+  font-size:12px;
   font-weight:700;
   color:#000;
 }
 .invoice-print-sheet .invoice-meta strong {
   min-width:0;
   overflow-wrap:anywhere;
-  font-size:15px;
+  font-size:13px;
   font-weight:800;
   color:#000;
 }
-.invoice-print-sheet .invoice-party-card strong { font-size:17px; font-weight:800; color:#000; }
+.invoice-print-sheet .invoice-party-card strong { font-size:15px; font-weight:800; color:#000; }
 .invoice-print-sheet .invoice-print-header {
   gap:16px;
   padding-bottom:10px;
 }
-.invoice-print-sheet .invoice-company-identity h1 { font-size:24px; font-weight:800; color:#000; }
-.invoice-print-sheet .invoice-company-subtitle { font-size:13.5px; font-weight:600; color:#000; }
-.invoice-print-sheet .invoice-company-contact { margin-top:6px; font-size:13.5px; font-weight:600; line-height:1.45; color:#000; }
+.invoice-print-sheet .invoice-company-identity h1 { font-size:22px; font-weight:800; color:#000; }
+.invoice-print-sheet .invoice-company-subtitle { font-size:12px; font-weight:600; color:#000; }
+.invoice-print-sheet .invoice-company-contact { margin-top:6px; font-size:12px; font-weight:600; line-height:1.45; color:#000; }
 .invoice-print-sheet .invoice-company-contact span { color:#000; font-weight:800; }
 .invoice-print-sheet .invoice-title-box { padding:10px 14px; }
 .invoice-print-sheet .invoice-document-label { font-size:11.5px; }
@@ -1220,9 +1220,9 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
 }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-company-identity { gap: 6px; }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-logo { width: 36px; height: 36px; padding: 2px; border-radius: 4px; }
-.invoice-print-sheet.invoice-print-sheet--a5 .invoice-company-identity h1 { font-size: 17px; font-weight: 800; line-height: 1.2; color: #000; }
-.invoice-print-sheet.invoice-print-sheet--a5 .invoice-company-subtitle { font-size: 10.5px; font-weight: 600; margin: 1px 0 0; color: #000; }
-.invoice-print-sheet.invoice-print-sheet--a5 .invoice-company-contact { margin-top: 2px; gap: 1px; font-size: 11px; font-weight: 600; line-height: 1.25; color: #000; }
+.invoice-print-sheet.invoice-print-sheet--a5 .invoice-company-identity h1 { font-size: 15px; font-weight: 800; line-height: 1.2; color: #000; }
+.invoice-print-sheet.invoice-print-sheet--a5 .invoice-company-subtitle { font-size: 9px; font-weight: 600; margin: 1px 0 0; color: #000; }
+.invoice-print-sheet.invoice-print-sheet--a5 .invoice-company-contact { margin-top: 2px; gap: 1px; font-size: 9px; font-weight: 600; line-height: 1.25; color: #000; }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-title-box { padding: 4px 8px; border-radius: 4px; }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-document-label { font-size: 8.5px; }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-title-box h2 { font-size: 14px; margin: 1px 0 3px; }
@@ -1232,9 +1232,9 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-title-box dd { font-size: 9.5px; }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3.5px 6px; margin: 4px 0; }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-meta > div { padding: 3.5px 7px; gap: 6px; }
-.invoice-print-sheet.invoice-print-sheet--a5 .invoice-meta span { font-size: 11px; font-weight: 700; color: #000; }
-.invoice-print-sheet.invoice-print-sheet--a5 .invoice-meta strong { font-size: 12px; font-weight: 800; color: #000; }
-.invoice-print-sheet.invoice-print-sheet--a5 .invoice-party-card strong { font-size: 13px; font-weight: 800; color: #000; }
+.invoice-print-sheet.invoice-print-sheet--a5 .invoice-meta span { font-size: 9.5px; font-weight: 700; color: #000; }
+.invoice-print-sheet.invoice-print-sheet--a5 .invoice-meta strong { font-size: 10.5px; font-weight: 800; color: #000; }
+.invoice-print-sheet.invoice-print-sheet--a5 .invoice-party-card strong { font-size: 12px; font-weight: 800; color: #000; }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-ledger-table { margin-top: 4px; font-size: 11px; line-height: 1.25; }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-ledger-table thead th { font-size: 10.5px; height: 28px; padding: 3px 4px; white-space: nowrap; }
 .invoice-print-sheet.invoice-print-sheet--a5 .invoice-ledger-table th,
@@ -1329,9 +1329,9 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
   }
   .invoice-print-sheet.invoice-print-sheet--a4 .invoice-company-identity { gap: 12px; }
   .invoice-print-sheet.invoice-print-sheet--a4 .invoice-logo { width: 56px; height: 56px; padding: 3px; border-radius: 6px; }
-  .invoice-print-sheet.invoice-print-sheet--a4 .invoice-company-identity h1 { font-size: 24px; font-weight: 800; line-height: 1.25; color: #000; }
-  .invoice-print-sheet.invoice-print-sheet--a4 .invoice-company-subtitle { font-size: 13.5px; font-weight: 600; margin: 2px 0 0; color: #000; }
-  .invoice-print-sheet.invoice-print-sheet--a4 .invoice-company-contact { margin-top: 5px; gap: 2px; font-size: 13.5px; font-weight: 600; line-height: 1.38; color: #000; }
+  .invoice-print-sheet.invoice-print-sheet--a4 .invoice-company-identity h1 { font-size: 22px; font-weight: 800; line-height: 1.25; color: #000; }
+  .invoice-print-sheet.invoice-print-sheet--a4 .invoice-company-subtitle { font-size: 12px; font-weight: 600; margin: 2px 0 0; color: #000; }
+  .invoice-print-sheet.invoice-print-sheet--a4 .invoice-company-contact { margin-top: 5px; gap: 2px; font-size: 12px; font-weight: 600; line-height: 1.38; color: #000; }
   .invoice-print-sheet.invoice-print-sheet--a4 .invoice-title-box { padding: 8px 13px; border-radius: 6px; }
   .invoice-print-sheet.invoice-print-sheet--a4 .invoice-document-label { font-size: 11px; }
   .invoice-print-sheet.invoice-print-sheet--a4 .invoice-title-box h2 { font-size: 19px; margin: 2px 0 5px; }
@@ -1341,9 +1341,9 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
   .invoice-print-sheet.invoice-print-sheet--a4 .invoice-title-box dd { font-size: 13px; }
   .invoice-print-sheet.invoice-print-sheet--a4 .invoice-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; margin: 8px 0; }
   .invoice-print-sheet.invoice-print-sheet--a4 .invoice-meta > div { padding: 6.5px 11px; gap: 8px; }
-  .invoice-print-sheet.invoice-print-sheet--a4 .invoice-meta span { font-size: 13.5px; font-weight: 700; color: #000; }
-  .invoice-print-sheet.invoice-print-sheet--a4 .invoice-meta strong { font-size: 15px; font-weight: 800; color: #000; }
-  .invoice-print-sheet.invoice-print-sheet--a4 .invoice-party-card strong { font-size: 17px; font-weight: 800; color: #000; }
+  .invoice-print-sheet.invoice-print-sheet--a4 .invoice-meta span { font-size: 12px; font-weight: 700; color: #000; }
+  .invoice-print-sheet.invoice-print-sheet--a4 .invoice-meta strong { font-size: 13.5px; font-weight: 800; color: #000; }
+  .invoice-print-sheet.invoice-print-sheet--a4 .invoice-party-card strong { font-size: 14.5px; font-weight: 800; color: #000; }
   .invoice-print-sheet.invoice-print-sheet--a4 .invoice-ledger-table { margin-top: 5px; font-size: 12.5px; line-height: 1.3; }
   .invoice-print-sheet.invoice-print-sheet--a4 .invoice-ledger-table thead th { font-size: 12.5px; height: 30px; }
   .invoice-print-sheet.invoice-print-sheet--a4 .invoice-ledger-table th,
@@ -1476,7 +1476,7 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
   height: 24px;
 }
 .invoice-print-sheet .party-balances-compact-table .invoice-product-name {
-  font-size: 12.5px;
+  
   font-weight: 800;
   color: #000;
 }
@@ -1493,7 +1493,7 @@ html[data-theme="dark"] .bg-gray-300 { background-color:var(--border-strong)!imp
   height: 18px;
 }
 .invoice-print-sheet.invoice-print-sheet--a5 .party-balances-compact-table .invoice-product-name {
-  font-size: 10.5px;
+  
   font-weight: 800;
   color: #000;
 }

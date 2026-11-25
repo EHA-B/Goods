@@ -112,7 +112,7 @@ export default function PrintableInvoice(props: Props) {
                   )}
                   <div>
                     <h1>{props.company.name || "اسم الشركة"}</h1>
-                     */}
+                    {/* <p className="invoice-company-subtitle">نظام المبيعات والمخزون</p> */}
                   </div>
                 </div>
                 <div className="invoice-company-contact">

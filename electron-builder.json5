@@ -3,6 +3,9 @@
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "com.stocklite.app",
   "asar": true,
+  "asarUnpack": [
+    "node_modules/pdf-to-printer/dist/SumatraPDF-*.exe"
+  ],
   "productName": "StockLite",
   "icon": "public/icon.ico",
   "directories": {

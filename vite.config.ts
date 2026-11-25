@@ -33,7 +33,7 @@ export default defineConfig({
             outDir: path.resolve(__dirname, "dist-electron/main"),
             emptyOutDir: true,
             rollupOptions: {
-              external: ["knex", "sqlite3", "bcrypt", "electron"],
+              external: ["knex", "sqlite3", "bcrypt", "electron", "pdf-to-printer"],
             },
           },
         },

@@ -1,9 +1,11 @@
 // @ts-nocheck
 import { app, ipcMain, dialog, BrowserWindow } from 'electron';
 import path from 'node:path';
+import os from 'node:os';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { writeFile } from 'node:fs/promises';
+import { unlink, writeFile } from 'node:fs/promises';
 import { clearCurrentUser, getCurrentUser, setCurrentUser } from '../services/sessionService';
 
 const require = createRequire(import.meta.url);
@@ -1395,8 +1397,85 @@ async function resolvePreferredPrinterDeviceName(webContents, requestedName = DE
   }
 }
 
+function getElectronPageSizeMicrons(pageSize) {
+  return String(pageSize || 'A4').toUpperCase() === 'A5'
+    ? { width: 148000, height: 210000 }
+    : { width: 210000, height: 297000 };
+}
+
+function resolveSumatraPdfPath() {
+  try {
+    const pkgDir = path.dirname(require.resolve('pdf-to-printer/package.json'));
+    const distDir = path.join(pkgDir, 'dist');
+    const candidate = path.join(distDir, 'SumatraPDF-3.4.6-32.exe');
+    const unpacked = candidate.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
+    if (existsSync(unpacked)) return unpacked;
+    if (existsSync(candidate)) return candidate;
+  } catch {
+    // Let pdf-to-printer resolve its own default path
+  }
+  return undefined;
+}
+
+async function printWebContentsViaPdfOnWindows(webContents, { normalizedSize, deviceName, copies, scaleFactor, silent }) {
+  if (process.platform !== 'win32') return null;
+
+  let tempPdfPath = null;
+  try {
+    const pdfToPrinter = require('pdf-to-printer');
+    if (!pdfToPrinter || typeof pdfToPrinter.print !== 'function') return null;
+
+    const scale = Math.max(0.5, Math.min(2, (Number(scaleFactor) || 100) / 100));
+    const pdfBuffer = await webContents.printToPDF({
+      printBackground: true,
+      pageSize: normalizedSize,
+      landscape: false,
+      scale,
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      preferCSSPageSize: true,
+    });
+
+    tempPdfPath = path.join(
+      os.tmpdir(),
+      `stocklite-print-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`,
+    );
+    await writeFile(tempPdfPath, pdfBuffer);
+
+    const sumatraPdfPath = resolveSumatraPdfPath();
+    const printOpts = {
+      paperSize: normalizedSize,
+      orientation: 'portrait',
+      scale: 'fit',
+      copies,
+      silent: Boolean(silent),
+      printDialog: !silent,
+    };
+    if (deviceName) {
+      printOpts.printer = deviceName;
+    }
+    if (sumatraPdfPath) {
+      printOpts.sumatraPdfPath = sumatraPdfPath;
+    }
+
+    await pdfToPrinter.print(tempPdfPath, printOpts);
+    return { printed: true, failureReason: '' };
+  } catch (err) {
+    console.warn('[print] PDF-based printing failed, falling back to webContents.print:', err?.message || err);
+    return null;
+  } finally {
+    if (tempPdfPath) {
+      try {
+        await unlink(tempPdfPath);
+      } catch {
+        // Ignore temp cleanup errors
+      }
+    }
+  }
+}
+
 async function printWebContentsWithPreferredPrinter(webContents, options = {}) {
-  const pageSize = String(options?.pageSize || 'A4').toUpperCase() === 'A5' ? 'A5' : 'A4';
+  const normalizedSize = String(options?.pageSize || 'A4').toUpperCase() === 'A5' ? 'A5' : 'A4';
+  const pageSize = getElectronPageSizeMicrons(normalizedSize);
   const copies = Math.max(1, Math.min(99, Math.round(Number(options?.copies) || 1)));
   const scaleFactor = Math.max(50, Math.min(200, Math.round(Number(options?.scaleFactor) || 100)));
   const silent = options?.silent !== undefined ? Boolean(options.silent) : true;
@@ -1405,39 +1484,72 @@ async function printWebContentsWithPreferredPrinter(webContents, options = {}) {
     options?.deviceName || DEFAULT_PRINTER_NAME,
   );
 
-  const runPrint = (printerDeviceName, useSilent) =>
-    new Promise((resolve) => {
-      const printOptions = {
-        silent: Boolean(useSilent),
-        printBackground: true,
-        landscape: false,
-        pageSize,
-        copies,
-        scaleFactor,
-        margins: { marginType: 'none' },
-      };
-      if (printerDeviceName) {
-        printOptions.deviceName = printerDeviceName;
-      }
-      webContents.print(printOptions, (printed, failureReason) =>
-        resolve({ printed, failureReason }),
-      );
-    });
+  let previousZoomFactor = 1;
+  try {
+    previousZoomFactor = webContents.getZoomFactor();
+    if (Math.abs(previousZoomFactor - 1) > 0.001) {
+      webContents.setZoomFactor(1);
+    }
+  } catch {
+    // Ignore zoom read/write errors on destroyed/unsupported webContents
+  }
 
-  let outcome = await runPrint(deviceName, silent);
-  if (!outcome.printed) {
-    const reason = String(outcome.failureReason || '').toLowerCase();
-    const isCanceled = reason === 'cancelled' || reason === 'canceled';
-    if (!isCanceled) {
-      if (deviceName) {
-        outcome = await runPrint(undefined, silent);
-      }
-      if (!outcome.printed && silent) {
-        outcome = await runPrint(deviceName, false);
+  try {
+    // On Windows, print via printToPDF + pdf-to-printer so physical output matches
+    // the exported PDF identically across all devices and printer drivers.
+    const pdfOutcome = await printWebContentsViaPdfOnWindows(webContents, {
+      normalizedSize,
+      deviceName,
+      copies,
+      scaleFactor,
+      silent,
+    });
+    if (pdfOutcome?.printed) {
+      return pdfOutcome;
+    }
+
+    const runPrint = (printerDeviceName, useSilent) =>
+      new Promise((resolve) => {
+        const printOptions = {
+          silent: Boolean(useSilent),
+          printBackground: true,
+          landscape: false,
+          pageSize,
+          copies,
+          scaleFactor,
+          margins: { marginType: 'none' },
+        };
+        if (printerDeviceName) {
+          printOptions.deviceName = printerDeviceName;
+        }
+        webContents.print(printOptions, (printed, failureReason) =>
+          resolve({ printed, failureReason }),
+        );
+      });
+
+    let outcome = await runPrint(deviceName, silent);
+    if (!outcome.printed) {
+      const reason = String(outcome.failureReason || '').toLowerCase();
+      const isCanceled = reason === 'cancelled' || reason === 'canceled';
+      if (!isCanceled) {
+        if (deviceName) {
+          outcome = await runPrint(undefined, silent);
+        }
+        if (!outcome.printed && silent) {
+          outcome = await runPrint(deviceName, false);
+        }
       }
     }
+    return outcome;
+  } finally {
+    try {
+      if (!webContents.isDestroyed() && Math.abs(previousZoomFactor - 1) > 0.001) {
+        webContents.setZoomFactor(previousZoomFactor);
+      }
+    } catch {
+      // Ignore restore errors
+    }
   }
-  return outcome;
 }
 
 /** Prints a generated report on A4 paper through the system print dialog. */
@@ -2431,8 +2543,10 @@ ipcMain.handle('api:system:printCurrentPage', async (event, input = {}) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window) return failure('PRINT_FAILED', 'تعذر الوصول إلى نافذة المستند');
 
+    const normalizedSize = String(input?.pageSize || 'A4').toUpperCase() === 'A5' ? 'A5' : 'A4';
+
     const outcome = await printWebContentsWithPreferredPrinter(window.webContents, {
-      pageSize: input?.pageSize,
+      pageSize: normalizedSize,
       deviceName: input?.deviceName || DEFAULT_PRINTER_NAME,
       copies: input?.copies,
       scaleFactor: input?.scaleFactor,

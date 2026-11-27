@@ -1581,7 +1581,9 @@ export default function ReportsPage() {
                       reportMode:
                         event.target.value === "compact"
                           ? "compact"
-                          : "detailed",
+                          : event.target.value === "statement"
+                            ? "statement"
+                            : "detailed",
                     }),
                   )
                 }
@@ -1593,6 +1595,12 @@ export default function ReportsPage() {
                   {
                     value: "compact",
                     label: "مختصر (تفاصيل الفواتير فقط)",
+                  },
+                  {
+                    value: "statement",
+                    label: isDetailedPurchases
+                      ? "كشف مشتريات (قائمة الفواتير)"
+                      : "كشف مبيعات (قائمة الفواتير)",
                   },
                 ]}
               />
@@ -2032,7 +2040,11 @@ export default function ReportsPage() {
                                       ? "whitespace-nowrap text-left font-medium tabular-nums"
                                       : "text-right",
                                     column.key ===
+                                      "invoice_number" ||
+                                    column.key ===
                                       "supplier_name" ||
+                                    column.key ===
+                                      "customer_name" ||
                                     column.key ===
                                       "product_name"
                                       ? "font-bold"

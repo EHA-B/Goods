@@ -293,6 +293,10 @@ class ReportController {
     }
 
     if (reportId === "sales-details") {
+      if (filters?.reportMode === "statement") {
+        return this.generateSalesStatement(filters);
+      }
+
       return applyInvoiceReportMode(
         await this.generateSalesDetails(filters),
         filters,
@@ -301,6 +305,10 @@ class ReportController {
     }
 
     if (reportId === "purchases-details") {
+      if (filters?.reportMode === "statement") {
+        return this.generatePurchasesStatement(filters);
+      }
+
       return applyInvoiceReportMode(
         await this.generatePurchasesDetails(filters),
         filters,
@@ -315,6 +323,242 @@ class ReportController {
       rows: [],
       summary: [],
       totalRows: 0,
+    };
+  }
+
+  async generateSalesStatement(filters = {}) {
+    const db = await dbmanager.init();
+
+    const where = ["1 = 1"];
+    const params = [];
+
+    if (filters.fromDate) {
+      where.push(`date(si.invoice_date) >= date(?)`);
+      params.push(filters.fromDate);
+    }
+
+    if (filters.toDate) {
+      where.push(`date(si.invoice_date) <= date(?)`);
+      params.push(filters.toDate);
+    }
+
+    addFilter(
+      where,
+      params,
+      `si.customer_id = ?`,
+      filters.customerId,
+    );
+
+    addFilter(
+      where,
+      params,
+      `si.status = ?`,
+      filters.status,
+    );
+
+    if (
+      filters.currency &&
+      filters.currency !== "all"
+    ) {
+      where.push(
+        `UPPER(COALESCE(si.currency, 'SYP')) = ?`,
+      );
+      params.push(
+        normalizeCurrency(filters.currency),
+      );
+    }
+
+    if (
+      filters.productId &&
+      filters.productId !== "all"
+    ) {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM sale_invoice_items filter_sii
+          LEFT JOIN stock_batches filter_sb
+            ON filter_sb.id = filter_sii.stock_batch_id
+          WHERE filter_sii.sale_invoice_id = si.id
+            AND COALESCE(filter_sii.product_id, filter_sb.product_id) = ?
+        )
+      `);
+      params.push(filters.productId);
+    }
+
+    const invoices = await all(
+      db,
+      `
+        SELECT
+          si.id,
+          si.invoice_number,
+          si.invoice_date,
+          si.total,
+          si.paid_amount,
+          si.remaining_amount,
+          si.status,
+          UPPER(COALESCE(si.currency, 'SYP')) AS currency,
+          c.name AS customer_name
+        FROM sale_invoices si
+        LEFT JOIN customers c
+          ON c.id = si.customer_id
+        WHERE ${where.join(" AND ")}
+        ORDER BY
+          date(si.invoice_date) DESC,
+          si.id DESC
+      `,
+      params,
+    );
+
+    const cancelledCount = invoices.filter(
+      (invoice) => String(invoice.status || "").toLowerCase() === "cancelled",
+    ).length;
+
+    return {
+      title: "كشف مبيعات",
+      mode: "statement",
+      generatedAt: new Date().toISOString(),
+      columns: [
+        { key: "invoice_number", label: "رقم الفاتورة", format: "text" },
+        { key: "invoice_date", label: "التاريخ", format: "date" },
+        { key: "customer_name", label: "العميل", format: "text" },
+        { key: "total", label: "الإجمالي", format: "currency" },
+        { key: "paid_amount", label: "المدفوع", format: "currency" },
+        { key: "remaining_amount", label: "المتبقي", format: "currency" },
+        { key: "status_label", label: "الحالة", format: "text" },
+      ],
+      rows: invoices.map((invoice) => ({
+        invoice_number: invoice.invoice_number || `#${invoice.id}`,
+        invoice_date: invoice.invoice_date || "—",
+        customer_name: invoice.customer_name || "بيع نقدي",
+        total: number(invoice.total),
+        paid_amount: number(invoice.paid_amount),
+        remaining_amount: number(invoice.remaining_amount),
+        status_label: invoiceStatusLabel(invoice.status),
+        currency: normalizeCurrency(invoice.currency),
+      })),
+      summary: [
+        { label: "عدد فواتير البيع", value: invoices.length },
+        { label: "الفواتير الملغاة", value: cancelledCount },
+        ...buildCurrencySummary(invoices, "إجمالي المبيعات"),
+      ],
+      totalRows: invoices.length,
+    };
+  }
+
+  async generatePurchasesStatement(filters = {}) {
+    const db = await dbmanager.init();
+
+    const where = ["1 = 1"];
+    const params = [];
+
+    if (filters.fromDate) {
+      where.push(`date(pi.invoice_date) >= date(?)`);
+      params.push(filters.fromDate);
+    }
+
+    if (filters.toDate) {
+      where.push(`date(pi.invoice_date) <= date(?)`);
+      params.push(filters.toDate);
+    }
+
+    addFilter(
+      where,
+      params,
+      `pi.supplier_id = ?`,
+      filters.supplierId,
+    );
+
+    addFilter(
+      where,
+      params,
+      `pi.status = ?`,
+      filters.status,
+    );
+
+    if (
+      filters.currency &&
+      filters.currency !== "all"
+    ) {
+      where.push(
+        `UPPER(COALESCE(pi.currency, 'SYP')) = ?`,
+      );
+      params.push(
+        normalizeCurrency(filters.currency),
+      );
+    }
+
+    if (
+      filters.productId &&
+      filters.productId !== "all"
+    ) {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM purchase_invoice_items filter_pii
+          WHERE filter_pii.purchase_invoice_id = pi.id
+            AND filter_pii.product_id = ?
+        )
+      `);
+      params.push(filters.productId);
+    }
+
+    const invoices = await all(
+      db,
+      `
+        SELECT
+          pi.id,
+          pi.invoice_number,
+          pi.invoice_date,
+          pi.total,
+          pi.paid_amount,
+          pi.remaining_amount,
+          pi.status,
+          UPPER(COALESCE(pi.currency, 'SYP')) AS currency,
+          s.name AS supplier_name
+        FROM purchase_invoices pi
+        LEFT JOIN suppliers s
+          ON s.id = pi.supplier_id
+        WHERE ${where.join(" AND ")}
+        ORDER BY
+          date(pi.invoice_date) DESC,
+          pi.id DESC
+      `,
+      params,
+    );
+
+    const cancelledCount = invoices.filter(
+      (invoice) => String(invoice.status || "").toLowerCase() === "cancelled",
+    ).length;
+
+    return {
+      title: "كشف مشتريات",
+      mode: "statement",
+      generatedAt: new Date().toISOString(),
+      columns: [
+        { key: "invoice_number", label: "رقم الفاتورة", format: "text" },
+        { key: "invoice_date", label: "التاريخ", format: "date" },
+        { key: "supplier_name", label: "المورد", format: "text" },
+        { key: "total", label: "الإجمالي", format: "currency" },
+        { key: "paid_amount", label: "المدفوع", format: "currency" },
+        { key: "remaining_amount", label: "المتبقي", format: "currency" },
+        { key: "status_label", label: "الحالة", format: "text" },
+      ],
+      rows: invoices.map((invoice) => ({
+        invoice_number: invoice.invoice_number || `#${invoice.id}`,
+        invoice_date: invoice.invoice_date || "—",
+        supplier_name: invoice.supplier_name || "مورد غير معروف",
+        total: number(invoice.total),
+        paid_amount: number(invoice.paid_amount),
+        remaining_amount: number(invoice.remaining_amount),
+        status_label: invoiceStatusLabel(invoice.status),
+        currency: normalizeCurrency(invoice.currency),
+      })),
+      summary: [
+        { label: "عدد فواتير الشراء", value: invoices.length },
+        { label: "الفواتير الملغاة", value: cancelledCount },
+        ...buildCurrencySummary(invoices, "إجمالي المشتريات"),
+      ],
+      totalRows: invoices.length,
     };
   }
 

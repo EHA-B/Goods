@@ -23,8 +23,8 @@ export type ReportFilters = {
   status?: string;
   groupBy?: string;
   currency?: string;
-  /** Detailed sales/purchases reports: full ("detailed") or invoice details only ("compact"). */
-  reportMode?: "detailed" | "compact";
+  /** Detailed sales/purchases reports: full ("detailed"), invoice details only ("compact"), or flat invoice list ("statement"). */
+  reportMode?: "detailed" | "compact" | "statement";
 };
 
 export type ReportColumn = {
@@ -55,7 +55,7 @@ export type ReportResult = {
   totalRows?: number;
   sections?: ReportSection[];
   layout?: string;
-  mode?: "detailed" | "compact";
+  mode?: "detailed" | "compact" | "statement";
 };
 
 export type ReportOption = { value: string; label: string };

@@ -375,6 +375,20 @@ function renderGenericReportSections(sections) {
   }).join('');
 }
 
+function paginateReportRows(rows, firstPageLimit, nextPageLimit) {
+  if (!Array.isArray(rows) || rows.length === 0) return [[]];
+  const pages = [];
+  let cursor = 0;
+  let pageIndex = 0;
+  while (cursor < rows.length) {
+    const limit = pageIndex === 0 ? firstPageLimit : nextPageLimit;
+    pages.push(rows.slice(cursor, cursor + limit));
+    cursor += limit;
+    pageIndex += 1;
+  }
+  return pages;
+}
+
 function renderReportHtml(report, printOptions = {}) {
   const columns = Array.isArray(report?.columns) ? report.columns : [];
   const rows = Array.isArray(report?.rows) ? report.rows : [];
@@ -382,17 +396,13 @@ function renderReportHtml(report, printOptions = {}) {
   const sections = Array.isArray(report?.sections) ? report.sections : [];
   const detailedInvoices = isDetailedInvoiceReport(report);
   const pageSize = String(printOptions?.pageSize || 'A4').toUpperCase() === 'A5' ? 'A5' : 'A4';
-  const topMarginMm = Number.isFinite(Number(printOptions?.topMarginMm)) ? Number(printOptions.topMarginMm) : (pageSize === 'A5' ? 3 : 6);
-  const sideMarginMm = Number.isFinite(Number(printOptions?.sideMarginMm)) ? Number(printOptions.sideMarginMm) : (pageSize === 'A5' ? 4.5 : 6);
-  const scaleFactor = Number.isFinite(Number(printOptions?.scaleFactor)) ? Math.max(50, Math.min(150, Number(printOptions.scaleFactor))) : 100;
+  const isA5 = pageSize === 'A5';
+  const topMarginMm = Number.isFinite(Number(printOptions?.topMarginMm)) ? Number(printOptions.topMarginMm) : (isA5 ? 3 : 6);
+  const sideMarginMm = Number.isFinite(Number(printOptions?.sideMarginMm)) ? Number(printOptions.sideMarginMm) : (isA5 ? 4.5 : 6);
+  const pageCssSize = isA5 ? '148mm 210mm' : '210mm 297mm';
 
   const summaryHtml = renderReportSummaryCards(summary);
-
-  const contentHtml = sections.length
-    ? detailedInvoices
-      ? renderDetailedInvoiceSections(sections)
-      : renderGenericReportSections(sections)
-    : renderReportTable(columns, rows);
+  const isFlatTableReport = !sections.length && columns.length > 0;
 
   const isProfitLoss =
     String(report?.title || '').includes('أرباح') ||
@@ -419,6 +429,69 @@ function renderReportHtml(report, printOptions = {}) {
     : '';
 
   const totalRows = report?.totalRows ?? rows.length;
+  const generatedLabel = normalizeLatinDigits(
+    new Date(report?.generatedAt || Date.now()).toLocaleString('en-US'),
+  );
+
+  const renderHeader = (pageIndex, totalPages) => `
+    <header class="report-header">
+      <div>
+        <h1>${escapeReportHtml(report?.title || 'تقرير')}${totalPages > 1 ? ` <span class="page-badge">(صفحة ${pageIndex + 1} من ${totalPages})</span>` : ''}</h1>
+        <div class="meta">
+          <span>تم التوليد:</span>
+          <span class="latin" dir="ltr">${escapeReportHtml(generatedLabel)}</span>
+        </div>
+      </div>
+      <div class="brand">StockLite</div>
+    </header>
+  `;
+
+  let bodyHtml = '';
+
+  if (isFlatTableReport) {
+    const isStatementReport = report?.mode === 'statement';
+    const hasSummary = summary.length > 0;
+    const firstPageLimit = isStatementReport
+      ? 24
+      : isA5
+        ? (hasSummary ? 14 : 18)
+        : (hasSummary ? 18 : 22);
+    const nextPageLimit = isStatementReport ? 24 : (isA5 ? 18 : 22);
+    const pages = paginateReportRows(rows, firstPageLimit, nextPageLimit);
+    const totalPages = pages.length;
+
+    bodyHtml = pages.map((pageRows, pageIndex) => `
+      <article class="report-sheet${isStatementReport ? ' report-sheet--statement' : ''}">
+        ${renderHeader(pageIndex, totalPages)}
+        ${pageIndex === 0 ? summaryHtml : ''}
+        ${pageIndex === 0 ? netHtml : ''}
+        ${renderReportTable(columns, pageRows)}
+        <footer class="report-footer">
+          <span>عدد النتائج: <strong>${escapeReportHtml(normalizeLatinDigits(totalRows))}</strong></span>
+          <span>${totalPages > 1 ? `صفحة ${pageIndex + 1} من ${totalPages}` : 'تقرير صادر إلكترونيًا من StockLite'}</span>
+        </footer>
+      </article>
+    `).join('');
+  } else {
+    const contentHtml = sections.length
+      ? detailedInvoices
+        ? renderDetailedInvoiceSections(sections)
+        : renderGenericReportSections(sections)
+      : renderReportTable(columns, rows);
+
+    bodyHtml = `
+      <main class="report-page">
+        ${renderHeader(0, 1)}
+        ${summaryHtml}
+        ${netHtml}
+        ${contentHtml}
+        <footer class="report-footer">
+          <span>عدد النتائج: <strong>${escapeReportHtml(normalizeLatinDigits(totalRows))}</strong></span>
+          <span>تقرير صادر إلكترونيًا من StockLite</span>
+        </footer>
+      </main>
+    `;
+  }
 
   return `<!doctype html>
 <html lang="ar" dir="rtl">
@@ -427,19 +500,48 @@ function renderReportHtml(report, printOptions = {}) {
   <title>${escapeReportHtml(report?.title || 'تقرير')}</title>
   <style>
     * { box-sizing: border-box; }
-    @page { size: ${pageSize === 'A5' ? '148mm 210mm' : '210mm 297mm'}; margin: 0mm; }
+    @page {
+      size: ${pageCssSize};
+      margin: ${isFlatTableReport ? '0mm' : `${topMarginMm}mm ${sideMarginMm}mm`};
+    }
 
-    html, body { direction: rtl; }
+    html, body {
+      direction: rtl;
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      color: #000000;
+    }
 
     body {
-      margin: 0;
-      padding: ${topMarginMm}mm ${sideMarginMm}mm;
-      zoom: ${scaleFactor}%;
-      font-family: Tahoma, Arial, sans-serif;
-      color: #17211f;
+      font-family: "Cairo", "Tajawal", Tahoma, Arial, sans-serif;
+      color: #000000;
       background: #ffffff;
-      font-size: 9px;
+      font-size: ${isA5 ? '10.5px' : '12px'};
+      line-height: ${isA5 ? '1.3' : '1.4'};
       text-align: right;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .report-sheet {
+      width: 100%;
+      max-width: ${isA5 ? '148mm' : '210mm'};
+      padding: ${topMarginMm}mm ${sideMarginMm}mm ${isA5 ? '3mm' : '5mm'};
+      direction: rtl;
+      page-break-after: always;
+      break-after: page;
+    }
+
+    .report-sheet:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+
+    .report-sheet--statement .data-table th,
+    .report-sheet--statement .data-table td {
+      padding: ${isA5 ? '2px 4px' : '3.5px 6px'};
+      height: ${isA5 ? '20px' : '26px'};
     }
 
     .report-page {
@@ -452,25 +554,33 @@ function renderReportHtml(report, printOptions = {}) {
       direction: rtl;
       align-items: flex-start;
       justify-content: space-between;
-      gap: 18px;
-      border-bottom: 2px solid #1f7664;
-      padding-bottom: 10px;
-      margin-bottom: 12px;
+      gap: ${isA5 ? '10px' : '16px'};
+      border-bottom: ${isA5 ? '1.5px' : '2px'} solid #172033;
+      padding-bottom: ${isA5 ? '5px' : '8px'};
+      margin-bottom: ${isA5 ? '6px' : '10px'};
       text-align: right;
     }
 
     h1 {
       margin: 0;
-      color: #153e35;
-      font-size: 18px;
-      line-height: 1.5;
+      color: #000000;
+      font-size: ${isA5 ? '15px' : '20px'};
+      font-weight: 800;
+      line-height: 1.3;
       text-align: right;
     }
 
+    .page-badge {
+      font-size: ${isA5 ? '10px' : '12px'};
+      font-weight: 700;
+      color: #333333;
+    }
+
     .meta {
-      margin-top: 4px;
-      color: #71807c;
-      font-size: 8px;
+      margin-top: 2px;
+      color: #000000;
+      font-size: ${isA5 ? '9.5px' : '11.5px'};
+      font-weight: 600;
       text-align: right;
     }
 
@@ -487,30 +597,30 @@ function renderReportHtml(report, printOptions = {}) {
     }
 
     .brand {
-      border: 1px solid #d9e5e1;
-      border-radius: 7px;
-      padding: 6px 10px;
-      color: #1f7664;
-      font-weight: 700;
+      border: 1px solid #172033;
+      border-radius: 6px;
+      padding: ${isA5 ? '3px 8px' : '5px 10px'};
+      color: #000000;
+      font-size: ${isA5 ? '11px' : '13px'};
+      font-weight: 800;
       white-space: nowrap;
     }
 
     .summary-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 6px;
-      margin-bottom: 12px;
+      grid-template-columns: repeat(${isA5 ? '2' : '4'}, minmax(0, 1fr));
+      gap: ${isA5 ? '4px' : '6px'};
+      margin-bottom: ${isA5 ? '6px' : '10px'};
       direction: rtl;
     }
 
     .summary-card {
       position: relative;
       overflow: hidden;
-      min-height: 48px;
-      border: 1px solid #dfe7e4;
-      border-radius: 7px;
-      padding: 7px 9px 7px 8px;
-      background: #f8fbfa;
+      border: 1px solid #cfd4dc;
+      border-radius: 5px;
+      padding: ${isA5 ? '4px 7px' : '6px 9px'};
+      background: #fafafa;
       text-align: right;
     }
 
@@ -520,31 +630,32 @@ function renderReportHtml(report, printOptions = {}) {
       inset-block: 0;
       right: 0;
       width: 3px;
-      background: #1f7664;
+      background: #172033;
     }
 
     .summary-label {
       padding-right: 4px;
-      color: #71807c;
-      font-size: 7px;
-      line-height: 1.4;
+      color: #000000;
+      font-size: ${isA5 ? '9.5px' : '11px'};
+      font-weight: 700;
+      line-height: 1.3;
       text-align: right;
     }
 
     .summary-value {
-      margin-top: 3px;
+      margin-top: 2px;
       padding-right: 4px;
-      color: #17211f;
-      font-size: 10px;
+      color: #000000;
+      font-size: ${isA5 ? '11.5px' : '13.5px'};
       font-weight: 800;
       text-align: right;
     }
 
     .invoice-card {
-      overflow: hidden;
-      margin: 0 0 12px;
-      border: 1px solid #cfdad6;
-      border-radius: 8px;
+      overflow: visible;
+      margin: 0 0 ${isA5 ? '8px' : '12px'};
+      border: 1px solid #30343b;
+      border-radius: 6px;
       background: #fff;
       break-inside: auto;
       page-break-inside: auto;
@@ -552,27 +663,27 @@ function renderReportHtml(report, printOptions = {}) {
 
     .invoice-heading {
       direction: rtl;
-      padding: 9px 10px;
-      border-bottom: 1px solid #cfdad6;
-      background: #eef5f2;
+      padding: ${isA5 ? '6px 8px' : '8px 10px'};
+      border-bottom: 1px solid #30343b;
+      background: #f2f4f7;
       text-align: right;
       break-after: avoid;
       page-break-after: avoid;
     }
 
     .invoice-title {
-      color: #214c41;
-      font-size: 10px;
+      color: #000000;
+      font-size: ${isA5 ? '11px' : '13px'};
       font-weight: 800;
-      line-height: 1.5;
+      line-height: 1.4;
       text-align: right;
     }
 
     .invoice-meta {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 6px 12px;
-      margin-top: 8px;
+      grid-template-columns: repeat(${isA5 ? '2' : '4'}, minmax(0, 1fr));
+      gap: ${isA5 ? '4px 8px' : '6px 12px'};
+      margin-top: 6px;
       direction: rtl;
     }
 
@@ -583,16 +694,16 @@ function renderReportHtml(report, printOptions = {}) {
 
     .meta-item span {
       display: block;
-      margin-bottom: 2px;
-      color: #71807c;
-      font-size: 6.5px;
+      margin-bottom: 1px;
+      color: #000000;
+      font-size: ${isA5 ? '9px' : '10.5px'};
       font-weight: 700;
     }
 
     .meta-item strong {
       display: block;
-      color: #17211f;
-      font-size: 8px;
+      color: #000000;
+      font-size: ${isA5 ? '10.5px' : '12px'};
       font-weight: 800;
       overflow-wrap: anywhere;
       text-align: right;
@@ -600,50 +711,54 @@ function renderReportHtml(report, printOptions = {}) {
 
     .table-wrap {
       width: 100%;
-      overflow: hidden;
+      overflow: visible;
       direction: rtl;
     }
 
     .data-table {
       width: 100%;
-      table-layout: fixed;
+      table-layout: auto;
       border-collapse: collapse;
+      border: 1.5px solid #30343b;
       direction: rtl;
-      font-size: 7px;
+      font-size: ${isA5 ? '10px' : '12px'};
     }
 
     .data-table thead {
       display: table-header-group;
     }
 
+    .data-table tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
     .data-table th,
     .data-table td {
-      border-left: 1px solid #d9e2df;
-      border-bottom: 1px solid #d9e2df;
-      padding: 4px 4px;
+      border: 1px solid #b8bec8;
+      padding: ${isA5 ? '3px 4px' : '4px 6px'};
+      height: ${isA5 ? '24px' : '28px'};
       vertical-align: middle;
-      line-height: 1.35;
+      line-height: 1.3;
       white-space: normal;
       overflow-wrap: anywhere;
       word-break: normal;
       text-align: right;
-    }
-
-    .data-table th:last-child,
-    .data-table td:last-child {
-      border-left: 0;
+      color: #000000;
     }
 
     .data-table th {
-      background: #f6f9f8;
-      color: #40534e;
-      font-size: 6.5px;
+      background: #d9dadc;
+      color: #000000;
+      font-size: ${isA5 ? '10px' : '12px'};
       font-weight: 800;
+      border-color: #30343b;
       text-align: right;
+      white-space: nowrap;
     }
 
     .data-table tbody tr:nth-child(even) td {
-      background: #fbfcfc;
+      background: #fafafa;
     }
 
     .data-table td.numeric,
@@ -651,6 +766,7 @@ function renderReportHtml(report, printOptions = {}) {
       direction: ltr;
       text-align: center;
       white-space: nowrap;
+      font-weight: 700;
     }
 
     .data-table td.date-cell {
@@ -660,8 +776,8 @@ function renderReportHtml(report, printOptions = {}) {
     }
 
     .empty {
-      padding: 10px !important;
-      color: #71807c;
+      padding: 12px !important;
+      color: #000000;
       text-align: center !important;
     }
 
@@ -669,7 +785,7 @@ function renderReportHtml(report, printOptions = {}) {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
       direction: rtl;
-      border-top: 1px solid #cfdad6;
+      border-top: 1px solid #30343b;
       break-inside: avoid;
       page-break-inside: avoid;
     }
@@ -677,23 +793,23 @@ function renderReportHtml(report, printOptions = {}) {
     .invoice-info-block,
     .invoice-financial-block {
       min-width: 0;
-      padding: 8px 10px;
+      padding: ${isA5 ? '5px 7px' : '8px 10px'};
       text-align: right;
     }
 
     .invoice-info-block {
-      border-left: 1px solid #d9e2df;
+      border-left: 1px solid #cfd4dc;
       background: #fff;
     }
 
     .invoice-financial-block {
-      background: #f8fbfa;
+      background: #fafafa;
     }
 
     .block-title {
-      margin-bottom: 6px;
-      color: #40534e;
-      font-size: 7px;
+      margin-bottom: 5px;
+      color: #000000;
+      font-size: ${isA5 ? '9.5px' : '11px'};
       font-weight: 800;
       text-align: right;
     }
@@ -710,41 +826,41 @@ function renderReportHtml(report, printOptions = {}) {
       direction: rtl;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 6px;
       min-width: 0;
       text-align: right;
     }
 
     .compact-row {
-      padding: 4px 6px;
+      padding: 3px 5px;
       border-radius: 4px;
-      background: #f7f9f8;
+      background: #f5f7f9;
     }
 
     .compact-row span,
     .financial-row span {
-      color: #71807c;
-      font-size: 6.5px;
+      color: #000000;
+      font-size: ${isA5 ? '9px' : '10.5px'};
       font-weight: 700;
       text-align: right;
     }
 
     .compact-row strong,
     .financial-row strong {
-      color: #17211f;
-      font-size: 7.5px;
+      color: #000000;
+      font-size: ${isA5 ? '10px' : '11.5px'};
       font-weight: 800;
       text-align: left;
     }
 
     .financial-list {
       display: grid;
-      gap: 3px;
+      gap: 2px;
     }
 
     .financial-row {
       padding: 3px 5px;
-      border-bottom: 1px solid #e8eeec;
+      border-bottom: 1px solid #e4e7ec;
     }
 
     .financial-row:last-child {
@@ -752,41 +868,41 @@ function renderReportHtml(report, printOptions = {}) {
     }
 
     .financial-row.important {
-      margin-top: 1px;
-      border: 1px solid #cfdad6;
+      margin-top: 2px;
+      border: 1px solid #30343b;
       border-radius: 4px;
       background: #fff;
     }
 
     .financial-row.important strong {
-      color: #1f7664;
-      font-size: 8px;
+      color: #000000;
+      font-size: ${isA5 ? '10.5px' : '12.5px'};
     }
 
     .report-section {
       margin: 0 0 10px;
-      border: 1px solid #cfdad6;
-      border-radius: 7px;
-      overflow: hidden;
+      border: 1px solid #30343b;
+      border-radius: 6px;
+      overflow: visible;
     }
 
     .section-title {
-      padding: 7px 9px;
-      border-bottom: 1px solid #cfdad6;
-      background: #eef5f2;
-      color: #294b43;
-      font-size: 9px;
+      padding: ${isA5 ? '5px 8px' : '7px 10px'};
+      border-bottom: 1px solid #30343b;
+      background: #f2f4f7;
+      color: #000000;
+      font-size: ${isA5 ? '11px' : '13px'};
       font-weight: 800;
       text-align: right;
     }
 
     .section-summary {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(${isA5 ? '2' : '4'}, minmax(0, 1fr));
       gap: 5px;
-      padding: 7px 9px;
-      border-top: 1px solid #cfdad6;
-      background: #f8fbfa;
+      padding: ${isA5 ? '5px 7px' : '7px 9px'};
+      border-top: 1px solid #cfd4dc;
+      background: #fafafa;
       direction: rtl;
     }
 
@@ -798,15 +914,15 @@ function renderReportHtml(report, printOptions = {}) {
     .section-summary span {
       display: block;
       margin-bottom: 2px;
-      color: #71807c;
-      font-size: 6.5px;
+      color: #000000;
+      font-size: ${isA5 ? '9px' : '10.5px'};
       font-weight: 700;
     }
 
     .section-summary strong {
       display: block;
-      color: #17211f;
-      font-size: 7.5px;
+      color: #000000;
+      font-size: ${isA5 ? '10.5px' : '12px'};
       font-weight: 800;
       text-align: right;
     }
@@ -817,34 +933,35 @@ function renderReportHtml(report, printOptions = {}) {
       align-items: center;
       justify-content: space-between;
       gap: 14px;
-      margin-bottom: 10px;
-      padding: 8px 10px;
-      border: 1px solid #9ccdbf;
-      border-radius: 7px;
-      background: #f1faf7;
+      margin-bottom: 8px;
+      padding: ${isA5 ? '6px 8px' : '8px 10px'};
+      border: 1.5px solid #30343b;
+      border-radius: 6px;
+      background: #f5f7f9;
     }
 
     .net-result.loss {
-      border-color: #e2b4b4;
+      border-color: #9f2f2f;
       background: #fff6f6;
     }
 
     .net-caption {
       display: block;
       margin-bottom: 2px;
-      color: #71807c;
-      font-size: 7px;
+      color: #000000;
+      font-size: ${isA5 ? '9.5px' : '11px'};
+      font-weight: 700;
     }
 
     .net-result strong {
-      color: #153e35;
-      font-size: 10px;
+      color: #000000;
+      font-size: ${isA5 ? '12px' : '14px'};
     }
 
     .net-number {
       direction: ltr;
-      color: #1f7664;
-      font-size: 12px;
+      color: #000000;
+      font-size: ${isA5 ? '13px' : '15px'};
       font-weight: 900;
       text-align: left;
     }
@@ -860,9 +977,12 @@ function renderReportHtml(report, printOptions = {}) {
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      margin-top: 8px;
-      color: #71807c;
-      font-size: 7px;
+      margin-top: ${isA5 ? '6px' : '10px'};
+      padding-top: 4px;
+      border-top: 1px dashed #98a2b3;
+      color: #000000;
+      font-size: ${isA5 ? '9.5px' : '11px'};
+      font-weight: 700;
       text-align: right;
     }
 
@@ -875,39 +995,10 @@ function renderReportHtml(report, printOptions = {}) {
         page-break-inside: avoid;
       }
     }
-
-    @page {
-      size: A4 portrait;
-      margin: 7mm;
-    }
   </style>
 </head>
 <body>
-  <main class="report-page">
-    <header class="report-header">
-      <div>
-        <h1>${escapeReportHtml(report?.title || 'تقرير')}</h1>
-        <div class="meta">
-          <span>تم التوليد:</span>
-          <span class="latin" dir="ltr">${escapeReportHtml(
-            normalizeLatinDigits(
-              new Date(report?.generatedAt || Date.now()).toLocaleString('en-US'),
-            ),
-          )}</span>
-        </div>
-      </div>
-      <div class="brand">StockLite</div>
-    </header>
-
-    ${summaryHtml}
-    ${netHtml}
-    ${contentHtml}
-
-    <footer class="report-footer">
-      <span>عدد النتائج: <strong>${escapeReportHtml(normalizeLatinDigits(totalRows))}</strong></span>
-      <span>تقرير صادر إلكترونيًا من StockLite</span>
-    </footer>
-  </main>
+  ${bodyHtml}
 </body>
 </html>`;
 }
